@@ -24,6 +24,7 @@ import type {
   QuestNodeDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
+import { getAllQuestDefinitionsInEpisodes } from "@sugarmagic/domain";
 import type { SceneContextModel } from "../../runtime/contracts/scene-context";
 import { compareCefrBands } from "../../runtime/cefr";
 import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/learner";
@@ -491,7 +492,9 @@ export function createSugarlangSceneContexts(
         targetLanguage,
         npcDefinitions: gameProject.npcDefinitions,
         dialogueDefinitions: gameProject.dialogueDefinitions,
-        questDefinitions: gameProject.questDefinitions,
+        questDefinitions: getAllQuestDefinitionsInEpisodes(
+          gameProject.episodes
+        ),
         itemDefinitions: gameProject.itemDefinitions,
         documentDefinitions: gameProject.documentDefinitions
       })),

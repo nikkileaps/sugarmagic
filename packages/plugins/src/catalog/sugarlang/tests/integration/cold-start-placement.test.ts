@@ -175,7 +175,6 @@ describe("cold-start placement golden", () => {
       activeScene: null,
       npcDefinitions: [],
       dialogueDefinitions: [],
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });

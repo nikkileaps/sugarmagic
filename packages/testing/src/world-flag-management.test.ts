@@ -39,21 +39,29 @@ function projectReferencing(worldFlagId: string): GameProject {
       }
     ]
   });
+  const base = createDefaultGameProject("Test", "test");
+  const quest = {
+    ...createDefaultQuestDefinition({
+      definitionId: "quest:test",
+      displayName: "Test Quest"
+    }),
+    startStageId: stage.stageId,
+    stageDefinitions: [stage]
+  };
   return {
-    ...createDefaultGameProject("Test", "test"),
+    ...base,
     worldFlagDefinitions: [
       createWorldFlagDefinition({ definitionId: worldFlagId, name: "gate-open" })
     ],
-    questDefinitions: [
-      {
-        ...createDefaultQuestDefinition({
-          definitionId: "quest:test",
-          displayName: "Test Quest"
-        }),
-        startStageId: stage.stageId,
-        stageDefinitions: [stage]
-      }
-    ]
+    // Quests are held by the Scene they happen in (epic #226).
+    episodes: base.episodes.map((episode) => ({
+      ...episode,
+      scenes: episode.scenes.map((scene, index) => ({
+        ...scene,
+        regionId: FLAG_TEST_REGION_ID,
+        questDefinitions: index === 0 ? [quest] : scene.questDefinitions
+      }))
+    }))
   };
 }
 

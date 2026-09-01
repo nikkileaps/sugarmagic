@@ -84,7 +84,6 @@ function servicesWithOverrides(
     }),
     npcDefinitions: [SCRIPTED_NPC, AGENT_NPC],
     dialogueDefinitions: [],
-    questDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: [],
     getEffectiveNpcInteractionMode: (npcDefinitionId) =>

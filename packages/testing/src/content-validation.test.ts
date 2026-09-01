@@ -68,12 +68,13 @@ function projectWith(quest: QuestDefinition): GameProject {
     ...project,
     episodes: project.episodes.map((episode) => ({
       ...episode,
-      scenes: episode.scenes.map((scene) => ({
+      scenes: episode.scenes.map((scene, index) => ({
         ...scene,
-        regionId: VALIDATION_REGION_ID
+        regionId: VALIDATION_REGION_ID,
+        // Quests are held by the Scene they happen in (epic #226).
+        questDefinitions: index === 0 ? [quest] : scene.questDefinitions
       }))
-    })),
-    questDefinitions: [quest]
+    }))
   };
 }
 

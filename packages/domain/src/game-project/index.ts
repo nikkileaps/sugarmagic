@@ -29,7 +29,8 @@ import {
   normalizeEpisodeEndRouting,
   normalizeEpisodes,
   type Episode,
-  type EpisodeEndRouting
+  type EpisodeEndRouting,
+  getAllQuestDefinitionsInEpisodes
 } from "../episodes";
 import {
   normalizeItemDefinition,
@@ -262,7 +263,6 @@ export interface GameProject {
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
-  questDefinitions: QuestDefinition[];
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
@@ -433,7 +433,6 @@ export function normalizeGameProject(
         | "documentDefinitions"
         | "npcDefinitions"
         | "dialogueDefinitions"
-        | "questDefinitions"
         | "menuDefinitions"
         | "hudDefinition"
         | "uiTheme"
@@ -465,7 +464,6 @@ export function normalizeGameProject(
         documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
         npcDefinitions?: Array<Partial<NPCDefinition>> | null;
         dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
-        questDefinitions?: Array<Partial<QuestDefinition>> | null;
         menuDefinitions?: Array<Partial<MenuDefinition>> | null;
         hudDefinition?: Partial<HUDDefinition> | null;
         uiTheme?: Partial<UITheme> | null;
@@ -554,9 +552,6 @@ export function normalizeGameProject(
     dialogueDefinitions: (gameProject.dialogueDefinitions ?? []).map(
       (definition) => normalizeDialogueDefinition(definition)
     ),
-    questDefinitions: (gameProject.questDefinitions ?? []).map((definition) =>
-      normalizeQuestDefinition(definition)
-    ),
     menuDefinitions: sourceMenus.map((definition, index) =>
       normalizeMenuDefinition(definition, gameProject.identity.id, index)
     ),
@@ -602,15 +597,91 @@ export function normalizeGameProject(
  * That shape is gone; a file still carrying it is overwritten
  * with a fresh campaign rather than converted.
  */
-function resolveEpisodes(gameProject: { episodes?: unknown }): Episode[] {
+/**
+ * Quests a load moved out of the old flat project list and onto a Scene
+ * (epic #226). Read once by the load path so the author is told where
+ * their quests went, rather than each of them being relocated silently.
+ */
+export interface QuestContainmentNote {
+  questDefinitionId: string;
+  displayName: string;
+  sceneId: string;
+}
+
+const questContainmentNotes: QuestContainmentNote[] = [];
+
+export function takeQuestContainmentNotes(): QuestContainmentNote[] {
+  return questContainmentNotes.splice(0, questContainmentNotes.length);
+}
+
+/**
+ * Move a pre-#226 project's flat `questDefinitions` onto the first Scene
+ * of the first Episode.
+ *
+ * Every quest gets an owner here rather than sitting in a holding state:
+ * the Studio surface for choosing a Scene per quest does not exist yet,
+ * so refusing the save until the author picked would leave the project
+ * unsaveable with nothing to fix it with. The author re-homes quests when
+ * that surface lands; every assignment is reported meanwhile.
+ */
+function containLegacyQuests(
+  gameProject: { questDefinitions?: unknown },
+  episodes: Episode[]
+): Episode[] {
+  const legacy = Array.isArray(gameProject.questDefinitions)
+    ? gameProject.questDefinitions
+    : [];
+  if (legacy.length === 0) return episodes;
+
+  const target = episodes.find((episode) => episode.scenes.length > 0);
+  const targetScene = target?.scenes[0];
+  if (!target || !targetScene) return episodes;
+
+  const owned = new Set(
+    getAllQuestDefinitionsInEpisodes(episodes).map((quest) => quest.definitionId)
+  );
+  const moved = legacy
+    .map((definition) => normalizeQuestDefinition(definition))
+    .filter((quest) => !owned.has(quest.definitionId));
+  if (moved.length === 0) return episodes;
+
+  for (const quest of moved) {
+    questContainmentNotes.push({
+      questDefinitionId: quest.definitionId,
+      displayName: quest.displayName,
+      sceneId: targetScene.sceneId
+    });
+  }
+
+  return episodes.map((episode) =>
+    episode.episodeId === target.episodeId
+      ? {
+          ...episode,
+          scenes: episode.scenes.map((scene, index) =>
+            index === 0
+              ? {
+                  ...scene,
+                  questDefinitions: [...scene.questDefinitions, ...moved]
+                }
+              : scene
+          )
+        }
+      : episode
+  );
+}
+
+function resolveEpisodes(gameProject: {
+  episodes?: unknown;
+  questDefinitions?: unknown;
+}): Episode[] {
   const authored = normalizeEpisodes(gameProject.episodes);
-  if (authored.length > 0) return authored;
-  return [
+  if (authored.length > 0) return containLegacyQuests(gameProject, authored);
+  return containLegacyQuests(gameProject, [
     createDefaultEpisode({
       episodeId: DEFAULT_EPISODE_ID,
       scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
     })
-  ];
+  ]);
 }
 
 export function createDefaultGameProject(
@@ -632,7 +703,6 @@ export function createDefaultGameProject(
     documentDefinitions: [],
     npcDefinitions: [],
     dialogueDefinitions: [],
-    questDefinitions: [],
     menuDefinitions: createDefaultMenuDefinitions(slug),
     hudDefinition: createDefaultHUD(slug),
     uiTheme: createDefaultUITheme(),

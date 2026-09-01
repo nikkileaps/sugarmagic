@@ -38,6 +38,7 @@ import {
   type Scene,
   type TransitionConfig
 } from "../scenes";
+import type { QuestDefinition } from "../quest-definition";
 
 /**
  * Stable id for the Episode that the load-time migration
@@ -314,6 +315,48 @@ export function resolveActiveScene(input: {
 /** Every Scene in the project, in narrative order across Episodes. */
 export function getAllScenes(episodes: readonly Episode[]): Scene[] {
   return episodes.flatMap((episode) => episode.scenes);
+}
+
+/**
+ * Every quest in the project, in narrative order (epic #226).
+ *
+ * Quests are HELD BY the Scene they happen in, but most consumers -- the
+ * runtime's quest manager, the deploy bundle, validation -- want them all
+ * and do not care which Scene owns which. This is that flat view, derived
+ * on read. Containment is the storage; this is the projection.
+ */
+export function getAllQuestDefinitionsInEpisodes(
+  episodes: readonly Episode[]
+): QuestDefinition[] {
+  return getAllScenes(episodes).flatMap((scene) => scene.questDefinitions);
+}
+
+/** The quest with this id, or null. */
+export function findQuestDefinitionById(
+  episodes: readonly Episode[],
+  questDefinitionId: string | null
+): QuestDefinition | null {
+  if (!questDefinitionId) return null;
+  return (
+    getAllQuestDefinitionsInEpisodes(episodes).find(
+      (quest) => quest.definitionId === questDefinitionId
+    ) ?? null
+  );
+}
+
+/** The Scene holding this quest, or null. */
+export function findSceneByQuestDefinitionId(
+  episodes: readonly Episode[],
+  questDefinitionId: string | null
+): Scene | null {
+  if (!questDefinitionId) return null;
+  return (
+    getAllScenes(episodes).find((scene) =>
+      scene.questDefinitions.some(
+        (quest) => quest.definitionId === questDefinitionId
+      )
+    ) ?? null
+  );
 }
 
 /** The Scene with this id, or null. */

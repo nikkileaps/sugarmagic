@@ -1043,7 +1043,7 @@ async function postPreviewBootMessage(
       documentDefinitions: session.gameProject.documentDefinitions,
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
-      questDefinitions: session.gameProject.questDefinitions,
+      questDefinitions: getAllQuestDefinitions(session),
       menuDefinitions: session.gameProject.menuDefinitions,
       hudDefinition: session.gameProject.hudDefinition,
       uiTheme: session.gameProject.uiTheme,
@@ -3768,7 +3768,7 @@ export function App() {
           onClose={() => setManageScenesOpen(false)}
           episodes={session.gameProject.episodes}
           activeSceneId={session.activeSceneId}
-          questDefinitions={session.gameProject.questDefinitions}
+          questDefinitions={getAllQuestDefinitions(session)}
           environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
             (definition) => ({
               definitionId: definition.definitionId,

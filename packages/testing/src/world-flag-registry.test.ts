@@ -14,7 +14,8 @@ import {
   normalizeRegionDocumentForLoad,
   validateProjectContent,
   type GameProject,
-  type RegionDocument
+  type RegionDocument,
+  getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
 import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
 
@@ -220,16 +221,28 @@ describe("migrating flag references written before the registry", () => {
       definitionId: "quest:test",
       displayName: "Test"
     });
+    const base = createDefaultGameProject("Test", "test");
+    const contained = {
+      ...quest,
+      startStageId: stage.stageId,
+      stageDefinitions: [stage]
+    };
     return {
-      ...createDefaultGameProject("Test", "test"),
-      questDefinitions: [
-        { ...quest, startStageId: stage.stageId, stageDefinitions: [stage] }
-      ]
+      ...base,
+      // Quests are held by the Scene they happen in (epic #226).
+      episodes: base.episodes.map((episode) => ({
+        ...episode,
+        scenes: episode.scenes.map((scene, index) => ({
+          ...scene,
+          questDefinitions: index === 0 ? [contained] : scene.questDefinitions
+        }))
+      }))
     };
   }
 
   function firstNodeOf(project: GameProject) {
-    return project.questDefinitions[0].stageDefinitions[0].nodeDefinitions[0];
+    return getAllQuestDefinitionsInEpisodes(project.episodes)[0]
+      .stageDefinitions[0].nodeDefinitions[0];
   }
 
   it("creates one entry per name and rewrites the references to its id", () => {

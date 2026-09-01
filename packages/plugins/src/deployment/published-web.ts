@@ -31,7 +31,8 @@ import type {
 } from "@sugarmagic/domain";
 import {
   collectFileBackedAssetPaths,
-  normalizeCreditsDefinition
+  normalizeCreditsDefinition,
+  getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
 
@@ -193,7 +194,9 @@ function buildBootJsonPayload(
     documentDefinitions: gameProject.documentDefinitions,
     npcDefinitions: gameProject.npcDefinitions,
     dialogueDefinitions: gameProject.dialogueDefinitions,
-    questDefinitions: gameProject.questDefinitions,
+    // Derived at the wire seam, not stored: quests live in the Scenes
+    // that hold them, so the bundle carries each one exactly once.
+    questDefinitions: getAllQuestDefinitionsInEpisodes(gameProject.episodes),
     menuDefinitions: gameProject.menuDefinitions,
     hudDefinition: gameProject.hudDefinition,
     uiTheme: gameProject.uiTheme,

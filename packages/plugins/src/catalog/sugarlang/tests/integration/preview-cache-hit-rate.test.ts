@@ -211,7 +211,6 @@ describe("preview directive cache hit rate golden", () => {
       activeScene,
       npcDefinitions: TEST_NPC_DEFINITIONS,
       dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });

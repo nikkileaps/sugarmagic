@@ -41,6 +41,10 @@ import {
 } from "../region-authoring";
 import type { ShaderBindingOverride } from "../shader-graph";
 import {
+  normalizeQuestDefinition,
+  type QuestDefinition
+} from "../quest-definition";
+import {
   cloneAssetCollider,
   isValidColliderShape,
   type AssetCollider
@@ -249,6 +253,18 @@ export interface Scene {
   /** What this Scene changes about its region: adds, suppressions, and
    *  restyles. */
   overlay: RegionSceneOverlay;
+  /**
+   * The quests that happen in this Scene (epic #226). HELD BY VALUE, the
+   * way an Episode holds its Scenes: a quest belongs to exactly one Scene
+   * by construction, so it cannot be orphaned or owned twice. Code that
+   * wants a quest without caring which Scene owns it uses the
+   * `getAllQuestDefinitions` / `findQuestDefinitionById` accessors in
+   * `episodes/`.
+   *
+   * Dialogue is NOT contained this way: a quest node references a dialogue
+   * by id, and an NPC-bound ambient dialogue belongs to no quest at all.
+   */
+  questDefinitions: QuestDefinition[];
   environmentOverride: SceneEnvironmentOverride | null;
   audioOverride: SceneAudioOverride | null;
   transitionConfig: TransitionConfig | null;
@@ -294,6 +310,7 @@ export function createDefaultScene(
     description: overrides.description ?? "",
     notes: overrides.notes ?? "",
     regionId: overrides.regionId ?? "",
+    questDefinitions: [...(overrides.questDefinitions ?? [])],
     overlay: overrides.overlay
       ? createRegionSceneOverlay(overrides.overlay)
       : createRegionSceneOverlay(),
@@ -562,6 +579,11 @@ export function normalizeScene(input: unknown): Scene | null {
     notes: typeof record.notes === "string" ? record.notes : "",
     regionId: collapsed.regionId,
     overlay: collapsed.overlay,
+    questDefinitions: Array.isArray(record.questDefinitions)
+      ? record.questDefinitions.map((definition) =>
+          normalizeQuestDefinition(definition)
+        )
+      : [],
     environmentOverride: normalizeEnvironmentOverride(
       record.environmentOverride
     ),

@@ -42,8 +42,7 @@ function makeSession(): AuthoringSession {
       npcDefinitions: [],
       dialogueDefinitions: [],
       itemDefinitions: [],
-      documentDefinitions: [],
-      questDefinitions: []
+      documentDefinitions: []
     }),
     [createDefaultRegion({ regionId: "region:town", displayName: "Town" })]
   );

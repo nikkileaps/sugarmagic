@@ -226,7 +226,6 @@ function makeSharedSetup(
     activeScene,
     npcDefinitions: TEST_NPC_DEFINITIONS,
     dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-    questDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: []
   });
@@ -284,7 +283,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: [],
       dialogueDefinitions: [],
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });
@@ -713,7 +711,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: TEST_NPC_DEFINITIONS,
       dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });
@@ -957,7 +954,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: TEST_NPC_DEFINITIONS,
       dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });

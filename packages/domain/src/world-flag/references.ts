@@ -2,7 +2,7 @@ import type {
   DialogueCondition,
   DialogueDefinition
 } from "../dialogue-definition";
-import { mapScenes } from "../episodes";
+import { getAllQuestDefinitionsInEpisodes, mapScenes } from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestActionDefinition,
@@ -152,8 +152,10 @@ export function mapWorldFlagReferences(
     };
   }
 
-  const questDefinitions: QuestDefinition[] = gameProject.questDefinitions.map(
-    (quest) => ({
+  const rewrittenQuests = new Map<string, QuestDefinition>(
+    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
+      quest.definitionId,
+      {
       ...quest,
       stageDefinitions: quest.stageDefinitions.map((stage) => ({
         ...stage,
@@ -186,7 +188,8 @@ export function mapWorldFlagReferences(
           };
         })
       }))
-    })
+      }
+    ])
   );
 
   // A dialogue's conditions hang off each node's outgoing edges.
@@ -322,10 +325,16 @@ export function mapWorldFlagReferences(
   return {
     gameProject: {
       ...gameProject,
-      questDefinitions,
       dialogueDefinitions,
       spellDefinitions,
-      episodes
+      // Quests go back into the Scenes that hold them: this walk rewrote
+      // them in place, and there is no flat list to write instead.
+      episodes: mapScenes(episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.map(
+          (quest) => rewrittenQuests.get(quest.definitionId) ?? quest
+        )
+      }))
     },
     regions: mappedRegions
   };

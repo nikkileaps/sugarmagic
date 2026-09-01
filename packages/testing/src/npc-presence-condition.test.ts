@@ -80,8 +80,7 @@ function makeSession() {
       npcDefinitions: [],
       dialogueDefinitions: [],
       itemDefinitions: [],
-      documentDefinitions: [],
-      questDefinitions: []
+      documentDefinitions: []
     }),
     [makeRegion()]
   );

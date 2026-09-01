@@ -16,7 +16,10 @@
  */
 
 import { tasksAreAmbiguous } from "../behavior-specificity";
-import { getAllScenes } from "../episodes";
+import {
+  getAllQuestDefinitionsInEpisodes,
+  getAllScenes
+} from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestConditionDefinition,
@@ -318,7 +321,7 @@ export function validateProjectContent(
     }
   }
 
-  for (const quest of gameProject.questDefinitions) {
+  for (const quest of getAllQuestDefinitionsInEpisodes(gameProject.episodes)) {
     issues.push(...validateQuest(quest));
   }
 
@@ -387,7 +390,7 @@ export function validateProjectContent(
   // A story point is authored as ids with no validation anywhere else, so a
   // quest or node that has since been deleted is only caught here.
   const nodeIdsByQuest = new Map(
-    gameProject.questDefinitions.map((quest) => [
+    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
       quest.definitionId,
       new Set(
         quest.stageDefinitions.flatMap((stage) =>
@@ -455,7 +458,11 @@ function findAmbiguousBehaviorTasks(
           const left = behavior.tasks[index]!;
           const right = behavior.tasks[other]!;
           if (
-            !tasksAreAmbiguous(left, right, gameProject.questDefinitions)
+            !tasksAreAmbiguous(
+              left,
+              right,
+              getAllQuestDefinitionsInEpisodes(gameProject.episodes)
+            )
           ) {
             continue;
           }

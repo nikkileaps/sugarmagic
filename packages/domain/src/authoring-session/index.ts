@@ -50,7 +50,8 @@ import {
   mapScenes,
   normalizeEpisodes,
   type Episode,
-  type EpisodeEndRouting
+  type EpisodeEndRouting,
+  getAllQuestDefinitionsInEpisodes
 } from "../episodes";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -447,10 +448,12 @@ export function getAllDialogueDefinitions(
   return session.gameProject.dialogueDefinitions;
 }
 
+/** Every quest in the session's project, flattened out of the Scenes that
+ *  hold them. Delegates rather than reading a second store. */
 export function getAllQuestDefinitions(
   session: AuthoringSession
 ): QuestDefinition[] {
-  return session.gameProject.questDefinitions;
+  return getAllQuestDefinitionsInEpisodes(session.gameProject.episodes);
 }
 
 export function getAllMenuDefinitions(
@@ -1738,10 +1741,17 @@ function applyCreateQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: [
-        ...session.gameProject.questDefinitions,
-        command.payload.definition
-      ]
+      episodes: mapScenes(session.gameProject.episodes, (scene) =>
+        scene.sceneId === session.activeSceneId
+          ? {
+              ...scene,
+              questDefinitions: [
+                ...scene.questDefinitions,
+                command.payload.definition
+              ]
+            }
+          : scene
+      )
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -1892,21 +1902,24 @@ function applyUpdateQuestDefinitionCommand(
   session: AuthoringSession,
   command: UpdateQuestDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.questDefinitions.map(
-    (definition) =>
-      definition.definitionId === command.payload.definition.definitionId
-        ? command.payload.definition
-        : definition
-  );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
   ]);
 
+  // By id across every Scene: the command names a quest, not a Scene, and
+  // exactly one Scene holds it.
   return {
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: nextDefinitions
+      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.map((definition) =>
+          definition.definitionId === command.payload.definition.definitionId
+            ? command.payload.definition
+            : definition
+        )
+      }))
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2042,9 +2055,13 @@ function applyDeleteQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: session.gameProject.questDefinitions.filter(
-        (definition) => definition.definitionId !== command.payload.definitionId
-      )
+      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.filter(
+          (definition) =>
+            definition.definitionId !== command.payload.definitionId
+        )
+      }))
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
