@@ -46,11 +46,6 @@ export interface RuntimeSceneLoadRequest {
   compileProfile: "authoring-preview" | "runtime-preview" | "published-target";
 }
 
-export interface RuntimeSceneDescriptor {
-  sceneId: string;
-  regionId: string;
-}
-
 export interface SceneObjectTransform {
   position: [number, number, number];
   rotation: [number, number, number];

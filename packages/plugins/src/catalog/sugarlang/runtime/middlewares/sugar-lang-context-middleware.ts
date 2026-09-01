@@ -42,7 +42,7 @@ import {
   computePendingProvisionalLemmas,
   computeProbeFloorState,
   getSugarlangConversationId,
-  getSceneId,
+  getRegionId,
   getTurnsSinceLastProbe,
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
@@ -137,18 +137,18 @@ export function createSugarLangContextMiddleware(
       // "quest.assessment" contribution, and sugarlang scores it there.
       // See sugarmagic-placement-sequencing-38i.
 
-      const sceneId = getSceneId(execution);
-      if (!sceneId) {
+      const regionId = getRegionId(execution);
+      if (!regionId) {
         logger.warn("Skipping Sugarlang context middleware - no active scene id.");
         return execution;
       }
 
       let sceneLexicon;
       try {
-        sceneLexicon = await services.sceneLexiconStore.ensure(sceneId);
+        sceneLexicon = await services.sceneLexiconStore.ensure(regionId);
       } catch (error) {
         logger.warn("Skipping Sugarlang turn after scene lexicon load failure.", {
-          sceneId,
+          regionId,
           reason: error instanceof Error ? error.message : String(error)
         });
         return execution;
@@ -177,7 +177,7 @@ export function createSugarLangContextMiddleware(
             encounterCounts
           },
           scene: {
-            sceneId,
+            regionId,
             dayIndex: blackboard ? getWorldDay(blackboard) : null
           },
           conversationId: getSugarlangConversationId(execution)

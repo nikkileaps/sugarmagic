@@ -82,7 +82,7 @@ export interface LearnerProgress {
    * same in a prompt and are different facts.
    */
   isColdStart: boolean;
-  sceneId: string | null;
+  regionId: string | null;
   conversationId: string;
 }
 
@@ -108,7 +108,7 @@ export interface LearnerProgressInputs {
     encounterCounts: Map<string, number>;
   };
   scene: {
-    sceneId: string | null;
+    regionId: string | null;
     /**
      * In-game days elapsed. Null when authored quests have not advanced the
      * world day; the encounter ledger degrades diversity to npc x scene then.
@@ -197,7 +197,7 @@ export function deriveLearnerProgress(
     createTelemetryEvent("learner.progress-derived", {
       timestamp: now,
       conversationId,
-      sceneId: scene.sceneId,
+      regionId: scene.regionId,
       isColdStart,
       learnerBand: learner.cefrBand,
       metCompetencyCount: met.length,
@@ -222,7 +222,7 @@ export function deriveLearnerProgress(
     unmetCompetencyIds,
     dueItemIds,
     isColdStart,
-    sceneId: scene.sceneId,
+    regionId: scene.regionId,
     conversationId
   };
 }

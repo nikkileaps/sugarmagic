@@ -122,7 +122,7 @@ function dueSchedule() {
     unmetCompetencyIds: [],
     dueItemIds: ["queso"],
     isColdStart: false,
-    sceneId: "scene-dock",
+    regionId: "scene-dock",
     conversationId: "c1"
   };
 }

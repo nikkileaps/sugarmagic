@@ -167,7 +167,7 @@ export function createSugarlangPlugin(
   // lives in IndexedDB and memory.
   const sceneContextCardContribution = createSceneContextHudCard({
     pluginId: context.configuration.pluginId,
-    getSceneContext: (sceneId) => services.getSceneContext(sceneId)
+    getSceneContext: (regionId) => services.getSceneContext(regionId)
   });
 
   // What the teaching system knows about the learner, while playing. Contributed
@@ -355,7 +355,7 @@ export function createSugarlangPlugin(
         {
           source: isPublished ? "shipped artifact" : "studio boot payload",
           models: seededContexts.map((model) => ({
-            sceneId: model.sceneId,
+            regionId: model.regionId,
             concepts: model.concepts.length
           }))
         }

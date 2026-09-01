@@ -82,7 +82,7 @@ function makeContext(currentRegionId: string | null): DebugHudCardContext {
 
 function makeModel(overrides: Partial<SceneContextModel> = {}): SceneContextModel {
   return {
-    sceneId: "scene-dock",
+    regionId: "scene-dock",
     contentHash: "hash",
     promptVersion: "090.1.0",
     supportLanguage: "en",
@@ -102,8 +102,8 @@ function makeModel(overrides: Partial<SceneContextModel> = {}): SceneContextMode
 }
 
 function render(
-  getSceneContext: (sceneId: string) => SceneContextModel | undefined,
-  sceneId: string | null = "scene-dock"
+  getSceneContext: (regionId: string) => SceneContextModel | undefined,
+  regionId: string | null = "scene-dock"
 ): string {
   const card = createSceneContextHudCard({
     pluginId: "sugarlang",
@@ -112,7 +112,7 @@ function render(
   const container = createFakeElement("div");
   card.payload.renderCard(
     container as unknown as HTMLElement,
-    makeContext(sceneId)
+    makeContext(regionId)
   );
   return readText(container);
 }
@@ -234,9 +234,9 @@ describe("createSceneContextHudCard", () => {
     const seen: string[] = [];
     const card = createSceneContextHudCard({
       pluginId: "sugarlang",
-      getSceneContext: (sceneId) => {
-        seen.push(sceneId);
-        return makeModel({ sceneId });
+      getSceneContext: (regionId) => {
+        seen.push(regionId);
+        return makeModel({ regionId });
       }
     });
     const container = createFakeElement("div");

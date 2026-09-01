@@ -80,7 +80,7 @@ describe("SugarLangContextMiddleware", () => {
       sourceSystem: SUGARLANG_PLACEMENT_WRITER
     });
     const ensure = vi.fn().mockResolvedValue({
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash",
       pipelineVersion: "v1",
       atlasVersion: "atlas-v1",
@@ -120,7 +120,7 @@ describe("SugarLangContextMiddleware", () => {
         supportLanguage: "en"
       },
       runtimeContext: {
-        here: { regionId: "region-1", regionDisplayName: "Region", regionLorePageId: null, sceneId: "scene-1", sceneDisplayName: "Scene", area: null, parentArea: null },
+        here: { regionId: "scene-1", regionDisplayName: "Scene", regionLorePageId: null, area: null, parentArea: null },
         playerLocation: null, playerPosition: null, playerArea: null,
         npcLocation: null, npcPosition: null, npcArea: null,
         npcPlayerRelation: null, npcBehavior: null, trackedQuest: null,
@@ -166,7 +166,7 @@ describe("SugarLangContextMiddleware", () => {
         learnerStateReducer: { apply: vi.fn() },
         sceneLexiconStore: {
           ensure: vi.fn().mockResolvedValue({
-            sceneId: "scene-1",
+            regionId: "scene-1",
             contentHash: "hash",
             pipelineVersion: "v1",
             atlasVersion: "atlas-v1",
@@ -232,7 +232,7 @@ describe("SugarLangContextMiddleware", () => {
         },
         sceneLexiconStore: {
           ensure: vi.fn().mockResolvedValue({
-            sceneId: "scene-1",
+            regionId: "scene-1",
             contentHash: "hash",
             pipelineVersion: "v1",
             atlasVersion: "atlas-v1",
@@ -261,7 +261,7 @@ describe("SugarLangContextMiddleware", () => {
         supportLanguage: "en"
       },
       runtimeContext: {
-        here: { regionId: "region-1", regionDisplayName: "Region", regionLorePageId: null, sceneId: "scene-1", sceneDisplayName: "Scene", area: null, parentArea: null },
+        here: { regionId: "scene-1", regionDisplayName: "Scene", regionLorePageId: null, area: null, parentArea: null },
         playerLocation: null, playerPosition: null, playerArea: null,
         npcLocation: null, npcPosition: null, npcArea: null,
         npcPlayerRelation: null, npcBehavior: null, trackedQuest: null,

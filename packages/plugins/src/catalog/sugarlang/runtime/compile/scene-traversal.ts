@@ -83,7 +83,7 @@ export interface SceneLorePage {
 }
 
 export interface SceneAuthoringContext {
-  sceneId: string;
+  regionId: string;
   targetLanguage: string;
   supportLanguage: string;
   region: RegionDocument;
@@ -639,7 +639,7 @@ export function createSceneAuthoringContext(
     itemIds.has(item.definitionId)
   );
   const provisionalContext: SceneAuthoringContext = {
-    sceneId: input.region.identity.id,
+    regionId: input.region.identity.id,
     targetLanguage: input.targetLanguage,
     supportLanguage: input.supportLanguage ?? "en",
     region: input.region,

@@ -285,7 +285,7 @@ export interface EntityBillboardContext {
   readonly entityKind: DebugEntityBillboardKind;
   readonly definitionId: string | null;
   readonly displayName: string;
-  readonly sceneId: string | null;
+  readonly regionId: string | null;
   readonly blackboard: RuntimeBlackboard;
 }
 

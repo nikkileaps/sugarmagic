@@ -251,5 +251,5 @@ export async function resolveSceneAuthoringContexts(
           .filter((page): page is SceneLorePage => page !== null)
       })
     )
-    .sort((left, right) => left.sceneId.localeCompare(right.sceneId));
+    .sort((left, right) => left.regionId.localeCompare(right.regionId));
 }

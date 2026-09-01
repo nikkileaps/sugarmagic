@@ -701,7 +701,7 @@ function enforceDirectiveRequirements(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        regionId: context.situation?.regionId ?? "unknown-scene",
         hardFloorReason: probeFloorState.hardFloorReason ?? null
       }),
       telemetry
@@ -839,7 +839,7 @@ export function repairDirective(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        regionId: context.situation?.regionId ?? "unknown-scene",
         contaminatedLemmas: contaminatedLemmaIds
       }),
       telemetry

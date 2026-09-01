@@ -293,7 +293,7 @@ export interface SceneContextExtractRequest {
   sources: ContextSource[];
   /** Language the concepts are written in. NOT the target language. */
   supportLanguage: string;
-  sceneId: string;
+  regionId: string;
   contentHash: string;
   promptVersion?: string;
   maxTokens?: number;
@@ -331,7 +331,7 @@ export class SceneContextExtractor {
       message: string;
     }): SceneContextExtractionResult => ({
       model: {
-        sceneId: request.sceneId,
+        regionId: request.regionId,
         contentHash: request.contentHash,
         promptVersion,
         supportLanguage: request.supportLanguage,
@@ -350,7 +350,7 @@ export class SceneContextExtractor {
       telemetry,
       createTelemetryEvent("scene-context.extraction-started", {
         timestamp: startedAt,
-        sceneId: request.sceneId,
+        regionId: request.regionId,
         contentHash: request.contentHash,
         supportLanguage: request.supportLanguage,
         sourceCount: request.sources.length,
@@ -390,7 +390,7 @@ export class SceneContextExtractor {
         telemetry,
         createTelemetryEvent("scene-context.extraction-failed", {
           timestamp: now(),
-          sceneId: request.sceneId,
+          regionId: request.regionId,
           contentHash: request.contentHash,
           supportLanguage: request.supportLanguage,
           error: failure
@@ -406,7 +406,7 @@ export class SceneContextExtractor {
       return degraded({
         code: "extractor_response_truncated",
         message:
-          `Scene context for "${request.sceneId}" did not fit in ` +
+          `Scene context for "${request.regionId}" did not fit in ` +
           `${request.maxTokens ?? 8000} output tokens. Raise maxTokens, or ` +
           `split the scene's authored content.`
       });
@@ -498,7 +498,7 @@ export class SceneContextExtractor {
     );
 
     const model: SceneContextModel = {
-      sceneId: request.sceneId,
+      regionId: request.regionId,
       contentHash: request.contentHash,
       promptVersion,
       supportLanguage: request.supportLanguage,
@@ -513,7 +513,7 @@ export class SceneContextExtractor {
       telemetry,
       createTelemetryEvent("scene-context.extraction-completed", {
         timestamp: now(),
-        sceneId: request.sceneId,
+        regionId: request.regionId,
         contentHash: request.contentHash,
         supportLanguage: request.supportLanguage,
         conceptCount: concepts.length,

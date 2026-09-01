@@ -473,7 +473,7 @@ interface DebugBillboardBinding {
   entityKind: DebugEntityBillboardKind;
   definitionId: string | null;
   displayName: string;
-  sceneId: string | null;
+  regionId: string | null;
 }
 
 function cloneSelectionMetadata(options: {
@@ -1469,7 +1469,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "npc",
         definitionId: presence.npcDefinitionId,
         displayName: npcDefinition?.displayName ?? "NPC",
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: interactableEntity,
@@ -1798,7 +1798,7 @@ export function createRuntimeGameplaySessionController(
       entityKind: binding.entityKind,
       definitionId: binding.definitionId,
       displayName: binding.displayName,
-      sceneId: binding.sceneId,
+      regionId: binding.regionId,
       blackboard
     };
   }
@@ -1910,7 +1910,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "player",
         definitionId: playerDefinition.definitionId,
         displayName: playerDefinition.displayName,
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: playerEntity,
@@ -1939,7 +1939,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "npc",
         definitionId: entry.npcDefinitionId,
         displayName: npcDefinition?.displayName ?? "NPC",
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: entry.entity,

@@ -222,7 +222,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
   async invoke(
     context: TeacherContext
   ): Promise<PedagogicalDirective> {
-    const sceneId = context.situation?.sceneId ?? "unknown-scene";
+    const regionId = context.situation?.regionId ?? "unknown-scene";
     const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
     // 090.4: derived, not carried -- see learner/pacing-signals.ts.
     const { pendingProvisionalLemmas, probeFloorState } = computePacingSignals(
@@ -239,7 +239,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher prompt constructed.", {
       conversationId: context.conversationId,
-      sceneId,
+      regionId,
       npcDefinitionId: npc.npcDefinitionId ?? null,
       npcDisplayName: npc.displayName ?? null,
       learnerBand: context.learner.estimatedCefrBand,
@@ -256,7 +256,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: startedAt,
-        sceneId,
+        regionId,
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
         teacherContext: {
@@ -305,7 +305,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,
-        sceneId: sceneId,
+        regionId: regionId,
         npcDefinitionId: npc.npcDefinitionId ?? null,
         npcDisplayName: npc.displayName ?? null,
         model: this.model,
@@ -318,7 +318,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
           sessionId: context.telemetryContext?.sessionId,
           turnId: context.telemetryContext?.turnId,
           timestamp: this.now(),
-          sceneId: sceneId,
+          regionId: regionId,
           npcId: npc.npcDefinitionId,
           npcDisplayName: npc.displayName,
           model: this.model,
@@ -359,7 +359,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     ) {
       this.logger.warn("Teacher response failed schema validation; applying repair.", {
         conversationId: context.conversationId,
-        sceneId: sceneId,
+        regionId: regionId,
         npcDefinitionId: npc.npcDefinitionId ?? null,
         npcDisplayName: npc.displayName ?? null,
         model: this.model,
@@ -381,7 +381,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     } else {
       this.logger.warn("Teacher response rejected before repair; falling back.", {
         conversationId: context.conversationId,
-        sceneId: sceneId,
+        regionId: regionId,
         npcDefinitionId: npc.npcDefinitionId ?? null,
         npcDisplayName: npc.displayName ?? null,
         model: this.model,
@@ -420,7 +420,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher response received.", {
       conversationId: context.conversationId,
-      sceneId: sceneId,
+      regionId: regionId,
       npcDefinitionId: npc.npcDefinitionId ?? null,
       npcDisplayName: npc.displayName ?? null,
       model: this.model,
@@ -449,7 +449,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: endedAt,
-        sceneId: sceneId,
+        regionId: regionId,
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
         directive,

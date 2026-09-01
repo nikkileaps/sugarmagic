@@ -6,7 +6,7 @@
  *
  * TOTAL BY CONSTRUCTION
  *   `composeSituation` cannot fail. Every input is optional, every absent input
- *   produces an unavailable fact, and a call with NOTHING but a sceneId returns
+ *   produces an unavailable fact, and a call with NOTHING but a regionId returns
  *   a valid situation in which every field says "unavailable". That is a
  *   deliberate design constraint rather than defensive habit: the blackboard is
  *   raw untyped state and any field can be missing for reasons this module
@@ -41,7 +41,7 @@ import type {
 } from "./situation";
 
 export interface ComposeSituationInput {
-  sceneId: string;
+  regionId: string;
   /** The built + seeded model, when the scene has one. */
   sceneContext?: SceneContextModel | null | undefined;
   /** Whatever the middleware was handed. Absent is legal. */
@@ -85,7 +85,7 @@ function readRuntimeFacts(
 
 export function composeSituation(input: ComposeSituationInput): Situation {
   return {
-    sceneId: input.sceneId,
+    regionId: input.regionId,
     sceneContext: runtimeFact(input.sceneContext),
     runtime: input.runtimeContext
       ? readRuntimeFacts(input.runtimeContext)

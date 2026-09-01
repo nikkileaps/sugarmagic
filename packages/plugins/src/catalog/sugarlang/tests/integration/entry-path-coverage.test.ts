@@ -257,8 +257,6 @@ function makeRuntimeContextMiddleware(options: {
       regionId: SCENE_ID,
       regionDisplayName: "Test Station",
       regionLorePageId: null,
-      sceneId: SCENE_ID,
-      sceneDisplayName: "Test Station",
       area: null,
       parentArea: null
     },

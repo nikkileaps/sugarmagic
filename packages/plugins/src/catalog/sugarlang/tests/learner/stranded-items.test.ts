@@ -121,7 +121,7 @@ describe("competencies squeezed out of the shared due list", () => {
         unmetCompetencyIds: [],
         dueItemIds: Object.keys(cards),
         isColdStart: false,
-        sceneId: "scene-station",
+        regionId: "scene-station",
         conversationId: "conv-1"
       },
       learner: { ...base.learner, lemmaCards: cards }
@@ -178,7 +178,7 @@ describe("which due items the Teacher passed over", () => {
         unmetCompetencyIds: [],
         dueItemIds,
         isColdStart: false,
-        sceneId: "scene-station",
+        regionId: "scene-station",
         conversationId: "conv-1"
       }
     });

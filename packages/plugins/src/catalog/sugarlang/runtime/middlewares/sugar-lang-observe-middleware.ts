@@ -55,7 +55,7 @@ import {
   createObservationEvent,
   getChoiceLemmaRef,
   getHoverLemma,
-  getSceneId,
+  getRegionId,
   getStoredComprehensionCheck,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -255,7 +255,7 @@ export function createSugarLangObserveMiddleware(
         const conversationId = getSugarlangConversationId(execution);
         const sessionId = getSugarAgentSessionId(execution);
         const traceTurnId = getSugarlangTelemetryTurnId(execution, "finalize");
-        const sceneId = getSceneId(execution);
+        const regionId = getRegionId(execution);
 
         // Placement no longer passes through here. It used to bypass observation
         // on the questionnaire turn and apply the completion off the submit turn;
@@ -307,7 +307,7 @@ export function createSugarLangObserveMiddleware(
               turnId: traceTurnId,
               timestamp: responseTimestamp,
               probeId: storedCheck.probeId,
-              sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+              regionId: storedCheck.regionId ?? regionId ?? "unknown-scene",
               npcId: storedCheck.npcId,
               npcDisplayName: storedCheck.npcDisplayName,
               targetLemmas: storedCheck.targetLemmas,
@@ -338,7 +338,7 @@ export function createSugarLangObserveMiddleware(
                 turnId: traceTurnId,
                 timestamp: responseTimestamp,
                 probeId: storedCheck.probeId,
-                sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+                regionId: storedCheck.regionId ?? regionId ?? "unknown-scene",
                 npcId: storedCheck.npcId,
                 npcDisplayName: storedCheck.npcDisplayName,
                 targetLemmas: storedCheck.targetLemmas,
@@ -392,7 +392,7 @@ export function createSugarLangObserveMiddleware(
                 turnId: traceTurnId,
                 timestamp: responseTimestamp,
                 probeId: storedCheck.probeId,
-                sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+                regionId: storedCheck.regionId ?? regionId ?? "unknown-scene",
                 npcId: storedCheck.npcId,
                 npcDisplayName: storedCheck.npcDisplayName,
                 targetLemmas: storedCheck.targetLemmas,
@@ -414,7 +414,7 @@ export function createSugarLangObserveMiddleware(
                 turnId: traceTurnId,
                 timestamp: responseTimestamp,
                 probeId: storedCheck.probeId,
-                sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+                regionId: storedCheck.regionId ?? regionId ?? "unknown-scene",
                 npcId: storedCheck.npcId,
                 npcDisplayName: storedCheck.npcDisplayName,
                 targetLemmas: storedCheck.targetLemmas,
@@ -436,7 +436,7 @@ export function createSugarLangObserveMiddleware(
                 turnId: traceTurnId,
                 timestamp: responseTimestamp,
                 probeId: storedCheck.probeId,
-                sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+                regionId: storedCheck.regionId ?? regionId ?? "unknown-scene",
                 npcId: storedCheck.npcId,
                 npcDisplayName: storedCheck.npcDisplayName,
                 targetLemmas: storedCheck.targetLemmas,
@@ -457,7 +457,7 @@ export function createSugarLangObserveMiddleware(
 
         const targetLemmaSet = buildTargetLemmaSet(constraint);
         const observedAtMs = Date.now();
-        if (!sceneId) {
+        if (!regionId) {
           return normalizedTurn;
         }
 
@@ -730,7 +730,7 @@ export function createSugarLangObserveMiddleware(
             // Only reinforce lemmas -- ones with an existing card in the snapshot.
             if (!(lemmaId in learner.lemmaCards)) continue;
             try {
-              const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
+              const entry = { npcDefinitionId: debtNpcId, regionId, dayIndex: debtDayIndex };
               await services.ledgerStore.recordEncounter(lemmaId, entry);
               const debt = await services.ledgerStore.getDebt(lemmaId);
               if (debt) {
@@ -745,7 +745,7 @@ export function createSugarLangObserveMiddleware(
                     itemId: lemmaId,
                     itemKind: "vocabulary",
                     npcDefinitionId: debtNpcId,
-                    sceneId,
+                    regionId,
                     dayIndex: debtDayIndex,
                     diverseEncounterCountAfter: diverseCount,
                     targetEncounters: debt.targetEncounters,
@@ -869,7 +869,7 @@ export function createSugarLangObserveMiddleware(
             // Chunks that aren't associated with a function are skipped.
             if (!isPlayerTurn && fnEntry) {
               try {
-                const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
+                const entry = { npcDefinitionId: debtNpcId, regionId, dayIndex: debtDayIndex };
                 await services.ledgerStore.recordEncounter(fnEntry.competencyId, entry);
                 const debt = await services.ledgerStore.getDebt(fnEntry.competencyId);
                 if (debt) {
@@ -884,7 +884,7 @@ export function createSugarLangObserveMiddleware(
                       itemId: fnEntry.competencyId,
                       itemKind: "competency",
                       npcDefinitionId: debtNpcId,
-                      sceneId,
+                      regionId,
                       dayIndex: debtDayIndex,
                       diverseEncounterCountAfter: diverseCount,
                       targetEncounters: debt.targetEncounters,
@@ -973,7 +973,7 @@ export function createSugarLangObserveMiddleware(
               sessionId,
               turnId: traceTurnId,
               timestamp: Date.now(),
-              sceneId,
+              regionId,
               observations: appliedObservations,
               learnerDelta: {
                 updatedLemmaIds: [
@@ -1001,7 +1001,7 @@ export function createSugarLangObserveMiddleware(
               turnId: traceTurnId,
               timestamp: promptedAtMs,
               probeId,
-              sceneId,
+              regionId,
               npcId: execution.selection.npcDefinitionId ?? null,
               npcDisplayName: execution.selection.npcDisplayName ?? null,
               targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas,
@@ -1016,7 +1016,7 @@ export function createSugarLangObserveMiddleware(
             probeStyle: constraint.comprehensionCheckInFlight.probeStyle,
             characterVoiceReminder:
               constraint.comprehensionCheckInFlight.characterVoiceReminder,
-            sceneId,
+            regionId,
             npcId: execution.selection.npcDefinitionId ?? null,
             npcDisplayName: execution.selection.npcDisplayName ?? null,
             promptedAtMs,

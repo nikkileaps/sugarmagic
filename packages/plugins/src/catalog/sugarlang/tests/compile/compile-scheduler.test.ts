@@ -77,8 +77,8 @@ describe("SugarlangAuthoringCompileScheduler", () => {
       debounceMs: 10
     });
 
-    scheduler.scheduleScene(scenes[0]!.sceneId);
-    scheduler.scheduleScene(scenes[0]!.sceneId);
+    scheduler.scheduleScene(scenes[0]!.regionId);
+    scheduler.scheduleScene(scenes[0]!.regionId);
     await vi.advanceTimersByTimeAsync(10);
 
     const entries = await cache.listEntries();
@@ -127,7 +127,7 @@ describe("SugarlangAuthoringCompileScheduler", () => {
       }
     });
 
-    scheduler.scheduleScene(scenes[0]!.sceneId);
+    scheduler.scheduleScene(scenes[0]!.regionId);
     await scheduler.flush();
     await vi.advanceTimersByTimeAsync(5);
 
@@ -137,7 +137,7 @@ describe("SugarlangAuthoringCompileScheduler", () => {
     expect(runtimeLexicon).toHaveLength(2);
     expect(chunkEntries).toHaveLength(1);
 
-    scheduler.scheduleScene(scenes[0]!.sceneId);
+    scheduler.scheduleScene(scenes[0]!.regionId);
     await scheduler.flush();
     await vi.advanceTimersByTimeAsync(5);
     expect(extractSceneChunks).toHaveBeenCalledTimes(1);
@@ -181,7 +181,7 @@ describe("SugarlangAuthoringCompileScheduler", () => {
       }
     });
 
-    scheduler.scheduleScene(scenes[0]!.sceneId);
+    scheduler.scheduleScene(scenes[0]!.regionId);
     await scheduler.flush();
     const flushPromise = scheduler.flushChunks();
     await Promise.resolve();
@@ -214,17 +214,17 @@ describe("RuntimeCompileScheduler", () => {
   it("lazy-compiles and caches missing scenes", async () => {
     const { scenes, atlas, morphology, cache } = createSchedulerDependencies();
     const scheduler = new RuntimeCompileScheduler({
-      getScene: (sceneId) => scenes.find((scene) => scene.sceneId === sceneId) ?? null,
+      getScene: (regionId) => scenes.find((scene) => scene.regionId === regionId) ?? null,
       atlas,
       morphology,
       cache,
       profile: "runtime-preview"
     });
 
-    const first = await scheduler.ensureScene(scenes[0]!.sceneId);
-    const second = await scheduler.ensureScene(scenes[0]!.sceneId);
+    const first = await scheduler.ensureScene(scenes[0]!.regionId);
+    const second = await scheduler.ensureScene(scenes[0]!.regionId);
 
     expect(first).toEqual(second);
-    expect(await cache.has(first.sceneId, first.contentHash, first.profile)).toBe(true);
+    expect(await cache.has(first.regionId, first.contentHash, first.profile)).toBe(true);
   });
 });

@@ -138,7 +138,7 @@ export interface SugarlangRebuildResult {
 export interface SugarlangRebuildProgress {
   completedScenes: number;
   totalScenes: number;
-  currentSceneId: string | null;
+  currentRegionId: string | null;
 }
 
 const atlas = new CefrLexAtlasProvider();
@@ -375,7 +375,7 @@ export async function collectSceneContextArtifact(
   // everything -- a bigger file beats a file missing the model in use.
   const isCurrent = (meta: (typeof metas)[number]): boolean => {
     if (!currentHashes) return true;
-    const current = currentHashes.get(meta.sceneId);
+    const current = currentHashes.get(meta.regionId);
     return (
       current === undefined ||
       (current === meta.contentHash &&
@@ -449,7 +449,7 @@ export async function restoreSceneContextsFromArtifact(
   const cache = new IndexedDBSceneContextCache({ workspaceId });
   let restored = 0;
   for (const model of models as SceneContextModel[]) {
-    if (!model?.sceneId || !model?.contentHash) {
+    if (!model?.regionId || !model?.contentHash) {
       continue;
     }
     await cache.set({
@@ -458,7 +458,7 @@ export async function restoreSceneContextsFromArtifact(
         supportLanguage: model.supportLanguage,
         promptVersion: model.promptVersion
       },
-      sceneId: model.sceneId,
+      regionId: model.regionId,
       model
     });
     restored += 1;
@@ -516,7 +516,7 @@ export async function compileAuthoringSceneLexicon(
     targetLanguage,
     activeScene
   )).find(
-    (scene) => scene.sceneId === activeRegion.identity.id
+    (scene) => scene.regionId === activeRegion.identity.id
   );
   if (!context) {
     return null;
@@ -555,7 +555,7 @@ async function collectAuthoringCacheEntries(
   workspaceId: string
 ): Promise<
   Array<{
-    sceneId: string;
+    regionId: string;
     contentHash: string;
   }>
 > {
@@ -565,7 +565,7 @@ async function collectAuthoringCacheEntries(
   return entries
     .filter((entry) => entry.profile === "authoring-preview")
     .map((entry) => ({
-      sceneId: entry.sceneId,
+      regionId: entry.regionId,
       contentHash: entry.contentHash
     }));
 }
@@ -616,7 +616,7 @@ function computeCurrentSceneHashes(
 ): Map<string, string> {
   return new Map(
     scenes.map((scene) => [
-      scene.sceneId,
+      scene.regionId,
       computeSceneContentHash(
         collectSceneText(scene),
         atlas.getAtlasVersion(scene.targetLanguage)
@@ -666,8 +666,8 @@ export async function readSugarlangCompileStatus(
   let chunkCachedScenes = 0;
 
   for (const scene of scenes) {
-    const currentHash = currentHashes.get(scene.sceneId);
-    const sceneEntries = entries.filter((entry) => entry.sceneId === scene.sceneId);
+    const currentHash = currentHashes.get(scene.regionId);
+    const sceneEntries = entries.filter((entry) => entry.regionId === scene.regionId);
     if (!currentHash || sceneEntries.length === 0) {
       missingScenes += 1;
       continue;
@@ -728,7 +728,7 @@ async function runTeachPlanPass(args: {
   const planned: Parameters<typeof serializeTeachPlans>[0]["scenes"] = [];
 
   for (const scene of scenes) {
-    const contentHash = currentHashes.get(scene.sceneId);
+    const contentHash = currentHashes.get(scene.regionId);
     // Read back what the scene-context pass just wrote. A miss is not fatal:
     // planSceneTeaching still asks, from a situation whose facts are all
     // unavailable, which is a weak directive rather than a wrong one.
@@ -743,7 +743,7 @@ async function runTeachPlanPass(args: {
       : null;
 
     const plan = await planSceneTeaching({
-      sceneId: scene.sceneId,
+      regionId: scene.regionId,
       sceneContext: cached?.model ?? null,
       bands: DIALOGUE_VARIANT_BANDS,
       targetLanguage,
@@ -762,7 +762,7 @@ async function runTeachPlanPass(args: {
     if (!fromSceneContext) {
       problems.push({
         pass: "scene-context",
-        message: `Scene "${scene.sceneId}" has no built context, so its lines were planned with nothing to teach.`,
+        message: `Scene "${scene.regionId}" has no built context, so its lines were planned with nothing to teach.`,
         detail:
           "Its concepts are missing or stale. Rebuild again; if it persists, the scene-context pass is failing for this scene."
       });
@@ -774,7 +774,7 @@ async function runTeachPlanPass(args: {
     if (failedBands.length > 0) {
       problems.push({
         pass: "teach-plan",
-        message: `Scene "${scene.sceneId}": the Teacher failed for ${failedBands.join(", ")}.`,
+        message: `Scene "${scene.regionId}": the Teacher failed for ${failedBands.join(", ")}.`,
         detail:
           "Lines baked at those bands will be graded for level but will not be steered toward any vocabulary."
       });
@@ -799,7 +799,7 @@ async function runTeachPlanPass(args: {
     // information gain. The dialogue index below is what makes per-dialogue
     // reads work after hydration.
     planned.push({
-      sceneId: scene.sceneId,
+      regionId: scene.regionId,
       contentHash: contentHash ?? null,
       fromSceneContext,
       dialogueDefinitionIds: scene.dialogues.map((d) => d.definitionId),
@@ -891,7 +891,7 @@ export async function rebuildSugarlangCompileCache(
   onProgress?.({
     completedScenes,
     totalScenes: scenes.length,
-    currentSceneId: null
+    currentRegionId: null
   });
 
   await cache.invalidate();
@@ -946,7 +946,7 @@ export async function rebuildSugarlangCompileCache(
                 sceneText: blobs,
                 lang: scene.targetLanguage,
                 promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
-                sceneId: scene.sceneId,
+                regionId: scene.regionId,
                 contentHash
               });
             },
@@ -967,7 +967,7 @@ export async function rebuildSugarlangCompileCache(
               // Support language, NOT target: concepts are English, so one
               // extraction serves every target language.
               supportLanguage: scene.supportLanguage,
-              sceneId: scene.sceneId,
+              regionId: scene.regionId,
               contentHash
             });
           },
@@ -990,8 +990,8 @@ export async function rebuildSugarlangCompileCache(
       onProgress?.({
         completedScenes,
         totalScenes: scenes.length,
-        currentSceneId:
-          typeof detail?.sceneId === "string" ? detail.sceneId : null
+        currentRegionId:
+          typeof detail?.regionId === "string" ? detail.regionId : null
       });
     }
   });

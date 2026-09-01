@@ -133,11 +133,9 @@ export function createTestExecution(
     annotations: {},
     runtimeContext: {
       here: {
-        regionId: "region-1",
-        regionDisplayName: "Region",
+        regionId: "scene-1",
+        regionDisplayName: "Scene",
         regionLorePageId: null,
-        sceneId: "scene-1",
-        sceneDisplayName: "Scene",
         area: null,
         parentArea: null
       },

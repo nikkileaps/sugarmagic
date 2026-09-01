@@ -507,8 +507,8 @@ export class SugarlangRuntimeServices {
    * Undefined is a legal, quiet state: the scene was never built, or the author
    * edited it since the last Rebuild so its content hash no longer matches.
    */
-  getSceneContext(sceneId: string): SceneContextModel | undefined {
-    return getSugarlangRuntimeSceneContext(sceneId);
+  getSceneContext(regionId: string): SceneContextModel | undefined {
+    return getSugarlangRuntimeSceneContext(regionId);
   }
 
   /**
@@ -893,12 +893,12 @@ export class SugarlangRuntimeServices {
     // region-level directive is faithful to what it actually does. Borrowing
     // one NPC's identity for all of them would be a fiction with no upside.
     const runtimeContext = buildRuntimeContext(null);
-    const sceneId = runtimeContext.here?.sceneId ?? null;
-    if (!sceneId) return null;
+    const regionId = runtimeContext.here?.regionId ?? null;
+    if (!regionId) return null;
 
-    const sceneContext = getSugarlangRuntimeSceneContext(sceneId);
+    const sceneContext = getSugarlangRuntimeSceneContext(regionId);
     const situation = composeSituation({
-      sceneId,
+      regionId,
       sceneContext: sceneContext ?? null,
       runtimeContext
     });
@@ -1271,10 +1271,10 @@ export class SugarlangRuntimeServices {
     const placementScoreEngine = new PlacementScoreEngine(atlas, morphology);
     const compileCache = getSugarlangRuntimeCompileCache();
     const scheduler = new RuntimeCompileScheduler({
-      getScene: (sceneId) => {
+      getScene: (regionId) => {
         if (
           !this.boundContext?.activeRegion ||
-          this.boundContext.activeRegion.identity.id !== sceneId
+          this.boundContext.activeRegion.identity.id !== regionId
         ) {
           return null;
         }

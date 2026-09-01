@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
 import { composeSituation, situationKey } from "../../runtime/situation";
 
 const RUNTIME_CONTEXT = {
-  here: { sceneId: "region-1", regionId: "region-1" },
+  here: { regionId: "region-1" },
   playerLocation: null,
   playerPosition: null,
   npcLocation: null,
@@ -46,12 +46,12 @@ describe("warm key parity", () => {
     // A warm-up composes with npc absent; the turn composes with the real NPC.
     // If the NPC ever entered the key, every warm-up would miss.
     const warm = composeSituation({
-      sceneId: "region-1",
+      regionId: "region-1",
       sceneContext: null,
       runtimeContext: RUNTIME_CONTEXT
     });
     const turn = composeSituation({
-      sceneId: "region-1",
+      regionId: "region-1",
       sceneContext: null,
       runtimeContext: RUNTIME_CONTEXT,
       npc: {
@@ -67,9 +67,9 @@ describe("warm key parity", () => {
   it("a situation with NO runtime context can never match one that has it", async () => {
     // This is the failure the warm path was one line away from shipping:
     // silent, total, and invisible.
-    const withoutContext = composeSituation({ sceneId: "region-1", sceneContext: null });
+    const withoutContext = composeSituation({ regionId: "region-1", sceneContext: null });
     const withContext = composeSituation({
-      sceneId: "region-1",
+      regionId: "region-1",
       sceneContext: null,
       runtimeContext: RUNTIME_CONTEXT
     });
@@ -82,12 +82,12 @@ describe("warm key parity", () => {
 
   it("the key moves when the world moves, which is what triggers a re-warm", async () => {
     const afternoon = composeSituation({
-      sceneId: "region-1",
+      regionId: "region-1",
       sceneContext: null,
       runtimeContext: RUNTIME_CONTEXT
     });
     const evening = composeSituation({
-      sceneId: "region-1",
+      regionId: "region-1",
       sceneContext: null,
       runtimeContext: { ...(RUNTIME_CONTEXT as object), timeOfDay: "evening" } as never
     });

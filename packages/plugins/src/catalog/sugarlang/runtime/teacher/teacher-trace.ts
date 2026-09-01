@@ -162,7 +162,7 @@ export function traceTeacherCall(args: {
   const contextNpc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
   const npc = contextNpc.displayName ?? contextNpc.npcDefinitionId ?? "(unknown npc)";
 
-  group(`[sugarlang] TEACHER CALL -- ${npc} -- ${context.situation?.sceneId ?? "unknown-scene"}`, () => {
+  group(`[sugarlang] TEACHER CALL -- ${npc} -- ${context.situation?.regionId ?? "unknown-scene"}`, () => {
     group("1. SITUATION handed to the Teacher", () => {
       if (!context.situation) {
         console.info(
@@ -174,7 +174,7 @@ export function traceTeacherCall(args: {
         // actually in here".
         console.info("situation:", context.situation);
         console.info("summary:", {
-          sceneId: context.situation.sceneId,
+          regionId: context.situation.regionId,
           sceneContextAvailable: context.situation.sceneContext.available,
           conceptCount: context.situation.sceneContext.available
             ? context.situation.sceneContext.value.concepts.length

@@ -166,7 +166,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       null;
     const currentLocationDisplayName =
       input.execution.runtimeContext?.here?.area?.displayName ??
-      input.execution.runtimeContext?.here?.sceneDisplayName ??
       input.execution.runtimeContext?.here?.regionDisplayName ??
       null;
     const currentParentAreaDisplayName =

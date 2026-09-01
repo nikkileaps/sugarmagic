@@ -95,15 +95,13 @@ const TEST_DIALOGUE_DEFINITIONS: DialogueDefinition[] = [
 const SCENE_ID = "scene-station";
 
 // Injected by the runtimeContextMiddleware so the sugarlang context middleware
-// can read sceneId without a full runtime framework.
+// can read regionId without a full runtime framework.
 function makeRuntimeContextMiddleware(): ConversationMiddleware {
   const runtimeContext: ConversationRuntimeContext = {
     here: {
       regionId: SCENE_ID,
       regionDisplayName: "Test Station",
       regionLorePageId: null,
-      sceneId: SCENE_ID,
-      sceneDisplayName: "Test Station",
       area: null,
       parentArea: null
     },

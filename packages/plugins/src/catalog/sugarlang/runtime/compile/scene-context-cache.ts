@@ -49,12 +49,12 @@ export interface SceneContextCacheKey {
 
 export interface SceneContextCacheEntry {
   key: SceneContextCacheKey;
-  sceneId: string;
+  regionId: string;
   model: SceneContextModel;
 }
 
 export interface SceneContextCacheEntryMeta extends SceneContextCacheKey {
-  sceneId: string;
+  regionId: string;
   conceptCount: number;
 }
 
@@ -75,9 +75,38 @@ export interface SugarlangSceneContextCache {
 function toMeta(entry: SceneContextCacheEntry): SceneContextCacheEntryMeta {
   return {
     ...entry.key,
-    sceneId: entry.sceneId,
+    regionId: entry.regionId,
     conceptCount: entry.model.concepts.length
   };
+}
+
+/**
+ * Records written before the regionId rename carry the id under the old name
+ * "sceneId", on the entry and on the model inside it. Mapped at the storage
+ * boundary so a cache built before the rename still answers and the artifact
+ * sweep does not silently drop its entries -- re-extraction is a paid gateway
+ * call per scene, so discarding them would cost money for no new information.
+ */
+type LegacySceneKeyed = { sceneId?: string };
+
+function upgradeLegacyEntry(
+  entry: SceneContextCacheEntry & LegacySceneKeyed
+): SceneContextCacheEntry | null {
+  const model = entry.model as SceneContextModel & LegacySceneKeyed;
+  const regionId = entry.regionId ?? entry.sceneId ?? null;
+  if (!regionId || !model) return null;
+  return {
+    key: entry.key,
+    regionId,
+    model: model.regionId ? model : { ...model, regionId: model.sceneId ?? regionId }
+  };
+}
+
+function upgradeLegacyMeta<T extends { regionId?: string } & LegacySceneKeyed>(
+  record: T
+): (T & { regionId: string }) | null {
+  const regionId = record.regionId ?? record.sceneId ?? null;
+  return regionId ? { ...record, regionId } : null;
 }
 
 export class MemorySceneContextCache implements SugarlangSceneContextCache {
@@ -211,7 +240,8 @@ export class IndexedDBSceneContextCache implements SugarlangSceneContextCache {
       "readonly",
       (store) => store.get(storageKey) as IDBRequest<IndexedDbSceneContextRecord>
     );
-    if (record?.entry) return record.entry;
+    const upgraded = record?.entry ? upgradeLegacyEntry(record.entry) : null;
+    if (upgraded) return upgraded;
     return this.fallback.get(key);
   }
 
@@ -256,12 +286,14 @@ export class IndexedDBSceneContextCache implements SugarlangSceneContextCache {
     );
     if (!records) return this.fallback.listEntries();
     return records
+      .map((record) => upgradeLegacyMeta(record))
+      .filter((record): record is NonNullable<typeof record> => record !== null)
       .map(
         (record): SceneContextCacheEntryMeta => ({
           contentHash: record.contentHash,
           supportLanguage: record.supportLanguage,
           promptVersion: record.promptVersion,
-          sceneId: record.sceneId,
+          regionId: record.regionId,
           conceptCount: record.conceptCount
         })
       )

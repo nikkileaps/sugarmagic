@@ -493,7 +493,7 @@ export function formatSceneSnapshot(context: TeacherContext): string {
   // has no scene door to read it from anymore.
   return [
     "SCENE SNAPSHOT:",
-    `- sceneId: ${context.situation?.sceneId ?? UNKNOWN_SECTION}`
+    `- regionId: ${context.situation?.regionId ?? UNKNOWN_SECTION}`
   ].join("\n");
 }
 
@@ -712,7 +712,7 @@ export function formatSituation(context: TeacherContext): string {
   const runtime = situation.runtime;
   return [
     "SITUATION:",
-    `- scene: ${situation.sceneId}`,
+    `- scene: ${situation.regionId}`,
     `- about: ${formatRuntimeFact(
       situation.sceneContext,
       (model) => model.prose || EMPTY_SECTION

@@ -76,7 +76,7 @@ describe("MultiWordExpressionExtractor", () => {
         })
       )
     }).extract({
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-1",
       sceneText: createSceneText(),
       lang: "es"
@@ -147,7 +147,7 @@ describe("MultiWordExpressionExtractor", () => {
       telemetry,
       llmClient
     }).extract({
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-1",
       sceneText: createSceneText(),
       lang: "es"
@@ -165,7 +165,7 @@ describe("MultiWordExpressionExtractor", () => {
     expect(events[0]).toEqual(
       expect.objectContaining({
         kind: "chunk.extraction-failed",
-        sceneId: "scene-1"
+        regionId: "scene-1"
       })
     );
   });

@@ -168,7 +168,7 @@ export function createReducerObservationEvent(options: {
     context: {
       sessionId: options.sessionId ?? "session-1",
       turnId: options.turnId ?? "turn-1",
-      sceneId: "scene-1",
+      regionId: "scene-1",
       lang: options.lang ?? "es",
       conversationId: "conversation-1"
     },

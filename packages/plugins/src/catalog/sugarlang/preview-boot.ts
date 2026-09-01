@@ -109,7 +109,7 @@ export async function buildSugarlangPreviewBootPayloadForSession(
       morphology,
       "runtime-preview"
     );
-    if (!(await cache.has(lexicon.sceneId, lexicon.contentHash, lexicon.profile))) {
+    if (!(await cache.has(lexicon.regionId, lexicon.contentHash, lexicon.profile))) {
       await cache.set(lexicon);
     }
   }

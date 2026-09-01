@@ -37,7 +37,7 @@ import { summarizeSceneDensity } from "../../ui/shell/editor-support";
 import type { CEFRBand, SceneVocabularyModel } from "../../runtime/types";
 
 const FIXTURE_LEXICON: SceneVocabularyModel = {
-  sceneId: "scene-1",
+  regionId: "scene-1",
   contentHash: "hash-1",
   pipelineVersion: "1",
   atlasVersion: "atlas-1",
@@ -48,7 +48,7 @@ const FIXTURE_LEXICON: SceneVocabularyModel = {
   diagnostics: [
     {
       severity: "warning",
-      sceneId: "scene-1",
+      regionId: "scene-1",
       message: "Scene skews above A2."
     }
   ]

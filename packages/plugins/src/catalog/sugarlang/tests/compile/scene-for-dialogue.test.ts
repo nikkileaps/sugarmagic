@@ -13,9 +13,9 @@ import { describe, expect, it } from "vitest";
 import { resolveSceneForDialogue } from "../../runtime/compile/scene-for-dialogue";
 import type { SceneAuthoringContext } from "../../runtime/compile/scene-traversal";
 
-function scene(sceneId: string, dialogueIds: string[]): SceneAuthoringContext {
+function scene(regionId: string, dialogueIds: string[]): SceneAuthoringContext {
   return {
-    sceneId,
+    regionId,
     dialogues: dialogueIds.map((definitionId) => ({ definitionId }))
   } as unknown as SceneAuthoringContext;
 }
@@ -32,7 +32,7 @@ describe("which scene does a dialogue belong to", () => {
       scene("scene-shop", ["dlg-finnick"])
     ]);
 
-    expect(result?.scene.sceneId).toBe("scene-shop");
+    expect(result?.scene.regionId).toBe("scene-shop");
     expect(result?.alsoIn).toEqual([]);
   });
 
@@ -44,8 +44,8 @@ describe("which scene does a dialogue belong to", () => {
       scene("scene-dock", ["dlg-finnick"])
     ]);
 
-    expect(result?.scene.sceneId).toBe("scene-dock");
-    expect(result?.alsoIn.map((s) => s.sceneId)).toEqual(["scene-shop"]);
+    expect(result?.scene.regionId).toBe("scene-dock");
+    expect(result?.alsoIn.map((s) => s.regionId)).toEqual(["scene-shop"]);
   });
 
   it("resolves the same way on every build", () => {
@@ -61,7 +61,7 @@ describe("which scene does a dialogue belong to", () => {
       scene("scene-b", ["dlg-1"])
     ]);
 
-    expect(a?.scene.sceneId).toBe(b?.scene.sceneId);
+    expect(a?.scene.regionId).toBe(b?.scene.regionId);
   });
 
   it("returns null for a dialogue no scene reaches", () => {

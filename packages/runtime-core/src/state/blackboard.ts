@@ -83,8 +83,6 @@ export interface LocationReference {
   regionId: string | null;
   regionDisplayName: string | null;
   regionLorePageId: string | null;
-  sceneId: string | null;
-  sceneDisplayName: string | null;
   area: AreaReference | null;
   parentArea: AreaReference | null;
 }
@@ -95,7 +93,6 @@ export interface EntityPositionFact {
   y: number;
   z: number;
   regionId: string | null;
-  sceneId: string | null;
 }
 
 export interface EntityLocationFact {

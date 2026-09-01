@@ -115,7 +115,7 @@ export interface SituationRuntimeFacts {
 }
 
 export interface Situation {
-  sceneId: string;
+  regionId: string;
   /**
    * The compile half. Unavailable when the scene was never built, or was edited
    * since the last build so its content hash no longer matches -- both normal,

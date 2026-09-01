@@ -56,7 +56,7 @@ export async function clearSugarlangRuntimeCompileCache(): Promise<void> {
 }
 
 /**
- * What each scene's authored content is ABOUT, by sceneId.
+ * What each scene's authored content is ABOUT, by regionId.
  *
  * The cached, unchanging half of a SITUATION. 090.3 overlays the live half --
  * who is ACTUALLY present, met/unmet, quest stage, time of day -- to produce the
@@ -71,16 +71,16 @@ export async function clearSugarlangRuntimeCompileCache(): Promise<void> {
 const runtimeSceneContexts = new Map<string, SceneContextModel>();
 
 export function getSugarlangRuntimeSceneContext(
-  sceneId: string
+  regionId: string
 ): SceneContextModel | undefined {
-  return runtimeSceneContexts.get(sceneId);
+  return runtimeSceneContexts.get(regionId);
 }
 
 export function seedSugarlangRuntimeSceneContext(
   models: SceneContextModel[]
 ): void {
   for (const model of models) {
-    runtimeSceneContexts.set(model.sceneId, model);
+    runtimeSceneContexts.set(model.regionId, model);
   }
 }
 

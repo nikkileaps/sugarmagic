@@ -26,13 +26,13 @@ import {
   createTestSceneAuthoringContext
 } from "./test-helpers";
 
-function createLexicon(sceneId = "scene-station") {
+function createLexicon(regionId = "scene-station") {
   const context = createTestSceneAuthoringContext({
     region: {
       ...createTestSceneAuthoringContext().region,
       identity: {
         ...createTestSceneAuthoringContext().region.identity,
-        id: sceneId
+        id: regionId
       }
     }
   });
@@ -66,7 +66,7 @@ describe("MemoryCompileCache", () => {
     await cache.set(lexicon);
 
     await expect(
-      cache.get(lexicon.sceneId, lexicon.contentHash, lexicon.profile)
+      cache.get(lexicon.regionId, lexicon.contentHash, lexicon.profile)
     ).resolves.toEqual(lexicon);
   });
 
@@ -87,10 +87,10 @@ describe("MemoryCompileCache", () => {
     await cache.set(second);
 
     await expect(
-      cache.get(first.sceneId, first.contentHash, first.profile)
+      cache.get(first.regionId, first.contentHash, first.profile)
     ).resolves.toBeNull();
     await expect(
-      cache.get(second.sceneId, second.contentHash, second.profile)
+      cache.get(second.regionId, second.contentHash, second.profile)
     ).resolves.toEqual(second);
   });
 
@@ -103,11 +103,11 @@ describe("MemoryCompileCache", () => {
     await cache.set(second);
     await cache.invalidate("scene-a");
 
-    expect(await cache.get(first.sceneId, first.contentHash, first.profile)).toBeNull();
-    expect(await cache.get(second.sceneId, second.contentHash, second.profile)).toEqual(second);
+    expect(await cache.get(first.regionId, first.contentHash, first.profile)).toBeNull();
+    expect(await cache.get(second.regionId, second.contentHash, second.profile)).toEqual(second);
 
     await cache.invalidate();
-    expect(await cache.get(second.sceneId, second.contentHash, second.profile)).toBeNull();
+    expect(await cache.get(second.regionId, second.contentHash, second.profile)).toBeNull();
   });
 
   it("handles parallel sets deterministically", async () => {
@@ -117,8 +117,8 @@ describe("MemoryCompileCache", () => {
 
     await Promise.all([cache.set(first), cache.set(second)]);
 
-    expect(await cache.has(first.sceneId, first.contentHash, first.profile)).toBe(true);
-    expect(await cache.has(second.sceneId, second.contentHash, second.profile)).toBe(true);
+    expect(await cache.has(first.regionId, first.contentHash, first.profile)).toBe(true);
+    expect(await cache.has(second.regionId, second.contentHash, second.profile)).toBe(true);
   });
 });
 
@@ -130,7 +130,7 @@ describe("IndexedDBCompileCache", () => {
 
     const second = new IndexedDBCompileCache({ workspaceId: "workspace-a" });
     await expect(
-      second.get(lexicon.sceneId, lexicon.contentHash, lexicon.profile)
+      second.get(lexicon.regionId, lexicon.contentHash, lexicon.profile)
     ).resolves.toEqual(lexicon);
   });
 
@@ -142,7 +142,7 @@ describe("IndexedDBCompileCache", () => {
     await first.set(lexicon);
 
     await expect(
-      second.get(lexicon.sceneId, lexicon.contentHash, lexicon.profile)
+      second.get(lexicon.regionId, lexicon.contentHash, lexicon.profile)
     ).resolves.toBeNull();
   });
 
@@ -157,7 +157,7 @@ describe("IndexedDBCompileCache", () => {
 
     await cache.set(lexicon);
 
-    expect(await cache.get(lexicon.sceneId, lexicon.contentHash, lexicon.profile)).toEqual(lexicon);
+    expect(await cache.get(lexicon.regionId, lexicon.contentHash, lexicon.profile)).toEqual(lexicon);
     expect(warn).toHaveBeenCalled();
   });
 });

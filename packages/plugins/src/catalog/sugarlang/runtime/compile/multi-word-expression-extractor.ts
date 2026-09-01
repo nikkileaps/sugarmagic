@@ -53,7 +53,7 @@
  *     const result = await extractor.extract({
  *       sceneText: collectSceneText(scene),
  *       lang: scene.targetLanguage,
- *       sceneId: scene.sceneId,
+ *       regionId: scene.regionId,
  *       contentHash
  *     });
  *   Callers own caching and scheduling -- this class is stateless per call.
@@ -163,7 +163,7 @@ export interface MultiWordExpressionExtractionInput {
   promptVersion?: string;
   model?: string;
   maxTokens?: number;
-  sceneId?: string;
+  regionId?: string;
   contentHash?: string;
   telemetry?: TelemetrySink;
   now?: () => number;
@@ -354,7 +354,7 @@ async function runExtraction(
     telemetry,
     createTelemetryEvent("chunk.extraction-started", {
       timestamp: startedAt,
-      sceneId: input.sceneId ?? "unknown-scene",
+      regionId: input.regionId ?? "unknown-scene",
       contentHash: input.contentHash ?? "unknown-hash",
       lang: input.lang,
       extractorPurpose: EXTRACTION_PURPOSE,
@@ -383,7 +383,7 @@ async function runExtraction(
       telemetry,
       createTelemetryEvent("chunk.extraction-failed", {
         timestamp: now(),
-        sceneId: input.sceneId ?? "unknown-scene",
+        regionId: input.regionId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
         extractorPurpose: EXTRACTION_PURPOSE,
@@ -432,7 +432,7 @@ async function runExtraction(
       telemetry,
       createTelemetryEvent("chunk.extraction-completed", {
         timestamp: extractedAtMs,
-        sceneId: input.sceneId ?? "unknown-scene",
+        regionId: input.regionId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
         chunkCount: dedupedChunks.length,
@@ -463,7 +463,7 @@ async function runExtraction(
       telemetry,
       createTelemetryEvent("chunk.extraction-failed", {
         timestamp: now(),
-        sceneId: input.sceneId ?? "unknown-scene",
+        regionId: input.regionId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
         extractorPurpose: EXTRACTION_PURPOSE,
@@ -504,7 +504,7 @@ export interface MultiWordExpressionExtractRequest {
   promptVersion?: string;
   model?: string;
   maxTokens?: number;
-  sceneId?: string;
+  regionId?: string;
   contentHash?: string;
 }
 

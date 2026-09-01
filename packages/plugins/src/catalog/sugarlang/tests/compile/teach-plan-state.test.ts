@@ -30,7 +30,7 @@ function docWithOneScene() {
     lang: "es",
     scenes: [
       {
-        sceneId: "scene-dock",
+        regionId: "scene-dock",
         contentHash: "hash-1",
         fromSceneContext: true,
         dialogueDefinitionIds: ["dlg-finnick", "dlg-orrin"],
@@ -153,7 +153,7 @@ describe("teach plan project round-trip", () => {
     const doc = docWithOneScene();
     doc.dialogueScenes.push({
       dialogueDefinitionId: "dlg-orphan",
-      sceneId: "scene-that-left"
+      regionId: "scene-that-left"
     });
 
     expect(hydrateTeachPlans(doc).hydrated).toBe(4);

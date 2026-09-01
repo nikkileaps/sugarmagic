@@ -38,9 +38,9 @@ import {
   createTestSceneAuthoringContext
 } from "./test-helpers";
 
-function makeModel(sceneId: string, contentHash: string): SceneContextModel {
+function makeModel(regionId: string, contentHash: string): SceneContextModel {
   return {
-    sceneId,
+    regionId,
     contentHash,
     promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
     supportLanguage: "en",
@@ -84,8 +84,8 @@ describe("scene-context seed path", () => {
         supportLanguage: scene.supportLanguage,
         promptVersion: SCENE_CONTEXT_PROMPT_VERSION
       },
-      sceneId: scene.sceneId,
-      model: makeModel(scene.sceneId, contentHash)
+      regionId: scene.regionId,
+      model: makeModel(scene.regionId, contentHash)
     });
 
     const payload = await buildSugarlangPreviewBootPayload(
@@ -100,7 +100,7 @@ describe("scene-context seed path", () => {
       extractSugarlangPreviewBootSceneContexts(payload)
     );
 
-    const seeded = getSugarlangRuntimeSceneContext(scene.sceneId);
+    const seeded = getSugarlangRuntimeSceneContext(scene.regionId);
     expect(seeded?.concepts.map((concept) => concept.label)).toEqual(["cheese"]);
   });
 
@@ -128,8 +128,8 @@ describe("scene-context seed path", () => {
         supportLanguage: scene.supportLanguage,
         promptVersion: SCENE_CONTEXT_PROMPT_VERSION
       },
-      sceneId: scene.sceneId,
-      model: makeModel(scene.sceneId, "stale-hash")
+      regionId: scene.regionId,
+      model: makeModel(scene.regionId, "stale-hash")
     });
 
     const payload = await buildSugarlangPreviewBootPayload(

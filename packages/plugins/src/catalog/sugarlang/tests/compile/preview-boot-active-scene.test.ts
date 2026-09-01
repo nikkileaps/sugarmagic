@@ -95,7 +95,7 @@ describe("preview boot composes the active Scene overlay", () => {
 
     expect(payload).not.toBeNull();
     const lexicon = payload!.compiledScenes.find(
-      (scene) => scene.sceneId === region.identity.id
+      (scene) => scene.regionId === region.identity.id
     );
     expect(lexicon).toBeDefined();
 

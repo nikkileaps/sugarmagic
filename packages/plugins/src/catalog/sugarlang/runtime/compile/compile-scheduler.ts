@@ -90,9 +90,9 @@ export interface SugarlangAuthoringCompileSchedulerOptions {
 
 
 export class SugarlangAuthoringCompileScheduler {
-  private readonly pendingSceneIds = new Set<string>();
-  private readonly pendingChunkSceneIds = new Set<string>();
-  private readonly pendingSceneContextSceneIds = new Set<string>();
+  private readonly pendingRegionIds = new Set<string>();
+  private readonly pendingChunkRegionIds = new Set<string>();
+  private readonly pendingSceneContextRegionIds = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chunkTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
@@ -111,23 +111,23 @@ export class SugarlangAuthoringCompileScheduler {
     this.telemetry = this.chunkPipeline?.telemetry ?? createNoOpTelemetrySink();
   }
 
-  scheduleScene(sceneId: string): void {
-    this.pendingSceneIds.add(sceneId);
+  scheduleScene(regionId: string): void {
+    this.pendingRegionIds.add(regionId);
     this.armTimer();
   }
 
-  scheduleScenes(sceneIds: Iterable<string>): void {
-    for (const sceneId of sceneIds) {
-      this.pendingSceneIds.add(sceneId);
+  scheduleScenes(regionIds: Iterable<string>): void {
+    for (const regionId of regionIds) {
+      this.pendingRegionIds.add(regionId);
     }
     this.armTimer();
   }
 
   rebuildAll(): void {
-    this.scheduleScenes(this.options.getScenes().map((scene) => scene.sceneId));
+    this.scheduleScenes(this.options.getScenes().map((scene) => scene.regionId));
     if (this.sceneContextPass) {
       for (const scene of this.options.getScenes()) {
-        this.pendingSceneContextSceneIds.add(scene.sceneId);
+        this.pendingSceneContextRegionIds.add(scene.regionId);
       }
     }
   }
@@ -143,7 +143,7 @@ export class SugarlangAuthoringCompileScheduler {
   }
 
   private armChunkTimer(): void {
-    if (!this.chunkPipeline || this.pendingChunkSceneIds.size === 0) {
+    if (!this.chunkPipeline || this.pendingChunkRegionIds.size === 0) {
       return;
     }
 
@@ -156,21 +156,21 @@ export class SugarlangAuthoringCompileScheduler {
     }, this.chunkDebounceMs);
   }
 
-  private getRequestedScenes(requestedSceneIds: string[]): SceneAuthoringContext[] {
-    const requested = new Set(requestedSceneIds);
+  private getRequestedScenes(requestedRegionIds: string[]): SceneAuthoringContext[] {
+    const requested = new Set(requestedRegionIds);
     return this.options
       .getScenes()
-      .filter((scene) => requested.has(scene.sceneId))
-      .sort((left, right) => left.sceneId.localeCompare(right.sceneId));
+      .filter((scene) => requested.has(scene.regionId))
+      .sort((left, right) => left.regionId.localeCompare(right.regionId));
   }
 
   private async writeChunksIntoCompileCache(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     chunks: NonNullable<SceneVocabularyModel["chunks"]>
   ): Promise<void> {
     for (const profile of ["runtime-preview", "authoring-preview"] as const) {
-      const existing = await this.options.cache.get(sceneId, contentHash, profile);
+      const existing = await this.options.cache.get(regionId, contentHash, profile);
       if (!existing) {
         continue;
       }
@@ -188,8 +188,8 @@ export class SugarlangAuthoringCompileScheduler {
       this.timer = null;
     }
 
-    const requested = [...this.pendingSceneIds].sort((left, right) => left.localeCompare(right));
-    this.pendingSceneIds.clear();
+    const requested = [...this.pendingRegionIds].sort((left, right) => left.localeCompare(right));
+    this.pendingRegionIds.clear();
     const scenes = this.getRequestedScenes(requested);
 
     const compiled: SceneVocabularyModel[] = [];
@@ -206,12 +206,12 @@ export class SugarlangAuthoringCompileScheduler {
       }
 
       this.onLog?.("compiled-scene", {
-        sceneId: scene.sceneId,
+        regionId: scene.regionId,
         profiles: ["runtime-preview", "authoring-preview"]
       });
 
       if (this.chunkPipeline) {
-        this.pendingChunkSceneIds.add(scene.sceneId);
+        this.pendingChunkRegionIds.add(scene.regionId);
       }
     }
 
@@ -231,10 +231,10 @@ export class SugarlangAuthoringCompileScheduler {
       return;
     }
 
-    const requested = [...this.pendingSceneContextSceneIds].sort((left, right) =>
+    const requested = [...this.pendingSceneContextRegionIds].sort((left, right) =>
       left.localeCompare(right)
     );
-    this.pendingSceneContextSceneIds.clear();
+    this.pendingSceneContextRegionIds.clear();
     const scenes = this.getRequestedScenes(requested);
 
     for (const scene of scenes) {
@@ -254,7 +254,7 @@ export class SugarlangAuthoringCompileScheduler {
       const cached = await this.sceneContextPass.cache.get(cacheKey);
       if (cached) {
         this.onLog?.("scene-context-cache-hit", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           conceptCount: cached.model.concepts.length
         });
         continue;
@@ -268,7 +268,7 @@ export class SugarlangAuthoringCompileScheduler {
         // Fail-soft: a scene with no context model is a worse build, not a
         // broken one. The extractor already degraded to authored prose.
         this.onLog?.("scene-context-extraction-failed", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           reason: result.failure.message
         });
         continue;
@@ -276,7 +276,7 @@ export class SugarlangAuthoringCompileScheduler {
 
       const latestScene = this.options
         .getScenes()
-        .find((entry) => entry.sceneId === scene.sceneId);
+        .find((entry) => entry.regionId === scene.regionId);
       if (!latestScene) {
         continue;
       }
@@ -289,7 +289,7 @@ export class SugarlangAuthoringCompileScheduler {
       ).contentHash;
       if (latestHash !== contentHash) {
         this.onLog?.("scene-context-stale-discarded", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           contentHash
         });
         continue;
@@ -297,11 +297,11 @@ export class SugarlangAuthoringCompileScheduler {
 
       await this.sceneContextPass.cache.set({
         key: cacheKey,
-        sceneId: scene.sceneId,
+        regionId: scene.regionId,
         model: result.model
       });
       this.onLog?.("scene-context-built", {
-        sceneId: scene.sceneId,
+        regionId: scene.regionId,
         conceptCount: result.model.concepts.length
       });
     }
@@ -317,10 +317,10 @@ export class SugarlangAuthoringCompileScheduler {
       this.chunkTimer = null;
     }
 
-    const requested = [...this.pendingChunkSceneIds].sort((left, right) =>
+    const requested = [...this.pendingChunkRegionIds].sort((left, right) =>
       left.localeCompare(right)
     );
-    this.pendingChunkSceneIds.clear();
+    this.pendingChunkRegionIds.clear();
     const scenes = this.getRequestedScenes(requested);
 
     for (const scene of scenes) {
@@ -338,9 +338,9 @@ export class SugarlangAuthoringCompileScheduler {
       };
       const cached = await this.chunkPipeline.cache.get(cacheKey);
       if (cached) {
-        await this.writeChunksIntoCompileCache(scene.sceneId, contentHash, cached.chunks);
+        await this.writeChunksIntoCompileCache(scene.regionId, contentHash, cached.chunks);
         this.onLog?.("chunk-cache-hit", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           chunkCount: cached.chunks.length
         });
         continue;
@@ -352,7 +352,7 @@ export class SugarlangAuthoringCompileScheduler {
       );
       if (extraction.failure) {
         this.onLog?.("chunk-extraction-failed", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           reason: extraction.failure.message
         });
         continue;
@@ -360,7 +360,7 @@ export class SugarlangAuthoringCompileScheduler {
 
       const latestScene = this.options
         .getScenes()
-        .find((entry) => entry.sceneId === scene.sceneId);
+        .find((entry) => entry.regionId === scene.regionId);
       if (!latestScene) {
         continue;
       }
@@ -376,13 +376,13 @@ export class SugarlangAuthoringCompileScheduler {
           this.telemetry,
           createTelemetryEvent("chunk.extraction-stale-discarded", {
             timestamp: Date.now(),
-            sceneId: scene.sceneId,
+            regionId: scene.regionId,
             contentHash,
             reason: "scene-content-changed-before-writeback"
           })
         );
         this.onLog?.("chunk-stale-discarded", {
-          sceneId: scene.sceneId,
+          regionId: scene.regionId,
           contentHash
         });
         continue;
@@ -390,18 +390,18 @@ export class SugarlangAuthoringCompileScheduler {
 
       await this.chunkPipeline.cache.set({
         key: cacheKey,
-        sceneId: scene.sceneId,
+        regionId: scene.regionId,
         chunks: extraction.chunks,
         extractedAtMs: Date.now(),
         extractedByModel: extraction.model
       });
       await this.writeChunksIntoCompileCache(
-        scene.sceneId,
+        scene.regionId,
         contentHash,
         extraction.chunks
       );
       this.onLog?.("chunk-extracted", {
-        sceneId: scene.sceneId,
+        regionId: scene.regionId,
         contentHash,
         chunkCount: extraction.chunks.length,
         textBlobCount: collectSceneText(scene).length
@@ -423,14 +423,14 @@ export class SugarlangAuthoringCompileScheduler {
       clearTimeout(this.chunkTimer);
       this.chunkTimer = null;
     }
-    this.pendingSceneIds.clear();
-    this.pendingChunkSceneIds.clear();
+    this.pendingRegionIds.clear();
+    this.pendingChunkRegionIds.clear();
     this.onLog?.("scheduler-stopped");
   }
 }
 
 export interface RuntimeCompileSchedulerOptions {
-  getScene: (sceneId: string) => SceneAuthoringContext | null;
+  getScene: (regionId: string) => SceneAuthoringContext | null;
   atlas: LexicalAtlasProvider;
   morphology: MorphologyLoader;
   cache: SugarlangCompileCache;
@@ -440,10 +440,10 @@ export interface RuntimeCompileSchedulerOptions {
 export class RuntimeCompileScheduler {
   constructor(private readonly options: RuntimeCompileSchedulerOptions) {}
 
-  async ensureScene(sceneId: string): Promise<SceneVocabularyModel> {
-    const scene = this.options.getScene(sceneId);
+  async ensureScene(regionId: string): Promise<SceneVocabularyModel> {
+    const scene = this.options.getScene(regionId);
     if (!scene) {
-      throw new Error(`Unknown sugarlang scene "${sceneId}".`);
+      throw new Error(`Unknown sugarlang scene "${regionId}".`);
     }
 
     const lexicon = compileSugarlangScene(
@@ -453,7 +453,7 @@ export class RuntimeCompileScheduler {
       this.options.profile
     );
     const cached = await this.options.cache.get(
-      sceneId,
+      regionId,
       lexicon.contentHash,
       this.options.profile
     );
@@ -465,12 +465,12 @@ export class RuntimeCompileScheduler {
     return lexicon;
   }
 
-  async prime(sceneIds: Iterable<string>): Promise<SceneVocabularyModel[]> {
+  async prime(regionIds: Iterable<string>): Promise<SceneVocabularyModel[]> {
     const compiled: SceneVocabularyModel[] = [];
-    for (const sceneId of [...sceneIds].sort((left, right) =>
+    for (const regionId of [...regionIds].sort((left, right) =>
       left.localeCompare(right)
     )) {
-      compiled.push(await this.ensureScene(sceneId));
+      compiled.push(await this.ensureScene(regionId));
     }
     return compiled;
   }

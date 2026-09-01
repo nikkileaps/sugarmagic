@@ -80,12 +80,20 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
     }
 
     this.dbPromise = new Promise((resolve) => {
+      // Version 2: records written before the regionId rename carry lexicons
+      // with the old field name, which downstream readers no longer accept.
+      // Compilation is local and free, so the upgrade clears the store and
+      // lets the next build refill it rather than mapping old records.
       const request = this.indexedDbFactory!.open(
         `${DB_NAME_PREFIX}:${this.workspaceId}`,
-        1
+        2
       );
       request.onupgradeneeded = () => {
-        request.result.createObjectStore(STORE_NAME, { keyPath: "cacheKey" });
+        const db = request.result;
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          db.deleteObjectStore(STORE_NAME);
+        }
+        db.createObjectStore(STORE_NAME, { keyPath: "cacheKey" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => {
@@ -155,14 +163,14 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
   }
 
   override async get(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ): Promise<SceneVocabularyModel | null> {
-    const cacheKey = createCompileCacheKey(sceneId, contentHash, profile);
+    const cacheKey = createCompileCacheKey(regionId, contentHash, profile);
     const db = await this.openDb();
     if (!db) {
-      return this.fallback.get(sceneId, contentHash, profile);
+      return this.fallback.get(regionId, contentHash, profile);
     }
 
     const record = await this.runTransaction<IndexedDbCacheRecord>(
@@ -186,12 +194,12 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
 
     const record: IndexedDbCacheRecord = {
       cacheKey: createCompileCacheKey(
-        lexicon.sceneId,
+        lexicon.regionId,
         lexicon.contentHash,
         lexicon.profile
       ),
       workspaceId: this.workspaceId,
-      sceneId: lexicon.sceneId,
+      regionId: lexicon.regionId,
       contentHash: lexicon.contentHash,
       profile: lexicon.profile,
       estimatedBytes: estimateBytes(lexicon),
@@ -203,26 +211,26 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
   }
 
   override async has(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ): Promise<boolean> {
-    return (await this.get(sceneId, contentHash, profile)) !== null;
+    return (await this.get(regionId, contentHash, profile)) !== null;
   }
 
-  override async invalidate(sceneId?: string): Promise<void> {
+  override async invalidate(regionId?: string): Promise<void> {
     const db = await this.openDb();
     if (!db) {
-      return this.fallback.invalidate(sceneId);
+      return this.fallback.invalidate(regionId);
     }
 
-    if (!sceneId) {
+    if (!regionId) {
       await this.runTransaction("readwrite", (store) => store.clear());
       return;
     }
 
     for (const record of await this.getAllRecords()) {
-      if (record.sceneId === sceneId) {
+      if (record.regionId === regionId) {
         await this.runTransaction("readwrite", (store) =>
           store.delete(record.cacheKey)
         );
@@ -239,7 +247,7 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
     return (await this.getAllRecords())
       .map((record) => ({
         cacheKey: record.cacheKey,
-        sceneId: record.sceneId,
+        regionId: record.regionId,
         contentHash: record.contentHash,
         profile: record.profile,
         estimatedBytes: record.estimatedBytes,

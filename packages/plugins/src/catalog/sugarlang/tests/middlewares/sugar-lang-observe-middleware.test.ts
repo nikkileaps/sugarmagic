@@ -48,7 +48,7 @@ const BUENOS_DIAS_CHUNK = {
 function makeSceneLexiconStoreWith(chunks: typeof BUENOS_DIAS_CHUNK[]) {
   return {
     ensure: vi.fn().mockResolvedValue({
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-1",
       chunks
     }),

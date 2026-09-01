@@ -123,7 +123,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "teacher.invocation-started",
       {
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         teacherContext: Record<string, unknown>;
@@ -141,7 +141,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "teacher.invocation-completed",
       {
-        sceneId?: string;
+        regionId?: string;
         npcId?: string | null;
         npcDisplayName?: string | null;
         directive: PedagogicalDirective;
@@ -169,7 +169,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "teacher.invocation-failed",
       {
-        sceneId?: string;
+        regionId?: string;
         npcId?: string | null;
         npcDisplayName?: string | null;
         model?: string | null;
@@ -212,7 +212,7 @@ export type TelemetryEvent =
         firstTurnOfConversation: boolean;
         /** What the turn actually waited: ~0 served, seconds when blocking. */
         teacherMs: number;
-        sceneId?: string;
+        regionId?: string;
         npcId?: string | null;
         npcDisplayName?: string | null;
         fallback: boolean;
@@ -221,7 +221,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "teacher.invocation-resolved",
       {
-        sceneId?: string;
+        regionId?: string;
         npcId?: string | null;
         npcDisplayName?: string | null;
         outcome: "claude" | "fallback" | "cache";
@@ -232,7 +232,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "classifier.verdict",
       {
-        sceneId: string | null;
+        regionId: string | null;
         learnerSnapshot: LearnerSnapshot;
         verdict: EnvelopeVerdict;
         inputText: string;
@@ -242,7 +242,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.extraction-started",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         lang: string;
         extractorPurpose: string;
@@ -252,7 +252,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.extraction-completed",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         lang: string;
         chunkCount: number;
@@ -267,7 +267,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.extraction-failed",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         lang: string;
         error: {
@@ -280,7 +280,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.extraction-drift-detected",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         previousChunkCount: number;
         newChunkCount: number;
@@ -295,7 +295,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "scene-context.extraction-started",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         supportLanguage: string;
         sourceCount: number;
@@ -306,7 +306,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "scene-context.extraction-completed",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         supportLanguage: string;
         conceptCount: number;
@@ -327,7 +327,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "scene-context.extraction-failed",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         supportLanguage: string;
         error: {
@@ -378,7 +378,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.hit-during-classification",
       {
-        sceneId: string;
+        regionId: string;
         matchedChunks: Array<{
           chunkId: string;
           cefrBand: CEFRBand;
@@ -389,7 +389,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "chunk.extraction-stale-discarded",
       {
-        sceneId: string;
+        regionId: string;
         contentHash: string;
         reason: string;
       }
@@ -397,7 +397,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "observe.observations-applied",
       {
-        sceneId: string;
+        regionId: string;
         observations: ObservationEvent[];
         learnerDelta: TelemetryLearnerDelta;
       }
@@ -436,20 +436,20 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "teacher.pre-placement-bypass",
       {
-        sceneId?: string | null;
+        regionId?: string | null;
         lineId: string;
       }
     >
   | TelemetryEventOf<
       "verify.pre-placement-bypass",
       {
-        sceneId?: string | null;
+        regionId?: string | null;
       }
     >
   | TelemetryEventOf<
       "verify.drift-sample",
       {
-        sceneId: string | null;
+        regionId: string | null;
         /** Ordinal turn index within the conversation (0-based). */
         turnIndex: number;
         measuredRatio: number;
@@ -464,7 +464,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "verify.ratio-verdict",
       {
-        sceneId: string | null;
+        regionId: string | null;
         measuredRatio: number;
         directedRatio: number;
         posture: string;
@@ -477,20 +477,20 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "observer.pre-placement-bypass",
       {
-        sceneId?: string | null;
+        regionId?: string | null;
       }
     >
   | TelemetryEventOf<
       "observer.placement-questionnaire-bypass",
       {
-        sceneId?: string | null;
+        regionId?: string | null;
       }
     >
   | TelemetryEventOf<
       "comprehension.probe-triggered",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -505,7 +505,7 @@ export type TelemetryEvent =
       "comprehension.probe-fired",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -517,7 +517,7 @@ export type TelemetryEvent =
       "comprehension.probe-response-received",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -530,7 +530,7 @@ export type TelemetryEvent =
       "comprehension.probe-passed",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -544,7 +544,7 @@ export type TelemetryEvent =
       "comprehension.probe-failed",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -558,7 +558,7 @@ export type TelemetryEvent =
       "comprehension.probe-mixed-result",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -573,7 +573,7 @@ export type TelemetryEvent =
       "comprehension.probe-language-fallback",
       {
         probeId: string;
-        sceneId: string;
+        regionId: string;
         npcId: string | null;
         npcDisplayName: string | null;
         targetLemmas: LemmaRef[];
@@ -584,7 +584,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "comprehension.teacher-hard-floor-violated",
       {
-        sceneId?: string;
+        regionId?: string;
         teacherModel?: string | null;
         hardFloorReason?: string | null;
       }
@@ -643,7 +643,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "quest-essential.classifier-exempted-lemma",
       {
-        sceneId: string;
+        regionId: string;
         lemmaRef: LemmaRef;
         cefrBand: CEFRBand | "unknown";
         learnerBand: CEFRBand;
@@ -654,7 +654,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "quest-essential.teacher-targetvocab-contamination",
       {
-        sceneId?: string;
+        regionId?: string;
         contaminatedLemmas: string[];
         contaminationSite?: "introduce" | "reinforce" | "avoid";
       }
@@ -662,7 +662,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "quest-essential.generator-missed-gloss",
       {
-        sceneId: string;
+        regionId: string;
         lemmaRef: LemmaRef;
         expectedGloss: string;
         generatedText: string;
@@ -673,7 +673,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "quest-essential.generator-missed-required",
       {
-        sceneId: string;
+        regionId: string;
         expectedLemmas: LemmaRef[];
         generatedText: string;
         sourceObjectiveDisplayName: string;
@@ -683,7 +683,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "quest-essential.compile-diagnostic-deadlock-prone",
       {
-        sceneId: string;
+        regionId: string;
         sourceObjectiveNodeId: string;
         sourceObjectiveDisplayName: string;
         highBandLemmas: string[];
@@ -704,7 +704,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "learner.progress-derived",
       {
-        sceneId: string | null;
+        regionId: string | null;
         isColdStart: boolean;
         learnerBand: string;
         /** Competencies the learner has been taught. */
@@ -762,7 +762,7 @@ export type TelemetryEvent =
         itemId: string;
         itemKind: "vocabulary" | "competency";
         npcDefinitionId: string | null;
-        sceneId: string | null;
+        regionId: string | null;
         dayIndex: number | null;
         diverseEncounterCountAfter: number;
         targetEncounters: number;
