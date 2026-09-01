@@ -269,14 +269,12 @@ function collectQuestBindings(
     }
   }
   for (const scene of getAllScenes(gameProject.episodes)) {
-    for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-      for (const presence of overlay.npcPresences) {
-        if (presence.condition) {
-          bindings.push({
-            binding: presence.condition,
-            where: `scene "${scene.displayName}" NPC placement in region "${regionId}"`
-          });
-        }
+    for (const presence of scene.overlay.npcPresences) {
+      if (presence.condition) {
+        bindings.push({
+          binding: presence.condition,
+          where: `scene "${scene.displayName}" NPC placement`
+        });
       }
     }
   }
@@ -295,6 +293,30 @@ export function validateProjectContent(
   regions: readonly RegionDocument[]
 ): ContentValidationResult {
   const issues: ContentValidationIssue[] = [];
+
+  // A Scene has to happen somewhere. The load path is permissive so Studio
+  // still opens a project whose Scene lost its region, and this is where
+  // that becomes a refusal -- errors block save and deploy.
+  const regionIds = new Set(regions.map((region) => region.identity.id));
+  for (const scene of getAllScenes(gameProject.episodes)) {
+    if (scene.regionId.trim().length === 0) {
+      issues.push(
+        error(
+          `scene.${scene.sceneId}.regionId`,
+          `Scene "${scene.displayName}" does not name a region. Pick the region it happens in.`
+        )
+      );
+      continue;
+    }
+    if (!regionIds.has(scene.regionId)) {
+      issues.push(
+        error(
+          `scene.${scene.sceneId}.regionId`,
+          `Scene "${scene.displayName}" names region "${scene.regionId}", which does not exist. Pick a region that does.`
+        )
+      );
+    }
+  }
 
   for (const quest of gameProject.questDefinitions) {
     issues.push(...validateQuest(quest));

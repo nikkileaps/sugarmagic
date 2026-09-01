@@ -20,7 +20,8 @@ import {
   type PlacedAssetInstance,
   type RegionDocument,
   type RegionLandscapeState,
-  type SurfaceBinding
+  type SurfaceBinding,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import { shallowEqual } from "@sugarmagic/shell";
 import {
@@ -92,7 +93,7 @@ function resolvePaintTarget(
     // instance, or a base instance. layerIds are unique, so search
     // every tier that can own an inline surface for this instance.
     const activeScene = getActiveScene(session);
-    const overlay = activeScene?.regionOverlays[region.identity.id] ?? null;
+    const overlay = sceneOverlayForRegion(activeScene, region.identity.id);
     const instance: PlacedAssetInstance | null =
       region.placedAssets.find(
         (candidate) => candidate.instanceId === target.instanceId

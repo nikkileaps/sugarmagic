@@ -293,34 +293,30 @@ export function mapWorldFlagReferences(
     )
   }));
 
-  // NPC presence conditions are Scene-scoped, not region-scoped: they live on
-  // Scene.regionOverlays, inside the Episode that owns the Scene.
+  // A Scene's own placements carry conditions too; they live on its
+  // overlay, inside the Episode that owns the Scene. The region's
+  // residents are walked above.
   const episodes = mapScenes(gameProject.episodes, (scene) => ({
     ...scene,
-    regionOverlays: Object.fromEntries(
-      Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
-        regionId,
-        {
-          ...overlay,
-          npcPresences: overlay.npcPresences.map((presence) =>
-            presence.condition
-              ? {
-                  ...presence,
-                  condition: binding(presence.condition, {
-                    where: `scene "${scene.displayName}" NPC placement in region "${regionId}"`,
-                    target: {
-                      kind: "npc-placement",
-                      sceneId: scene.sceneId,
-                      regionId,
-                      presenceId: presence.presenceId
-                    }
-                  })
+    overlay: {
+      ...scene.overlay,
+      npcPresences: scene.overlay.npcPresences.map((presence) =>
+        presence.condition
+          ? {
+              ...presence,
+              condition: binding(presence.condition, {
+                where: `scene "${scene.displayName}" NPC placement`,
+                target: {
+                  kind: "npc-placement",
+                  sceneId: scene.sceneId,
+                  regionId: scene.regionId,
+                  presenceId: presence.presenceId
                 }
-              : presence
-          )
-        }
-      ])
-    )
+              })
+            }
+          : presence
+      )
+    }
   }));
 
   return {

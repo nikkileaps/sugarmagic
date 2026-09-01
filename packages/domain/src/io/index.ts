@@ -414,9 +414,10 @@ export function normalizeScenesForLoad(
   contentLibrary: ContentLibrarySnapshot
 ): Scene[] {
   return scenes.map((scene) => {
-    const regionOverlays: Record<string, RegionSceneOverlay> = {};
-    for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-      regionOverlays[regionId] = {
+    const overlay = scene.overlay;
+    return {
+      ...scene,
+      overlay: {
         itemPresences: overlay.itemPresences.map((presence) =>
           createRegionItemPresence({
             ...presence,
@@ -445,8 +446,7 @@ export function normalizeScenesForLoad(
         // Absent in files predating epic #226: nothing suppressed.
         suppressedRegionIds: [...(overlay.suppressedRegionIds ?? [])],
         assetAppearanceOverrides: overlay.assetAppearanceOverrides ?? {}
-      };
-    }
-    return { ...scene, regionOverlays };
+      }
+    };
   });
 }

@@ -225,8 +225,8 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
 export function createTestActiveScene(regionId: string): Scene {
   return createDefaultScene({
     sceneId: "scene:test",
-    regionOverlays: {
-      [regionId]: {
+    regionId: regionId,
+    overlay: {
         suppressedRegionIds: [],
         assetAppearanceOverrides: {},
         folders: [],
@@ -239,7 +239,6 @@ export function createTestActiveScene(regionId: string): Scene {
           createRegionItemPresence({ itemDefinitionId: "item-ticket" })
         ]
       }
-    }
   });
 }
 

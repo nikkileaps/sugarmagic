@@ -144,8 +144,8 @@ describe("SetPlacedAssetSurfaceSlotOverride command", () => {
     const base = createDefaultScene({ sceneId: "scene:test" });
     const scene: Scene = {
       ...base,
-      regionOverlays: {
-        "test-region": {
+      regionId: "test-region",
+      overlay: {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           itemPresences: [],
@@ -154,7 +154,6 @@ describe("SetPlacedAssetSurfaceSlotOverride command", () => {
           placedAssets: [makeInstance({ instanceId: "overlay-001" })],
           folders: []
         }
-      }
     };
 
     const result = executeCommand(
@@ -163,7 +162,7 @@ describe("SetPlacedAssetSurfaceSlotOverride command", () => {
     );
 
     const overlayAsset =
-      result.scene.regionOverlays["test-region"]!.placedAssets[0]!;
+      result.scene.overlay.placedAssets[0]!;
     expect(overlayAsset.surfaceSlotOverrides).toHaveLength(1);
     expect(overlayAsset.surfaceSlotOverrides![0]!.slotName).toBe("roof");
   });

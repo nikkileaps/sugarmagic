@@ -32,7 +32,7 @@ describe("createDefaultScene", () => {
     expect(scene.environmentOverride).toBeNull();
     expect(scene.audioOverride).toBeNull();
     expect(scene.transitionConfig).toBeNull();
-    expect(scene.regionOverlays).toEqual({});
+    expect(scene.overlay.placedAssets).toEqual([]);
   });
 
   it("has no order number and no gate of its own", () => {
@@ -73,7 +73,7 @@ describe("normalizeScene", () => {
     expect(scene!.environmentOverride).toBeNull();
     expect(scene!.audioOverride).toBeNull();
     expect(scene!.transitionConfig).toBeNull();
-    expect(scene!.regionOverlays).toEqual({});
+    expect(scene!.overlay.placedAssets).toEqual([]);
   });
 
   it("drops a pre-Episodes order number and gate rather than keeping them", () => {
@@ -108,8 +108,8 @@ describe("normalizeScene", () => {
   it("normalizes region overlays through the presence factories", () => {
     const scene = normalizeScene({
       sceneId: "s",
-      regionOverlays: {
-        "region:town": {
+      regionId: "region:town",
+      overlay: {
           itemPresences: [
             { presenceId: "p:1", itemDefinitionId: "item:coin", quantity: 0 }
           ],
@@ -118,9 +118,8 @@ describe("normalizeScene", () => {
           placedAssets: [],
           folders: []
         }
-      }
     });
-    const overlay = scene!.regionOverlays["region:town"]!;
+    const overlay = scene!.overlay;
     // Factory clamps quantity to >= 1 — proves the coercion ran.
     expect(overlay.itemPresences[0]!.quantity).toBe(1);
     expect(overlay.itemPresences[0]!.presenceId).toBe("p:1");
@@ -129,9 +128,10 @@ describe("normalizeScene", () => {
   it("treats a partial overlay object as coercible, not droppable", () => {
     const scene = normalizeScene({
       sceneId: "s",
-      regionOverlays: { "region:town": {} }
+      regionId: "region:town",
+      overlay: {}
     });
-    expect(scene!.regionOverlays["region:town"]).toEqual(
+    expect(scene!.overlay).toEqual(
       createRegionSceneOverlay()
     );
   });

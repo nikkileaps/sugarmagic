@@ -15,7 +15,8 @@ import {
   type RegionNPCPresence,
   type RegionPlayerPresence,
   type Scene,
-  type SceneAssetAppearanceOverride
+  type SceneAssetAppearanceOverride,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import type {
   EffectiveMaterialSlotBinding,
@@ -122,8 +123,8 @@ export function resolveSceneObjects(
   const contents = composeRegionContents(region, activeScene);
   // Plan 068.2 -- the active Scene may restyle base placements.
   const appearanceOverrides =
-    activeScene?.regionOverlays[region.identity.id]?.assetAppearanceOverrides ??
-    {};
+    sceneOverlayForRegion(activeScene, region.identity.id)
+      ?.assetAppearanceOverrides ?? {};
 
   const sceneObjects = contents.placedAssets.map((asset) =>
     createPlacedAssetSceneObject(

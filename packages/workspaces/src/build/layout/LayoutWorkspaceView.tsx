@@ -52,7 +52,8 @@ import {
   createPlayerPresenceId,
   createSceneFolderId,
   type ComposedRegionContents,
-  type Scene
+  type Scene,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import {
   PanelSection,
@@ -506,7 +507,8 @@ export function useLayoutWorkspaceView(
     if (!region || !activeScene) return new Set<string>();
     return new Set(
       (
-        activeScene.regionOverlays[region.identity.id]?.placedAssets ?? []
+        sceneOverlayForRegion(activeScene, region.identity.id)?.placedAssets ??
+        []
       ).map((asset) => asset.instanceId)
     );
   }, [region, activeScene]);

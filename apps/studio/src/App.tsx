@@ -138,7 +138,8 @@ import {
   createDefaultSoundCueDefinition,
   createDefaultMechanicsDefinition,
   createDefaultRegion,
-  createScopedId
+  createScopedId,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -3004,7 +3005,7 @@ export function App() {
       return null;
     }
     const overlay =
-      getActiveScene(session)?.regionOverlays[region.identity.id] ?? null;
+      sceneOverlayForRegion(getActiveScene(session), region.identity.id);
     const instance =
       region.placedAssets.find(
         (asset) => asset.instanceId === surfaceStudioTarget.instanceId

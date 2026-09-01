@@ -116,7 +116,7 @@ function sceneScopedSurfaceCommand(
 describe("scene-scoped appearance commands", () => {
   it("a scene-scope write on a BASE placement lands in the overlay record, not the instance", () => {
     const region = makeRegion([makeInstance()]);
-    const scene = createDefaultScene({ sceneId: "scene:snowy" });
+    const scene = createDefaultScene({ sceneId: "scene:snowy", regionId: "test-region" });
 
     const result = executeCommand(
       { region, scene },
@@ -127,7 +127,7 @@ describe("scene-scoped appearance commands", () => {
     expect(result.region.placedAssets[0]!.surfaceSlotOverrides).toBeUndefined();
     // Overlay record written (overlay created on demand).
     const record =
-      result.scene.regionOverlays["test-region"]!.assetAppearanceOverrides[
+      result.scene.overlay.assetAppearanceOverrides[
         "instance-001"
       ]!;
     expect(record.surfaceSlotOverrides).toHaveLength(1);
@@ -136,7 +136,7 @@ describe("scene-scoped appearance commands", () => {
 
   it("clearing the last scene override drops the whole record", () => {
     const region = makeRegion([makeInstance()]);
-    const scene = createDefaultScene({ sceneId: "scene:snowy" });
+    const scene = createDefaultScene({ sceneId: "scene:snowy", regionId: "test-region" });
 
     const applied = executeCommand(
       { region, scene },
@@ -148,7 +148,7 @@ describe("scene-scoped appearance commands", () => {
     );
 
     expect(
-      cleared.scene.regionOverlays["test-region"]!.assetAppearanceOverrides[
+      cleared.scene.overlay.assetAppearanceOverrides[
         "instance-001"
       ]
     ).toBeUndefined();
@@ -156,14 +156,13 @@ describe("scene-scoped appearance commands", () => {
 
   it("a scene-scope write on a SCENE-CONTAINED instance routes to the instance (double-scoping guard)", () => {
     const region = makeRegion([]);
-    const base = createDefaultScene({ sceneId: "scene:snowy" });
+    const base = createDefaultScene({ sceneId: "scene:snowy", regionId: "test-region" });
     const scene: Scene = {
       ...base,
-      regionOverlays: {
-        "test-region": createRegionSceneOverlay({
+      regionId: "test-region",
+      overlay: createRegionSceneOverlay({
           placedAssets: [makeInstance({ instanceId: "overlay-001" })]
         })
-      }
     };
 
     const result = executeCommand(
@@ -171,7 +170,7 @@ describe("scene-scoped appearance commands", () => {
       sceneScopedSurfaceCommand("roof", colorSurface(0x00ff00), "overlay-001")
     );
 
-    const overlay = result.scene.regionOverlays["test-region"]!;
+    const overlay = result.scene.overlay;
     // Fields on the instance, NO appearance record.
     expect(overlay.placedAssets[0]!.surfaceSlotOverrides).toHaveLength(1);
     expect(overlay.assetAppearanceOverrides["overlay-001"]).toBeUndefined();
@@ -179,7 +178,7 @@ describe("scene-scoped appearance commands", () => {
 
   it("scene-scoped deform/effect shader overrides land in the record too", () => {
     const region = makeRegion([makeInstance()]);
-    const scene = createDefaultScene({ sceneId: "scene:snowy" });
+    const scene = createDefaultScene({ sceneId: "scene:snowy", regionId: "test-region" });
 
     const result = executeCommand(
       { region, scene },
@@ -197,7 +196,7 @@ describe("scene-scoped appearance commands", () => {
     );
 
     const record =
-      result.scene.regionOverlays["test-region"]!.assetAppearanceOverrides[
+      result.scene.overlay.assetAppearanceOverrides[
         "instance-001"
       ]!;
     expect(record.shaderOverrides).toEqual([
@@ -277,12 +276,12 @@ describe("scene-tier resolution", () => {
   it("resolveSceneObjects applies the active Scene's restyle and changes the representationKey", () => {
     const contentLibrary = makeLibraryWithHouse();
     const region = makeRegion([makeInstance()]);
-    const plainScene = createDefaultScene({ sceneId: "scene:plain" });
-    const snowyBase = createDefaultScene({ sceneId: "scene:snowy" });
+    const plainScene = createDefaultScene({ sceneId: "scene:plain", regionId: "test-region" });
+    const snowyBase = createDefaultScene({ sceneId: "scene:snowy", regionId: "test-region" });
     const snowyScene: Scene = {
       ...snowyBase,
-      regionOverlays: {
-        "test-region": createRegionSceneOverlay({
+      regionId: "test-region",
+      overlay: createRegionSceneOverlay({
           assetAppearanceOverrides: {
             "instance-001": {
               surfaceSlotOverrides: [
@@ -291,7 +290,6 @@ describe("scene-tier resolution", () => {
             }
           }
         })
-      }
     };
 
     const plainObjects = resolveSceneObjects(region, {

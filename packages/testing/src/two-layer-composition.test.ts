@@ -55,9 +55,8 @@ function sceneWithOverlay(
 ): Scene {
   return createDefaultScene({
     sceneId: "scene:market-day",
-    regionOverlays: {
-      [REGION_ID]: createRegionSceneOverlay(overlay)
-    }
+    regionId: REGION_ID,
+    overlay: createRegionSceneOverlay(overlay)
   });
 }
 
@@ -145,8 +144,8 @@ describe("two-layer composition", () => {
   it("a Scene that names a different region leaves this one at rest", () => {
     const scene = createDefaultScene({
       sceneId: "scene:elsewhere",
-      regionOverlays: {
-        "region:harbour": createRegionSceneOverlay({
+      regionId: "region:harbour",
+      overlay: createRegionSceneOverlay({
           npcPresences: [
             createRegionNPCPresence({
               presenceId: "presence:harbour-master",
@@ -154,7 +153,6 @@ describe("two-layer composition", () => {
             })
           ]
         })
-      }
     });
 
     const composed = composeRegionContents(regionWithResidents(), scene);

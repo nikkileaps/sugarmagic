@@ -1138,12 +1138,10 @@ export function useQuestWorkspaceView({
       }
     }
     for (const scene of getAllScenes(episodes)) {
-      for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-        const region = regions.find((r) => r.identity.id === regionId);
-        const regionDisplayName = region?.displayName ?? regionId;
-        for (const presence of overlay.npcPresences) {
-          addPresence(presence, regionId, regionDisplayName);
-        }
+      const region = regions.find((r) => r.identity.id === scene.regionId);
+      const regionDisplayName = region?.displayName ?? scene.regionId;
+      for (const presence of scene.overlay.npcPresences) {
+        addPresence(presence, scene.regionId, regionDisplayName);
       }
     }
     return items;

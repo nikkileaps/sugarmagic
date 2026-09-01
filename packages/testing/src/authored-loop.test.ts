@@ -46,7 +46,7 @@ function makeTestRegion(): RegionDocument {
 }
 
 function makeTestScene(): Scene {
-  return createDefaultScene({ sceneId: "scene:test" });
+  return createDefaultScene({ sceneId: "scene:test", regionId: "test-region" });
 }
 
 describe("first authored loop", () => {
@@ -148,8 +148,8 @@ describe("first authored loop", () => {
     const region = makeTestRegion();
     const scene = createDefaultScene({
       sceneId: "scene:test",
-      regionOverlays: {
-        [region.identity.id]: {
+      regionId: region.identity.id,
+      overlay: {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
@@ -173,7 +173,6 @@ describe("first authored loop", () => {
             }
           ]
         }
-      }
     });
 
     const result = executeCommand(
@@ -190,7 +189,7 @@ describe("first authored loop", () => {
     );
 
     expect(
-      result.scene.regionOverlays[region.identity.id]?.placedAssets[0]
+      result.scene.overlay?.placedAssets[0]
         ?.transform.position
     ).toEqual([7, 8, 9]);
     // Base asset untouched.
@@ -226,7 +225,7 @@ describe("first authored loop", () => {
     );
 
     expect(
-      result.scene.regionOverlays[region.identity.id]?.placedAssets
+      result.scene.overlay?.placedAssets
     ).toHaveLength(1);
     // Base list unchanged (still just cube-001).
     expect(result.region.placedAssets).toHaveLength(1);

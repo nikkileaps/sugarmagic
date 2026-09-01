@@ -73,7 +73,7 @@ export interface ManageScenesModalProps {
         Scene,
         | "description"
         | "notes"
-        | "startingRegionId"
+        | "regionId"
         | "environmentOverride"
         | "audioOverride"
         | "transitionConfig"
@@ -807,17 +807,15 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
             />
             <Select
               size="xs"
-              label="Starting region"
-              placeholder="(first region)"
-              clearable
+              label="Region"
               data={regions.map((region) => ({
                 value: region.regionId,
                 label: region.displayName
               }))}
-              value={selectedScene.startingRegionId ?? null}
+              value={selectedScene.regionId || null}
               onChange={(value) =>
                 onUpdateScene(selectedScene.sceneId, {
-                  startingRegionId: value ?? null
+                  regionId: value ?? ""
                 })
               }
               {...fieldLabelProps}

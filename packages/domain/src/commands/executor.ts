@@ -99,6 +99,7 @@ import type {
 } from "../shader-graph";
 import {
   createRegionSceneOverlay,
+  sceneOverlayForRegion,
   type RegionSceneOverlay,
   type Scene,
   type SceneAssetAppearanceOverride
@@ -130,17 +131,18 @@ function nextTransactionId(): string {
   return `tx-${++txCounter}-${Date.now()}`;
 }
 
+/**
+ * Mutate the Scene's overlay, but only when the Scene is the one dressing
+ * this region. Editing another region while some Scene is active must not
+ * write that Scene's overlay -- the Scene happens somewhere else.
+ */
 function withOverlay(
   scene: Scene,
   regionId: string,
   mutate: (overlay: RegionSceneOverlay) => RegionSceneOverlay
 ): Scene {
-  const current =
-    scene.regionOverlays[regionId] ?? createRegionSceneOverlay();
-  return {
-    ...scene,
-    regionOverlays: { ...scene.regionOverlays, [regionId]: mutate(current) }
-  };
+  if (scene.regionId !== regionId) return scene;
+  return { ...scene, overlay: mutate(scene.overlay) };
 }
 
 /**
@@ -160,7 +162,7 @@ function mapPlacedAssetsEverywhere(
     ...context.region,
     placedAssets: transform(context.region.placedAssets)
   };
-  const scene = context.scene.regionOverlays[regionId]
+  const scene = sceneOverlayForRegion(context.scene, regionId)
     ? withOverlay(context.scene, regionId, (overlay) => ({
         ...overlay,
         placedAssets: transform(overlay.placedAssets)
@@ -186,7 +188,7 @@ function mapNpcPresencesEverywhere(
     ...context.region,
     npcPresences: transform(context.region.npcPresences)
   };
-  const scene = context.scene.regionOverlays[regionId]
+  const scene = sceneOverlayForRegion(context.scene, regionId)
     ? withOverlay(context.scene, regionId, (overlay) => ({
         ...overlay,
         npcPresences: transform(overlay.npcPresences)
@@ -204,7 +206,7 @@ function mapItemPresencesEverywhere(
     ...context.region,
     itemPresences: transform(context.region.itemPresences)
   };
-  const scene = context.scene.regionOverlays[regionId]
+  const scene = sceneOverlayForRegion(context.scene, regionId)
     ? withOverlay(context.scene, regionId, (overlay) => ({
         ...overlay,
         itemPresences: transform(overlay.itemPresences)
@@ -247,7 +249,7 @@ function mapFoldersEverywhere(
     ...context.region,
     folders: transform(context.region.folders)
   };
-  const scene = context.scene.regionOverlays[regionId]
+  const scene = sceneOverlayForRegion(context.scene, regionId)
     ? withOverlay(context.scene, regionId, (overlay) => ({
         ...overlay,
         folders: transform(overlay.folders)
@@ -354,7 +356,7 @@ function applyDuplicatePlacedAsset(
 ): { region: RegionDocument; scene: Scene } {
   const regionId = context.region.identity.id;
   const overlayAssets =
-    context.scene.regionOverlays[regionId]?.placedAssets ?? [];
+    sceneOverlayForRegion(context.scene, regionId)?.placedAssets ?? [];
   // Scope affinity: the duplicate lands in the same store as its
   // source (base copy stays base, overlay copy stays overlay).
   const baseSource = context.region.placedAssets.find(
@@ -422,7 +424,7 @@ function applyBrushPlaceAssets(
       (folder) => folder.folderId === folderSpec.folderId
     );
     const existsInOverlay = (
-      context.scene.regionOverlays[context.region.identity.id]?.folders ?? []
+      sceneOverlayForRegion(context.scene, context.region.identity.id)?.folders ?? []
     ).some((folder) => folder.folderId === folderSpec.folderId);
     if (!existsInBase && !existsInOverlay) {
       const folder = {
@@ -619,7 +621,7 @@ function applyCreatePlayerPresence(
   // same region. A region's own start is not a conflict — the Scene's
   // answer simply wins over it when both exist (see
   // `composeRegionContents`), so this guard reads the overlay only.
-  if (context.scene.regionOverlays[regionId]?.playerPresence) {
+  if (sceneOverlayForRegion(context.scene, regionId)?.playerPresence) {
     return context.scene;
   }
   return withOverlay(context.scene, regionId, (overlay) => ({
@@ -644,7 +646,7 @@ function mapPlayerPresenceEverywhere(
   transform: (presence: RegionPlayerPresence) => RegionPlayerPresence | null
 ): { region: RegionDocument; scene: Scene } {
   const regionId = context.region.identity.id;
-  const inOverlay = context.scene.regionOverlays[regionId]?.playerPresence;
+  const inOverlay = sceneOverlayForRegion(context.scene, regionId)?.playerPresence;
   if (inOverlay?.presenceId === presenceId) {
     return {
       region: context.region,
@@ -771,7 +773,7 @@ function isSceneContainedInstance(
   context: CommandExecutionContext,
   instanceId: string
 ): boolean {
-  const overlay = context.scene.regionOverlays[context.region.identity.id];
+  const overlay = sceneOverlayForRegion(context.scene, context.region.identity.id);
   return Boolean(
     overlay?.placedAssets.some((asset) => asset.instanceId === instanceId)
   );
@@ -1292,7 +1294,7 @@ function applyDeleteSceneFolder(
 ): { region: RegionDocument; scene: Scene } {
   const regionId = context.region.identity.id;
   const overlayFolders =
-    context.scene.regionOverlays[regionId]?.folders ?? [];
+    sceneOverlayForRegion(context.scene, regionId)?.folders ?? [];
   const folder =
     context.region.folders.find(
       (candidate) => candidate.folderId === command.payload.folderId

@@ -68,8 +68,8 @@ describe("preview boot composes the active Scene overlay", () => {
           scenes: [
             createDefaultScene({
               sceneId: "scene:overlay-test",
-              regionOverlays: {
-                [region.identity.id]: {
+              regionId: region.identity.id,
+              overlay: {
                   suppressedRegionIds: [],
                   assetAppearanceOverrides: {},
                   folders: [],
@@ -80,7 +80,6 @@ describe("preview boot composes the active Scene overlay", () => {
                   ],
                   itemPresences: []
                 }
-              }
             })
           ]
         })

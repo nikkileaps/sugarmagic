@@ -2727,10 +2727,17 @@ export function createWebRuntimeHost(
               : ("locked" as const)
       }))
     };
+    // Where the player is, in order: where the save left them, then the
+    // region the active Scene happens in, then an explicit request
+    // (Studio Preview's edited region). A Scene now always names its
+    // region, so the old "no starting region, fall through to the first
+    // one" rung is gone.
     const activeRegion = getActiveRegion(
       migratedContent.regions,
       resolvedActiveRegionId ??
-        activeScene?.startingRegionId ??
+        (activeScene && activeScene.regionId.length > 0
+          ? activeScene.regionId
+          : null) ??
         state.activeRegionId ??
         null
     );

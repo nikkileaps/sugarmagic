@@ -18,6 +18,21 @@ import {
 } from "@sugarmagic/domain";
 import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
 
+/** A project whose Scenes name the given region. These tests are about flag
+ *  migration; a Scene naming nowhere is a separate validation error and
+ *  would drown the assertion under test. */
+function projectNaming(regionId: string) {
+  const base = createDefaultGameProject("Test", "test");
+  return {
+    ...base,
+    episodes: base.episodes.map((episode) => ({
+      ...episode,
+      scenes: episode.scenes.map((scene) => ({ ...scene, regionId }))
+    }))
+  };
+}
+
+
 /**
  * The flag registry and the chain that carries it. Most of that chain is
  * hand-written per-field code with no compiler check behind it, so a forgotten
@@ -144,7 +159,7 @@ describe("a region written before the registry", () => {
   }
 
   it("resolves its legacy flag key once normalized, then migrated", () => {
-    const project = createDefaultGameProject("Test", "test");
+    const project = projectNaming("region:test");
     const normalized = normalizeRegionDocumentForLoad(
       rawLegacyRegion() as unknown as RegionDocument,
       createEmptyContentLibrarySnapshot(project.identity.id)
@@ -170,7 +185,7 @@ describe("a region written before the registry", () => {
   // raw flag name and the save was refused. Migrating an unnormalized region
   // has to work, or the order of two calls in one function is load-bearing.
   it("resolves its legacy flag key even without normalizing first", () => {
-    const project = createDefaultGameProject("Test", "test");
+    const project = projectNaming("region:test");
     const migrated = migrateWorldFlagReferences(project, [
       rawLegacyRegion() as unknown as RegionDocument
     ]);

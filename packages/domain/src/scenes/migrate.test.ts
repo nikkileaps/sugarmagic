@@ -109,14 +109,14 @@ describe("migrateToScenes", () => {
     expect(region.folders.map((folder) => folder.folderId)).toEqual(["f1"]);
     // Legacy nest is stripped.
     expect((region as { scene?: unknown }).scene).toBeUndefined();
-    // Presences land in the default Scene's overlay.
+    // Presences land on the REGION: a pre-058 file nested them under the
+    // region, which is where epic #226 puts them again.
     const defaultScene = result.scenes.find(
       (scene) => scene.sceneId === DEFAULT_SCENE_ID
     );
     expect(defaultScene).toBeDefined();
-    const overlay = defaultScene!.regionOverlays["region:town"]!;
-    expect(overlay.playerPresence?.presenceId).toBe("player-1");
-    expect(overlay.npcPresences.map((p) => p.presenceId)).toEqual(["npc-1"]);
+    expect(region.playerPresence?.presenceId).toBe("player-1");
+    expect(region.npcPresences.map((p) => p.presenceId)).toEqual(["npc-1"]);
   });
 
   it("is idempotent — a second pass changes nothing", () => {
@@ -154,17 +154,18 @@ describe("migrateToScenes", () => {
     expect(result.scenes.map((scene) => scene.sceneId)).toEqual([
       "scene:authored"
     ]);
-    expect(
-      result.scenes[0]!.regionOverlays["region:town"]?.playerPresence
-        ?.presenceId
-    ).toBe("player-1");
+    // The authored Scene named no region, so the migration gives it the
+    // project's first one -- a Scene naming nowhere is unenterable.
+    expect(result.scenes[0]!.regionId).toBe("region:town");
+    // Its presences are the region's now, not the Scene's.
+    expect(result.regions[0]!.playerPresence?.presenceId).toBe("player-1");
   });
 
   it("never clobbers an overlay that already exists for a region", () => {
     const existing = createDefaultScene({
       sceneId: DEFAULT_SCENE_ID,
-      regionOverlays: {
-        "region:town": {
+      regionId: "region:town",
+      overlay: {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
@@ -185,13 +186,12 @@ describe("migrateToScenes", () => {
             }
           ]
         }
-      }
     });
     const result = migrateToScenes({
       scenes: [existing],
       regions: [makeLegacyRegion("region:town")]
     });
-    const overlay = result.scenes[0]!.regionOverlays["region:town"]!;
+    const overlay = result.scenes[0]!.overlay;
     // First-run overlay wins; the legacy presences do NOT replace it.
     expect(overlay.itemPresences.map((p) => p.presenceId)).toEqual([
       "kept-item"
@@ -217,15 +217,17 @@ describe("composeRegionContents", () => {
     expect(contents.npcPresences).toHaveLength(1);
   });
 
-  it("null scene composes base-only", () => {
+  it("no scene composes the region alone -- residents included", () => {
     const migrated = migrateToScenes({
       scenes: [],
       regions: [makeLegacyRegion("region:town")]
     });
     const contents = composeRegionContents(migrated.regions[0]!, null);
     expect(contents.placedAssets).toHaveLength(1);
-    expect(contents.playerPresence).toBeNull();
-    expect(contents.npcPresences).toHaveLength(0);
+    // Epic #226: a region with no Scene is a populated place, not an
+    // empty one. The lifted presences are the region's own.
+    expect(contents.playerPresence?.presenceId).toBe("player-1");
+    expect(contents.npcPresences.map((p) => p.presenceId)).toEqual(["npc-1"]);
   });
 
   it("unions base and overlay assets + folders", () => {
@@ -246,8 +248,8 @@ describe("composeRegionContents", () => {
     });
     const scene = createDefaultScene({
       sceneId: "scene:x",
-      regionOverlays: {
-        "region:town": {
+      regionId: "region:town",
+      overlay: {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
@@ -271,7 +273,6 @@ describe("composeRegionContents", () => {
           npcPresences: [],
           itemPresences: []
         }
-      }
     });
     const contents = composeRegionContents(region, scene);
     expect(contents.placedAssets.map((asset) => asset.instanceId)).toEqual([

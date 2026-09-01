@@ -38,7 +38,8 @@ import {
   normalizeScenes,
   type ComposedRegionContents,
   type RegionSceneOverlay,
-  type Scene
+  type Scene,
+  takeSceneRegionCollapseNotes
 } from "../scenes";
 import {
   createDefaultEpisode,
@@ -496,11 +497,40 @@ export function createAuthoringSession(
     contentLibrary,
     normalizedProject.identity.id
   );
+  // A Scene used to be able to dress several regions and now names one, so
+  // any other region's overlay content has nowhere to go. Say what was
+  // stranded rather than dropping it quietly -- the author decides whether
+  // to re-home it onto the region or into another Scene.
+  for (const note of takeSceneRegionCollapseNotes()) {
+    console.warn(
+      `[scenes] Scene "${note.sceneId}" also dressed region "${note.regionId}", which it no longer names. ` +
+        `Stranded: ${note.npcPresences} NPC, ${note.itemPresences} item, ${note.placedAssets} placed asset` +
+        `${note.hasPlayerPresence ? ", and a player start" : ""}. ` +
+        `Re-place them on the region or in a Scene that names it.`
+    );
+  }
+
+  // The migration's Scene output is otherwise ignored here, but its region
+  // assignment is not: a Scene that names nowhere cannot be entered, and
+  // the migration is what knows the project's regions.
+  const migratedRegionIds = new Map(
+    migrated.scenes.map((scene) => [scene.sceneId, scene.regionId])
+  );
   const projectWithScenes: GameProject = {
     ...normalizedProject,
     episodes: normalizedProject.episodes.map((episode) => ({
       ...episode,
-      scenes: normalizeScenesForLoad(episode.scenes, normalizedContentLibrary)
+      scenes: normalizeScenesForLoad(
+        episode.scenes.map((scene) =>
+          scene.regionId.length > 0
+            ? scene
+            : {
+                ...scene,
+                regionId: migratedRegionIds.get(scene.sceneId) ?? ""
+              }
+        ),
+        normalizedContentLibrary
+      )
     }))
   };
   const regionMap = new Map<string, RegionDocument>();
@@ -773,32 +803,18 @@ function applyDeleteShaderGraphCommand(
       ...session.gameProject,
       episodes: mapScenes(session.gameProject.episodes, (scene) => ({
         ...scene,
-        regionOverlays: Object.fromEntries(
-          Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
-            regionId,
-            {
-              ...overlay,
-              placedAssets: overlay.placedAssets.map((asset) =>
-                stripShaderReferences(
-                  asset,
-                  command.payload.shaderDefinitionId
-                )
-              ),
-              npcPresences: overlay.npcPresences.map((presence) =>
-                stripShaderReferences(
-                  presence,
-                  command.payload.shaderDefinitionId
-                )
-              ),
-              itemPresences: overlay.itemPresences.map((presence) =>
-                stripShaderReferences(
-                  presence,
-                  command.payload.shaderDefinitionId
-                )
-              )
-            }
-          ])
-        )
+        overlay: {
+          ...scene.overlay,
+          placedAssets: scene.overlay.placedAssets.map((asset) =>
+            stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          ),
+          npcPresences: scene.overlay.npcPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          ),
+          itemPresences: scene.overlay.itemPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          )
+        }
       }))
     },
     contentLibrary: {
@@ -2874,7 +2890,7 @@ export function updateEpisodeInSession(
  */
 export function addSceneToSession(
   session: AuthoringSession,
-  options: { displayName: string; episodeId?: string }
+  options: { displayName: string; episodeId?: string; regionId?: string }
 ): AuthoringSession {
   const episode = options.episodeId
     ? session.gameProject.episodes.find(
@@ -2882,8 +2898,13 @@ export function addSceneToSession(
       )
     : getActiveEpisode(session);
   if (!episode) return session;
+  // A Scene has to happen somewhere. Absent an explicit choice, it happens
+  // where the author already is -- the region they have open. Leaving it
+  // blank would create a Scene that cannot be entered and that content
+  // validation immediately refuses to save.
   const scene = createDefaultScene({
-    displayName: options.displayName.trim() || "Untitled Scene"
+    displayName: options.displayName.trim() || "Untitled Scene",
+    regionId: options.regionId ?? session.activeRegionId ?? ""
   });
   return {
     ...withEpisodeScenes(session, episode.episodeId, [
@@ -2907,7 +2928,7 @@ export function updateSceneInSession(
       | "displayName"
       | "description"
       | "notes"
-      | "startingRegionId"
+      | "regionId"
       | "environmentOverride"
       | "audioOverride"
       | "transitionConfig"
@@ -2991,7 +3012,8 @@ export function convertAssetScopeInSession(
   const activeScene = getActiveScene(session);
   if (!region || !activeScene) return session;
 
-  const overlay = activeScene.regionOverlays[options.regionId];
+  const overlay =
+    activeScene.regionId === options.regionId ? activeScene.overlay : null;
   const inBase = region.placedAssets.find(
     (asset) => asset.instanceId === options.instanceId
   );
@@ -3025,20 +3047,16 @@ export function convertAssetScopeInSession(
 
   const newEpisodes = mapScenes(session.gameProject.episodes, (scene) => {
     if (scene.sceneId !== activeScene.sceneId) return scene;
-    const current =
-      scene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+    const current = scene.overlay;
     return {
       ...scene,
-      regionOverlays: {
-        ...scene.regionOverlays,
-        [options.regionId]: {
-          ...current,
-          placedAssets: inBase
-            ? [...current.placedAssets, moved]
-            : current.placedAssets.filter(
-                (asset) => asset.instanceId !== options.instanceId
-              )
-        }
+      overlay: {
+        ...current,
+        placedAssets: inBase
+          ? [...current.placedAssets, moved]
+          : current.placedAssets.filter(
+              (asset) => asset.instanceId !== options.instanceId
+            )
       }
     };
   });
@@ -3077,11 +3095,15 @@ export function copyOverlayEntryToScene(
   // already present in every Scene by composition, so copying one into a
   // Scene overlay would place a second copy beside the one that composes.
   // Nothing to copy is the correct answer for region content.
-  const fromOverlay = fromScene?.regionOverlays[options.regionId];
+  // Both Scenes must be dressing the region the copy is happening in.
+  const fromOverlay =
+    fromScene && fromScene.regionId === options.regionId
+      ? fromScene.overlay
+      : null;
   if (!fromScene || !toScene || !fromOverlay) return session;
+  if (toScene.regionId !== options.regionId) return session;
 
-  const target =
-    toScene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+  const target = toScene.overlay;
   let nextTarget: RegionSceneOverlay | null = null;
 
   if (options.kind === "npc") {
@@ -3149,13 +3171,7 @@ export function copyOverlayEntryToScene(
     session,
     mapScenes(session.gameProject.episodes, (scene) =>
       scene.sceneId === options.toSceneId
-        ? {
-            ...scene,
-            regionOverlays: {
-              ...scene.regionOverlays,
-              [options.regionId]: nextTarget!
-            }
-          }
+        ? { ...scene, overlay: nextTarget! }
         : scene
     )
   );
@@ -4229,10 +4245,8 @@ export function assetDefinitionHasSceneReferences(
   );
   if (inBase) return true;
   return getAllScenes(session.gameProject.episodes).some((scene) =>
-    Object.values(scene.regionOverlays).some((overlay) =>
-      overlay.placedAssets.some(
-        (asset) => asset.assetDefinitionId === definitionId
-      )
+    scene.overlay.placedAssets.some(
+      (asset) => asset.assetDefinitionId === definitionId
     )
   );
 }

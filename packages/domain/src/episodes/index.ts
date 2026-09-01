@@ -33,7 +33,7 @@
 
 import { createScopedId } from "../shared/identity";
 import {
-  normalizeScene,
+  normalizeScenes,
   normalizeTransitionConfig,
   type Scene,
   type TransitionConfig
@@ -167,13 +167,12 @@ export function normalizeEpisode(input: unknown): Episode | null {
     return null;
   }
   const scenes: Scene[] = [];
-  const seenSceneIds = new Set<string>();
-  for (const candidate of Array.isArray(record.scenes) ? record.scenes : []) {
-    const scene = normalizeScene(candidate);
-    if (!scene || seenSceneIds.has(scene.sceneId)) continue;
-    seenSceneIds.add(scene.sceneId);
-    scenes.push(scene);
-  }
+  // Through `normalizeScenes`, not a local loop over `normalizeScene`:
+  // that function owns list-level normalization, including filling a Scene
+  // that names no region from the Scene before it. A private loop here is
+  // how that rule silently stopped applying to Scenes inside Episodes,
+  // which is every Scene there is.
+  scenes.push(...normalizeScenes(record.scenes));
   return {
     episodeId: record.episodeId.trim(),
     displayName:

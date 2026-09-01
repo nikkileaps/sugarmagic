@@ -68,7 +68,7 @@ describe("Scene CRUD", () => {
     expect(scenesOf(session)).toHaveLength(2);
     const added = scenesOf(session)[1]!;
     expect(added.displayName).toBe("Scene 2");
-    expect(added.regionOverlays).toEqual({});
+    expect(added.overlay.placedAssets).toEqual([]);
     // Appending IS the ordering — the new Scene lands last in its
     // Episode, with no order number to compute.
     expect(session.gameProject.episodes).toHaveLength(1);
@@ -186,7 +186,7 @@ describe("scope conversion", () => {
       instanceId: "asset:statue"
     });
     expect(session.regions.get("region:town")!.placedAssets).toHaveLength(0);
-    const overlay = getActiveScene(session)!.regionOverlays["region:town"]!;
+    const overlay = getActiveScene(session)!.overlay;
     expect(overlay.placedAssets.map((asset) => asset.instanceId)).toEqual([
       "asset:statue"
     ]);
@@ -208,7 +208,7 @@ describe("scope conversion", () => {
       )
     ).toEqual(["asset:statue"]);
     expect(
-      getActiveScene(session)!.regionOverlays["region:town"]!.placedAssets
+      getActiveScene(session)!.overlay.placedAssets
     ).toHaveLength(0);
     expect(getActiveScene(session)!.sceneId).toBe(sceneId);
   });
@@ -232,7 +232,7 @@ describe("scope conversion", () => {
       regionId: "region:town",
       instanceId: "asset:statue"
     });
-    const overlay = getActiveScene(session)!.regionOverlays["region:town"]!;
+    const overlay = getActiveScene(session)!.overlay;
     expect(overlay.placedAssets[0]!.parentFolderId).toBeNull();
   });
 });
@@ -248,8 +248,8 @@ describe("cross-Scene copy", () => {
         ...session.gameProject,
         episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
-          regionOverlays: {
-            "region:town": {
+          regionId: "region:town",
+          overlay: {
               suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
@@ -268,7 +268,6 @@ describe("cross-Scene copy", () => {
               ],
               itemPresences: []
             }
-          }
         }))
       }
     };
@@ -286,7 +285,7 @@ describe("cross-Scene copy", () => {
     const sceneTwo = scenesOf(session).find(
       (scene) => scene.sceneId === sceneTwoId
     )!;
-    const copied = sceneTwo.regionOverlays["region:town"]!.npcPresences[0]!;
+    const copied = sceneTwo.overlay.npcPresences[0]!;
     expect(copied.npcDefinitionId).toBe("def:testy");
     expect(copied.transform.position).toEqual([3, 0, 3]);
     expect(copied.presenceId).not.toBe("npc:testy");
@@ -295,7 +294,7 @@ describe("cross-Scene copy", () => {
       (scene) => scene.sceneId === sceneOneId
     )!;
     expect(
-      sceneOne.regionOverlays["region:town"]!.npcPresences[0]!.presenceId
+      sceneOne.overlay.npcPresences[0]!.presenceId
     ).toBe("npc:testy");
   });
 
@@ -308,8 +307,8 @@ describe("cross-Scene copy", () => {
         ...session.gameProject,
         episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
-          regionOverlays: {
-            "region:town": {
+          regionId: "region:town",
+          overlay: {
               suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
@@ -325,7 +324,6 @@ describe("cross-Scene copy", () => {
               npcPresences: [],
               itemPresences: []
             }
-          }
         }))
       }
     };
@@ -341,7 +339,7 @@ describe("cross-Scene copy", () => {
     });
     const firstCopy = scenesOf(session).find(
       (scene) => scene.sceneId === sceneTwoId
-    )!.regionOverlays["region:town"]!.playerPresence;
+    )!.overlay.playerPresence;
     expect(firstCopy).not.toBeNull();
     // Second copy is a no-op.
     const again = copyOverlayEntryToScene(session, {
@@ -353,7 +351,7 @@ describe("cross-Scene copy", () => {
     });
     expect(
       scenesOf(again).find((scene) => scene.sceneId === sceneTwoId)!
-        .regionOverlays["region:town"]!.playerPresence
+        .overlay.playerPresence
     ).toEqual(firstCopy);
   });
 
@@ -366,8 +364,8 @@ describe("cross-Scene copy", () => {
         ...session.gameProject,
         episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
-          regionOverlays: {
-            "region:town": {
+          regionId: "region:town",
+          overlay: {
               suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
@@ -381,7 +379,6 @@ describe("cross-Scene copy", () => {
               ],
               itemPresences: []
             }
-          }
         }))
       }
     };

@@ -90,7 +90,7 @@ function fixture(): { region: RegionDocument; scene: Scene } {
     itemPresences: [],
     playerPresence: null
   };
-  return { region, scene: createDefaultScene({ sceneId: "scene:1" }) };
+  return { region, scene: createDefaultScene({ sceneId: "scene:1", regionId: "region-1" }) };
 }
 
 function cmd(collider: AssetCollider | null, scope: "base" | "scene"): SemanticCommand {
@@ -134,7 +134,7 @@ describe("SetPlacedAssetColliderOverride — scope routing", () => {
     // Instance untouched...
     expect(next.region.placedAssets[0]?.colliderOverride).toBeUndefined();
     // ...the Scene overlay holds it.
-    const overlay = next.scene.regionOverlays["region-1"];
+    const overlay = next.scene.overlay;
     expect(
       overlay?.assetAppearanceOverrides["inst:rock"]?.colliderOverride?.shape
     ).toBe("none");
@@ -177,7 +177,7 @@ describe("SetPlacedAssetColliderOverride — scope routing", () => {
       { region: set.region, scene: set.scene },
       cmd(null, "scene")
     );
-    const overlay = cleared.scene.regionOverlays["region-1"];
+    const overlay = cleared.scene.overlay;
     expect(overlay?.assetAppearanceOverrides["inst:rock"]).toBeUndefined();
   });
 });
