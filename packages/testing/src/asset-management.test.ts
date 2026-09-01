@@ -69,7 +69,9 @@ function makeRegion(): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

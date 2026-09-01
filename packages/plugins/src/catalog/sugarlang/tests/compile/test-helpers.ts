@@ -150,7 +150,9 @@ export function createTestRegion(): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState(),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

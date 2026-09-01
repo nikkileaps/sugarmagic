@@ -221,7 +221,9 @@ describe("dangling story point references", () => {
       ],
       landscape: createDefaultRegionLandscapeState({}),
       markers: [],
-      gameplayPlacements: []
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null
     };
     return [region];
   }
@@ -311,7 +313,9 @@ describe("behavior tasks with no ordering between them", () => {
         ],
         landscape: createDefaultRegionLandscapeState({}),
         markers: [],
-        gameplayPlacements: []
+        npcPresences: [],
+        itemPresences: [],
+        playerPresence: null
       }
     ];
   }

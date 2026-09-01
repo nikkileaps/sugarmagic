@@ -442,7 +442,9 @@ function regionWithVolumes(
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({}),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

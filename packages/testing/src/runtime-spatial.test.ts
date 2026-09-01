@@ -115,7 +115,9 @@ function makeRegion(): RegionDocument {
       paintPayload: null
     },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

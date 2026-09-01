@@ -72,7 +72,9 @@ function makeRegion(assets: PlacedAssetInstance[]): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   } as unknown as RegionDocument;
 }
 

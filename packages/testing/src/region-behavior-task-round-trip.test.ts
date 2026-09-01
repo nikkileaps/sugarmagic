@@ -58,7 +58,9 @@ function regionWithTask(
     landscape: createDefaultRegionLandscapeState({}),
     audio: { emitters: [], ambienceZones: [] },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

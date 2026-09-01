@@ -149,12 +149,6 @@ export interface RegionMarker {
   position: [number, number, number];
 }
 
-export interface RegionGameplayPlacement {
-  placementId: string;
-  placementKind: "npc" | "trigger" | "pickup" | "inspectable" | "vfx-spawn";
-  definitionId: string;
-}
-
 export type RegionAudioTrigger =
   | "always"
   | "on-enter"
@@ -388,18 +382,17 @@ export interface RegionNPCBehaviorDefinition {
 }
 
 /**
- * Plan 058 §058.1 — the region is the BASE of the Base + Overlay
- * split. Geography (placement, landscape, areas) plus the
- * always-visible placed assets and the folders that group them.
- * Presences (items, NPCs, player) and Scene-scoped decoration
- * live on `Scene.regionOverlays[regionId]` in the GameProject —
- * a region document no longer carries narrative content.
+ * The region document is the world at rest: geography (placement,
+ * landscape, areas), the placed assets and folders that dress it, how its
+ * residents behave (`behaviors`), and — epic #226 — the residents
+ * themselves (`npcPresences`, `itemPresences`, `playerPresence`). A Scene
+ * overlay is a diff against this document; composing a region with no
+ * Scene yields a populated place (ADR 003).
  *
- * The pre-058 `scene` nest ({folders, placedAssets,
- * playerPresence, npcPresences, itemPresences}) is gone from the
- * type; `normalizeRegionDocumentForLoad` + `migrateToScenes`
- * accept the legacy shape on disk and lift it into this shape +
- * the project's default Scene.
+ * The pre-058 `scene` nest ({folders, placedAssets, playerPresence,
+ * npcPresences, itemPresences}) is gone from the type;
+ * `normalizeRegionDocumentForLoad` + `migrateToScenes` accept the legacy
+ * shape on disk and lift its presences into the project's default Scene.
  */
 /**
  * Plan 069.8 — a baked navmesh artifact reference on the region. The binary
@@ -447,10 +440,16 @@ export interface RegionDocument {
    *  migrates areas + ambience zones into it. */
   volumes?: RegionVolumeDefinition[];
   behaviors: RegionNPCBehaviorDefinition[];
+  /** Epic #226 — the region's residents, composed whenever the region is,
+   *  Scene or no Scene. A Scene overlay adds to or suppresses them; it
+   *  never replaces the set. */
+  npcPresences: RegionNPCPresence[];
+  itemPresences: RegionItemPresence[];
+  /** Where the player stands when no Scene supplies a player presence. */
+  playerPresence: RegionPlayerPresence | null;
   landscape: RegionLandscapeState;
   audio?: RegionAudioState;
   markers: RegionMarker[];
-  gameplayPlacements: RegionGameplayPlacement[];
   /** Plan 069.8 — the baked navmesh artifact reference. NOT a player-save
    *  (`GameSavePayload`) slice, but it DOES persist in this region document
    *  (so deploy/reload restore it — see `RegionNavMeshArtifact`). Null/absent
@@ -1213,10 +1212,12 @@ export function createDefaultRegion(options: {
     areas: [],
     volumes: [],
     behaviors: [],
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null,
     landscape: createDefaultRegionLandscapeState(),
     audio: createRegionAudioState(),
     markers: [],
-    gameplayPlacements: [],
     navMesh: null
   };
 }

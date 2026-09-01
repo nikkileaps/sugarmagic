@@ -137,7 +137,9 @@ describe("a region written before the registry", () => {
       ],
       landscape: createDefaultRegionLandscapeState({}),
       markers: [],
-      gameplayPlacements: []
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null
     };
   }
 

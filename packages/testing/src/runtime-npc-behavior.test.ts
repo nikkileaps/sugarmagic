@@ -118,7 +118,9 @@ function makeRegion(): RegionDocument {
       paintPayload: null
     },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 
@@ -945,7 +947,9 @@ describe("time-window task gating (074.4)", () => {
         paintPayload: null
       },
       markers: [],
-      gameplayPlacements: []
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null
     };
   }
 

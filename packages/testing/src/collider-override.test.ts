@@ -86,7 +86,9 @@ function fixture(): { region: RegionDocument; scene: Scene } {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({}),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
   return { region, scene: createDefaultScene({ sceneId: "scene:1" }) };
 }

@@ -30,7 +30,9 @@ function makeRegion(enabled = true): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled }),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 
@@ -279,7 +281,9 @@ describe("landscape runtime controller", () => {
       areas: [],
       behaviors: [],
       markers: [],
-      gameplayPlacements: [],
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null,
       landscape: {
         enabled: true,
         size: 64,

@@ -279,8 +279,13 @@ export function normalizeRegionDocumentForLoad(
   const derivedAmbienceZones =
     deriveRegionAmbienceZonesFromVolumes(regionVolumes);
 
+  // Pre-#226 files carry a reader-less `gameplayPlacements` field; stripped
+  // here so a save stops persisting it.
+  const { gameplayPlacements: _legacyGameplayPlacements, ...regionRest } =
+    region as RegionDocument & { gameplayPlacements?: unknown };
+
   return {
-    ...region,
+    ...regionRest,
     lorePageId:
       typeof region.lorePageId === "string" &&
       region.lorePageId.trim().length > 0
@@ -296,6 +301,18 @@ export function normalizeRegionDocumentForLoad(
       })
     ),
     folders: [...baseFolders],
+    // Epic #226 — the region's residents. Absent in files predating the
+    // fields; empty lists mean exactly the pre-#226 world until composition
+    // reads them.
+    npcPresences: (region.npcPresences ?? []).map((presence) =>
+      createRegionNPCPresence(presence)
+    ),
+    itemPresences: (region.itemPresences ?? []).map((presence) =>
+      createRegionItemPresence(presence)
+    ),
+    playerPresence: region.playerPresence
+      ? createRegionPlayerPresence(region.playerPresence)
+      : null,
     environmentBinding: {
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ??
