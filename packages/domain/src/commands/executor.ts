@@ -169,31 +169,71 @@ function mapPlacedAssetsEverywhere(
   return { region, scene };
 }
 
-/** Presences are overlay-only; these map the active Scene's
- *  presence lists for the context's region. */
-function mapOverlayNpcPresences(
+/**
+ * Presences live in TWO stores (epic #226): the region's own residents
+ * and the active Scene's overlay list — the same shape placed assets have
+ * had since 058, and these map both for exactly the same reason.
+ * Mutation commands identify a presence by presenceId, so a by-id
+ * map/filter applies to both stores and the one without the id passes
+ * through unchanged. Only CREATE decides which store it lands in.
+ */
+function mapNpcPresencesEverywhere(
   context: CommandExecutionContext,
   transform: (presences: RegionNPCPresence[]) => RegionNPCPresence[]
-): Scene {
-  return withOverlay(
-    context.scene,
-    context.region.identity.id,
-    (overlay) => ({ ...overlay, npcPresences: transform(overlay.npcPresences) })
-  );
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const region = {
+    ...context.region,
+    npcPresences: transform(context.region.npcPresences)
+  };
+  const scene = context.scene.regionOverlays[regionId]
+    ? withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        npcPresences: transform(overlay.npcPresences)
+      }))
+    : context.scene;
+  return { region, scene };
 }
 
-function mapOverlayItemPresences(
+function mapItemPresencesEverywhere(
   context: CommandExecutionContext,
   transform: (presences: RegionItemPresence[]) => RegionItemPresence[]
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const region = {
+    ...context.region,
+    itemPresences: transform(context.region.itemPresences)
+  };
+  const scene = context.scene.regionOverlays[regionId]
+    ? withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        itemPresences: transform(overlay.itemPresences)
+      }))
+    : context.scene;
+  return { region, scene };
+}
+
+/** Create targets the overlay: the Scene is what the author is editing
+ *  when placing through this path. Build's region-scoped placement is
+ *  its own story. */
+function addOverlayNpcPresence(
+  context: CommandExecutionContext,
+  presence: RegionNPCPresence
 ): Scene {
-  return withOverlay(
-    context.scene,
-    context.region.identity.id,
-    (overlay) => ({
-      ...overlay,
-      itemPresences: transform(overlay.itemPresences)
-    })
-  );
+  return withOverlay(context.scene, context.region.identity.id, (overlay) => ({
+    ...overlay,
+    npcPresences: [...overlay.npcPresences, presence]
+  }));
+}
+
+function addOverlayItemPresence(
+  context: CommandExecutionContext,
+  presence: RegionItemPresence
+): Scene {
+  return withOverlay(context.scene, context.region.identity.id, (overlay) => ({
+    ...overlay,
+    itemPresences: [...overlay.itemPresences, presence]
+  }));
 }
 
 /** Folder analog of `mapPlacedAssetsEverywhere` — folder trees
@@ -574,9 +614,11 @@ function applyCreatePlayerPresence(
   command: CreatePlayerPresenceCommand
 ): Scene {
   const regionId = context.region.identity.id;
-  // Plan 058 §058.1 — singularity is per (Scene, region): one
-  // player spawn per region within each Scene. A different Scene
-  // may place its own spawn in the same region.
+  // Singularity is per (Scene, region): one player spawn per region
+  // within each Scene. A different Scene may place its own spawn in the
+  // same region. A region's own start is not a conflict — the Scene's
+  // answer simply wins over it when both exist (see
+  // `composeRegionContents`), so this guard reads the overlay only.
   if (context.scene.regionOverlays[regionId]?.playerPresence) {
     return context.scene;
   }
@@ -586,41 +628,71 @@ function applyCreatePlayerPresence(
   }));
 }
 
+/**
+ * By-id like every other presence mutation: whichever store holds the id
+ * is the one that changes. Reading the overlay alone made transform and
+ * remove silent no-ops on a region's own player start.
+ *
+ * The list funnels above take a list transform; a player start is singular,
+ * so this one takes the presence itself and returns its replacement, or
+ * null to clear it. Both callers route through here so "which store owns
+ * this id" is answered in exactly one place.
+ */
+function mapPlayerPresenceEverywhere(
+  context: CommandExecutionContext,
+  presenceId: string,
+  transform: (presence: RegionPlayerPresence) => RegionPlayerPresence | null
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const inOverlay = context.scene.regionOverlays[regionId]?.playerPresence;
+  if (inOverlay?.presenceId === presenceId) {
+    return {
+      region: context.region,
+      scene: withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        playerPresence: transform(inOverlay)
+      }))
+    };
+  }
+  const inRegion = context.region.playerPresence;
+  if (inRegion?.presenceId === presenceId) {
+    return {
+      region: { ...context.region, playerPresence: transform(inRegion) },
+      scene: context.scene
+    };
+  }
+  // An id in neither store is a no-op, the same answer the by-id list
+  // funnels give when nothing matches.
+  return { region: context.region, scene: context.scene };
+}
+
 function applyTransformPlayerPresence(
   context: CommandExecutionContext,
   command: TransformPlayerPresenceCommand
-): Scene {
-  const regionId = context.region.identity.id;
-  const existing = context.scene.regionOverlays[regionId]?.playerPresence;
-  if (!existing || existing.presenceId !== command.payload.presenceId) {
-    return context.scene;
-  }
-  return withOverlay(context.scene, regionId, (overlay) => ({
-    ...overlay,
-    playerPresence: {
-      ...existing,
+): { region: RegionDocument; scene: Scene } {
+  return mapPlayerPresenceEverywhere(
+    context,
+    command.payload.presenceId,
+    (presence) => ({
+      ...presence,
       transform: {
         position: command.payload.position,
         rotation: command.payload.rotation,
         scale: command.payload.scale
       }
-    }
-  }));
+    })
+  );
 }
 
 function applyRemovePlayerPresence(
   context: CommandExecutionContext,
   command: RemovePlayerPresenceCommand
-): Scene {
-  const regionId = context.region.identity.id;
-  const existing = context.scene.regionOverlays[regionId]?.playerPresence;
-  if (!existing || existing.presenceId !== command.payload.presenceId) {
-    return context.scene;
-  }
-  return withOverlay(context.scene, regionId, (overlay) => ({
-    ...overlay,
-    playerPresence: null
-  }));
+): { region: RegionDocument; scene: Scene } {
+  return mapPlayerPresenceEverywhere(
+    context,
+    command.payload.presenceId,
+    () => null
+  );
 }
 
 function createNPCPresenceFromCommand(
@@ -906,8 +978,8 @@ function applyClearPlacedAssetShaderParameterOverride(
 function applySetNPCPresenceShaderOverride(
   context: CommandExecutionContext,
   command: SetNPCPresenceShaderOverrideCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -929,8 +1001,8 @@ function applySetNPCPresenceShaderOverride(
 function applySetNPCPresenceShaderParameterOverride(
   context: CommandExecutionContext,
   command: SetNPCPresenceShaderParameterOverrideCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -951,8 +1023,8 @@ function applySetNPCPresenceShaderParameterOverride(
 function applyClearNPCPresenceShaderParameterOverride(
   context: CommandExecutionContext,
   command: ClearNPCPresenceShaderParameterOverrideCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -974,8 +1046,8 @@ function applyClearNPCPresenceShaderParameterOverride(
 function applySetItemPresenceShaderOverride(
   context: CommandExecutionContext,
   command: SetItemPresenceShaderOverrideCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -997,8 +1069,8 @@ function applySetItemPresenceShaderOverride(
 function applySetItemPresenceShaderParameterOverride(
   context: CommandExecutionContext,
   command: SetItemPresenceShaderParameterOverrideCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -1019,8 +1091,8 @@ function applySetItemPresenceShaderParameterOverride(
 function applyClearItemPresenceShaderParameterOverride(
   context: CommandExecutionContext,
   command: ClearItemPresenceShaderParameterOverrideCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -1043,17 +1115,14 @@ function applyCreateNPCPresence(
   context: CommandExecutionContext,
   command: CreateNPCPresenceCommand
 ): Scene {
-  return mapOverlayNpcPresences(context, (presences) => [
-    ...presences,
-    createNPCPresenceFromCommand(command)
-  ]);
+  return addOverlayNpcPresence(context, createNPCPresenceFromCommand(command));
 }
 
 function applyTransformNPCPresence(
   context: CommandExecutionContext,
   command: TransformNPCPresenceCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -1072,8 +1141,8 @@ function applyTransformNPCPresence(
 function applySetNPCPresenceCondition(
   context: CommandExecutionContext,
   command: SetNPCPresenceConditionCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? { ...presence, condition: command.payload.condition }
@@ -1085,8 +1154,8 @@ function applySetNPCPresenceCondition(
 function applySetNPCPresenceLabel(
   context: CommandExecutionContext,
   command: SetNPCPresenceLabelCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? { ...presence, placementLabel: command.payload.label }
@@ -1098,8 +1167,8 @@ function applySetNPCPresenceLabel(
 function applyRemoveNPCPresence(
   context: CommandExecutionContext,
   command: RemoveNPCPresenceCommand
-): Scene {
-  return mapOverlayNpcPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapNpcPresencesEverywhere(context, (presences) =>
     presences.filter(
       (presence) => presence.presenceId !== command.payload.presenceId
     )
@@ -1110,17 +1179,14 @@ function applyCreateItemPresence(
   context: CommandExecutionContext,
   command: CreateItemPresenceCommand
 ): Scene {
-  return mapOverlayItemPresences(context, (presences) => [
-    ...presences,
-    createItemPresenceFromCommand(command)
-  ]);
+  return addOverlayItemPresence(context, createItemPresenceFromCommand(command));
 }
 
 function applyTransformItemPresence(
   context: CommandExecutionContext,
   command: TransformItemPresenceCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -1139,8 +1205,8 @@ function applyTransformItemPresence(
 function applyUpdateItemPresence(
   context: CommandExecutionContext,
   command: UpdateItemPresenceCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? {
@@ -1158,8 +1224,8 @@ function applyUpdateItemPresence(
 function applyRemoveItemPresence(
   context: CommandExecutionContext,
   command: RemoveItemPresenceCommand
-): Scene {
-  return mapOverlayItemPresences(context, (presences) =>
+): { region: RegionDocument; scene: Scene } {
+  return mapItemPresencesEverywhere(context, (presences) =>
     presences.filter(
       (presence) => presence.presenceId !== command.payload.presenceId
     )
@@ -1653,12 +1719,11 @@ export function executeCommand(
   command: SemanticCommand
 ): CommandExecutionResult {
   const { region, scene } = context;
-  // Three apply families (Plan 058 §058.1):
-  //   - Base+Overlay pairs (assets / folders — by-id across both
-  //     stores; creates branch on payload.scope)
-  //   - Scene-only (presences — always the active Scene's overlay)
+  // Two apply families:
+  //   - Region+Overlay pairs (assets, folders, and presences — by-id
+  //     across both stores; creates decide which store they land in)
   //   - Region-only (areas / landscape / audio / behaviors /
-  //     metadata — untouched by the Scene split)
+  //     metadata — no overlay counterpart exists)
   let updatedRegion: RegionDocument = region;
   let updatedScene: Scene = scene;
 
@@ -1816,67 +1881,67 @@ export function executeCommand(
       updatedScene = applyCreatePlayerPresence(context, command);
       break;
     case "TransformPlayerPresence":
-      updatedScene = applyTransformPlayerPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyTransformPlayerPresence(context, command));
       break;
     case "RemovePlayerPresence":
-      updatedScene = applyRemovePlayerPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyRemovePlayerPresence(context, command));
       break;
     case "CreateNPCPresence":
       updatedScene = applyCreateNPCPresence(context, command);
       break;
     case "TransformNPCPresence":
-      updatedScene = applyTransformNPCPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyTransformNPCPresence(context, command));
       break;
     case "SetNPCPresenceShaderOverride":
-      updatedScene = applySetNPCPresenceShaderOverride(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceShaderOverride(context, command));
       break;
     case "SetNPCPresenceShaderParameterOverride":
-      updatedScene = applySetNPCPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceShaderParameterOverride(
         context,
         command
-      );
+      ));
       break;
     case "ClearNPCPresenceShaderParameterOverride":
-      updatedScene = applyClearNPCPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } = applyClearNPCPresenceShaderParameterOverride(
         context,
         command
-      );
+      ));
       break;
     case "SetNPCPresenceCondition":
-      updatedScene = applySetNPCPresenceCondition(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceCondition(context, command));
       break;
     case "SetNPCPresenceLabel":
-      updatedScene = applySetNPCPresenceLabel(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceLabel(context, command));
       break;
     case "RemoveNPCPresence":
-      updatedScene = applyRemoveNPCPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyRemoveNPCPresence(context, command));
       break;
     case "CreateItemPresence":
       updatedScene = applyCreateItemPresence(context, command);
       break;
     case "TransformItemPresence":
-      updatedScene = applyTransformItemPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyTransformItemPresence(context, command));
       break;
     case "UpdateItemPresence":
-      updatedScene = applyUpdateItemPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyUpdateItemPresence(context, command));
       break;
     case "SetItemPresenceShaderOverride":
-      updatedScene = applySetItemPresenceShaderOverride(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applySetItemPresenceShaderOverride(context, command));
       break;
     case "SetItemPresenceShaderParameterOverride":
-      updatedScene = applySetItemPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } = applySetItemPresenceShaderParameterOverride(
         context,
         command
-      );
+      ));
       break;
     case "ClearItemPresenceShaderParameterOverride":
-      updatedScene = applyClearItemPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } = applyClearItemPresenceShaderParameterOverride(
         context,
         command
-      );
+      ));
       break;
     case "RemoveItemPresence":
-      updatedScene = applyRemoveItemPresence(context, command);
+      ({ region: updatedRegion, scene: updatedScene } = applyRemoveItemPresence(context, command));
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

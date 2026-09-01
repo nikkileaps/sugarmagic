@@ -227,6 +227,7 @@ export function createTestActiveScene(regionId: string): Scene {
     sceneId: "scene:test",
     regionOverlays: {
       [regionId]: {
+        suppressedRegionIds: [],
         assetAppearanceOverrides: {},
         folders: [],
         placedAssets: [],

@@ -848,11 +848,19 @@ function applyDeleteShaderGraphCommand(
         regionId,
         {
           ...region,
-          // Plan 058 §058.1 — base-scope assets scrub here; the
-          // overlay-side scrub happens across gameProject.scenes
-          // below (a shader delete is global, not Scene-scoped).
+          // Region-owned content scrubs here; the overlay-side scrub
+          // happens across every Scene above (a shader delete is global,
+          // not Scene-scoped). Residents are region-owned too, so they
+          // scrub with the assets or they keep dangling references to a
+          // shader that no longer exists.
           placedAssets: region.placedAssets.map((asset) =>
             stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          ),
+          npcPresences: region.npcPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          ),
+          itemPresences: region.itemPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
           )
         }
       ])
@@ -3065,6 +3073,10 @@ export function copyOverlayEntryToScene(
     session.gameProject.episodes,
     options.toSceneId
   );
+  // Overlay content only, deliberately. A region-owned resident or prop is
+  // already present in every Scene by composition, so copying one into a
+  // Scene overlay would place a second copy beside the one that composes.
+  // Nothing to copy is the correct answer for region content.
   const fromOverlay = fromScene?.regionOverlays[options.regionId];
   if (!fromScene || !toScene || !fromOverlay) return session;
 

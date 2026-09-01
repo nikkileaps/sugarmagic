@@ -222,6 +222,15 @@ export interface RegionSceneOverlay {
   folders: RegionSceneFolder[];
   /** Plan 068.2 — Scene restyles of base placements, by instanceId. */
   assetAppearanceOverrides: Record<string, SceneAssetAppearanceOverride>;
+  /**
+   * Epic #226 — region-owned content this Scene hides: placed-asset
+   * `instanceId`s and presence `presenceId`s in one list, since both are
+   * uuids and a Scene hides a thing without caring which kind it is. Names
+   * region content rather than copying it, so there is never a second copy
+   * to drift. Ids that match nothing are ignored: an author can delete a
+   * region asset a Scene once hid without breaking that Scene.
+   */
+  suppressedRegionIds: string[];
 }
 
 export interface Scene {
@@ -253,6 +262,7 @@ export function createRegionSceneOverlay(
     playerPresence: overrides.playerPresence ?? null,
     placedAssets: [...(overrides.placedAssets ?? [])],
     folders: [...(overrides.folders ?? [])],
+    suppressedRegionIds: [...(overrides.suppressedRegionIds ?? [])],
     assetAppearanceOverrides: Object.fromEntries(
       Object.entries(overrides.assetAppearanceOverrides ?? {}).map(
         ([instanceId, override]) => [
@@ -425,6 +435,9 @@ function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
       createPlacedAssetInstance(asset)
     ),
     folders: [...(record.folders ?? [])],
+    suppressedRegionIds: (record.suppressedRegionIds ?? []).filter(
+      (id): id is string => typeof id === "string" && id.trim().length > 0
+    ),
     assetAppearanceOverrides: normalizeSceneAssetAppearanceOverrides(
       record.assetAppearanceOverrides
     )

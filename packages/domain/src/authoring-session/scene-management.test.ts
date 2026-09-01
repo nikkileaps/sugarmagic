@@ -250,6 +250,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
@@ -309,6 +310,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
@@ -366,6 +368,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              suppressedRegionIds: [],
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],

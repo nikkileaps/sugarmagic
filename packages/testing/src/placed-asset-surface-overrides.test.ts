@@ -146,6 +146,7 @@ describe("SetPlacedAssetSurfaceSlotOverride command", () => {
       ...base,
       regionOverlays: {
         "test-region": {
+          suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           itemPresences: [],
           npcPresences: [],

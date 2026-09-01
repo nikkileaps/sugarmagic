@@ -257,6 +257,16 @@ function collectQuestBindings(
         });
       }
     }
+    // A resident's spawn condition validates like a Scene placement's; the
+    // region owns this one, so it is reachable with no Scene at all.
+    for (const presence of region.npcPresences) {
+      if (presence.condition) {
+        bindings.push({
+          binding: presence.condition,
+          where: `region "${region.displayName}" NPC placement`
+        });
+      }
+    }
   }
   for (const scene of getAllScenes(gameProject.episodes)) {
     for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {

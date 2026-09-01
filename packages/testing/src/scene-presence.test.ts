@@ -139,6 +139,7 @@ describe("layout scene presences", () => {
       sceneId: "scene:test",
       regionOverlays: {
         [region.identity.id]: {
+          suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
           placedAssets: [],

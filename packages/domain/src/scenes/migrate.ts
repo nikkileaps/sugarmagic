@@ -52,22 +52,54 @@ export interface ComposedRegionContents {
 }
 
 /**
- * Compose a region's base layer with the active Scene's overlay
- * for that region. Null scene (or no overlay for this region)
- * yields base-only contents — presences empty, base assets
- * visible. Pure; call at the spawn/read seam, never per-tick.
+ * Compose one region with the active Scene's overlay for that region
+ * (epic #226). Two layers: the region is the world at rest -- its
+ * dressing AND its residents -- and the Scene overlay is a diff that
+ * adds, suppresses, and restyles. A null scene, or a Scene with no
+ * overlay for this region, yields the region alone: a populated place,
+ * which is what free roam composes.
+ *
+ * Suppression names region-owned ids, so a Scene hides a resident or a
+ * prop without the overlay holding a copy of it. It cannot reach the
+ * overlay's own content -- a Scene that does not want something simply
+ * does not add it.
+ *
+ * Pure; call at the spawn/read seam, never per-tick.
  */
 export function composeRegionContents(
   region: RegionDocument,
   scene: Scene | null
 ): ComposedRegionContents {
   const overlay = scene?.regionOverlays[region.identity.id] ?? null;
+  const suppressed = new Set(overlay?.suppressedRegionIds ?? []);
+  const regionPlayerPresence =
+    region.playerPresence && !suppressed.has(region.playerPresence.presenceId)
+      ? region.playerPresence
+      : null;
   return {
     folders: [...region.folders, ...(overlay?.folders ?? [])],
-    placedAssets: [...region.placedAssets, ...(overlay?.placedAssets ?? [])],
-    playerPresence: overlay?.playerPresence ?? null,
-    npcPresences: [...(overlay?.npcPresences ?? [])],
-    itemPresences: [...(overlay?.itemPresences ?? [])]
+    placedAssets: [
+      ...region.placedAssets.filter(
+        (asset) => !suppressed.has(asset.instanceId)
+      ),
+      ...(overlay?.placedAssets ?? [])
+    ],
+    // Exactly one player spawn: the Scene's answer wins where it has one,
+    // otherwise the region's. Reading the overlay alone used to be the
+    // whole rule, so a region start plus a Scene start meant two spawns.
+    playerPresence: overlay?.playerPresence ?? regionPlayerPresence,
+    npcPresences: [
+      ...region.npcPresences.filter(
+        (presence) => !suppressed.has(presence.presenceId)
+      ),
+      ...(overlay?.npcPresences ?? [])
+    ],
+    itemPresences: [
+      ...region.itemPresences.filter(
+        (presence) => !suppressed.has(presence.presenceId)
+      ),
+      ...(overlay?.itemPresences ?? [])
+    ]
   };
 }
 

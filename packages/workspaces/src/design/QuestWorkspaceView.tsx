@@ -1082,9 +1082,10 @@ export function useQuestWorkspaceView({
     [regions]
   );
 
-  // Plan 079.7 -- all NPC presences across all scenes/regions, for the stage picker.
-  // Deduped by presenceId (first scene overlay wins); tracks which region owns each
-  // and the presence's current condition (to derive checked state in the picker).
+  // Plan 079.7 -- every NPC presence an author can bind a quest stage to:
+  // the regions' own residents plus every Scene's overlay placements.
+  // Deduped by presenceId; tracks which region owns each and the presence's
+  // current condition (to derive checked state in the picker).
   const allNpcPresences = useMemo(() => {
     const seen = new Set<string>();
     const items: Array<{
@@ -1097,29 +1098,51 @@ export function useQuestWorkspaceView({
         questStageId: string | null;
       } | null;
     }> = [];
+    const addPresence = (
+      presence: {
+        presenceId: string;
+        npcDefinitionId: string;
+        placementLabel?: string | null;
+        condition?: {
+          questDefinitionId: string | null;
+          questStageId: string | null;
+        } | null;
+      },
+      regionId: string,
+      regionDisplayName: string
+    ): void => {
+      if (seen.has(presence.presenceId)) return;
+      seen.add(presence.presenceId);
+      const npcDef = npcDefinitions.find(
+        (n) => n.definitionId === presence.npcDefinitionId
+      );
+      const baseName = npcDef?.displayName ?? presence.npcDefinitionId;
+      items.push({
+        presenceId: presence.presenceId,
+        regionId,
+        regionDisplayName,
+        displayLabel: presence.placementLabel ?? baseName,
+        condition: presence.condition
+          ? {
+              questDefinitionId: presence.condition.questDefinitionId,
+              questStageId: presence.condition.questStageId
+            }
+          : null
+      });
+    };
+    // Residents first: they are present in every Scene, so they are the
+    // most bindable thing in the list.
+    for (const region of regions) {
+      for (const presence of region.npcPresences) {
+        addPresence(presence, region.identity.id, region.displayName);
+      }
+    }
     for (const scene of getAllScenes(episodes)) {
       for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
         const region = regions.find((r) => r.identity.id === regionId);
         const regionDisplayName = region?.displayName ?? regionId;
         for (const presence of overlay.npcPresences) {
-          if (seen.has(presence.presenceId)) continue;
-          seen.add(presence.presenceId);
-          const npcDef = npcDefinitions.find(
-            (n) => n.definitionId === presence.npcDefinitionId
-          );
-          const baseName = npcDef?.displayName ?? presence.npcDefinitionId;
-          items.push({
-            presenceId: presence.presenceId,
-            regionId,
-            regionDisplayName,
-            displayLabel: presence.placementLabel ?? baseName,
-            condition: presence.condition
-              ? {
-                  questDefinitionId: presence.condition.questDefinitionId,
-                  questStageId: presence.condition.questStageId
-                }
-              : null
-          });
+          addPresence(presence, regionId, regionDisplayName);
         }
       }
     }

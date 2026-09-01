@@ -70,6 +70,7 @@ describe("preview boot composes the active Scene overlay", () => {
               sceneId: "scene:overlay-test",
               regionOverlays: {
                 [region.identity.id]: {
+                  suppressedRegionIds: [],
                   assetAppearanceOverrides: {},
                   folders: [],
                   placedAssets: [],

@@ -442,6 +442,8 @@ export function normalizeScenesForLoad(
           })
         ),
         folders: [...overlay.folders],
+        // Absent in files predating epic #226: nothing suppressed.
+        suppressedRegionIds: [...(overlay.suppressedRegionIds ?? [])],
         assetAppearanceOverrides: overlay.assetAppearanceOverrides ?? {}
       };
     }

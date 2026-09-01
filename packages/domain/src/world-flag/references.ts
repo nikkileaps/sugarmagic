@@ -40,7 +40,8 @@ export type WorldFlagReferenceTarget =
   | { kind: "volume"; regionId: string; volumeId: string }
   | {
       kind: "npc-placement";
-      sceneId: string;
+      /** Null when the region owns the placement rather than a Scene. */
+      sceneId: string | null;
       regionId: string;
       presenceId: string;
     };
@@ -240,6 +241,26 @@ export function mapWorldFlagReferences(
   // volume's flag write becomes a quest action and joins this walk.
   const mappedRegions: RegionDocument[] = regions.map((region) => ({
     ...region,
+    // A resident's spawn condition is a flag reference like any other. It
+    // reaches the walk here rather than through the Scene loop below,
+    // because the region owns it and no Scene needs to exist for it to
+    // matter.
+    npcPresences: region.npcPresences.map((presence) =>
+      presence.condition
+        ? {
+            ...presence,
+            condition: binding(presence.condition, {
+              where: `region "${region.displayName}" NPC placement`,
+              target: {
+                kind: "npc-placement",
+                sceneId: null,
+                regionId: region.identity.id,
+                presenceId: presence.presenceId
+              }
+            })
+          }
+        : presence
+    ),
     behaviors: region.behaviors.map((behavior) => ({
       ...behavior,
       tasks: behavior.tasks.map((task) => ({
