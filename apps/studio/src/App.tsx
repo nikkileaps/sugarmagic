@@ -25,7 +25,7 @@ import {
   Badge
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
-import { ManageScenesModal } from "./ManageScenesModal";
+import { StoryStructureView } from "./StoryStructureView";
 import { CreditsPreview } from "./CreditsPreview";
 import { createCharacterWizardServices } from "./character-wizard/characterWizardServices";
 import type {
@@ -139,7 +139,8 @@ import {
   createDefaultMechanicsDefinition,
   createDefaultRegion,
   createScopedId,
-  sceneOverlayForRegion
+  sceneOverlayForRegion,
+  moveQuestToSceneInSession
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -204,7 +205,8 @@ import {
   useDesignProductModeView,
   usePublishProductModeView,
   useRenderProductModeView,
-  type WorkspaceNavigationTarget
+  type WorkspaceNavigationTarget,
+  useStoryProductModeView
 } from "@sugarmagic/workspaces";
 import {
   ActionStripe,
@@ -799,6 +801,16 @@ function handleMoveSceneToEpisode(sceneId: string, toEpisodeId: string) {
     .updateSession(moveSceneToEpisodeInSession(session, sceneId, toEpisodeId));
 }
 
+function handleMoveQuestToScene(questDefinitionId: string, toSceneId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(
+      moveQuestToSceneInSession(session, questDefinitionId, toSceneId)
+    );
+}
+
 function handleUpdateEpisodeEndRouting(routing: EpisodeEndRouting) {
   const { session } = projectStore.getState();
   if (!session) return;
@@ -864,6 +876,7 @@ function handleStartPreview(
     activeProductMode: shell.activeProductMode,
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+    activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
     activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
     activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
     activeRegionId: shell.activeRegionId,
@@ -940,6 +953,9 @@ function handleStopPreview() {
   }
   if (snapshot.activeProductMode === "design") {
     shell.setActiveDesignWorkspaceKind(snapshot.activeDesignWorkspaceKind);
+  }
+  if (snapshot.activeProductMode === "story") {
+    shell.setActiveStoryWorkspaceKind(snapshot.activeStoryWorkspaceKind);
   }
   if (snapshot.activeProductMode === "render") {
     shell.setActiveRenderWorkspaceKind(snapshot.activeRenderWorkspaceKind);
@@ -1093,6 +1109,10 @@ export function App() {
     shellStore,
     (s) => s.activeDesignWorkspaceKind
   );
+  const activeStoryKind = useStore(
+    shellStore,
+    (s) => s.activeStoryWorkspaceKind
+  );
   const activeRenderKind = useStore(
     shellStore,
     (s) => s.activeRenderWorkspaceKind
@@ -1129,6 +1149,7 @@ export function App() {
   const hasSession = session != null;
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
+  const isStory = activeProductMode === "story";
   const isRender = activeProductMode === "render";
   const isPublish = activeProductMode === "publish";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
@@ -1147,7 +1168,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [manageScenesOpen, setManageScenesOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -1401,6 +1421,7 @@ export function App() {
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+      activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
       activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
       activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
       activeRegionId: shell.activeRegionId,
@@ -3375,6 +3396,73 @@ export function App() {
         }
       )
   });
+  const storyView = useStoryProductModeView({
+    activeStoryKind,
+    onSelectKind: (kind) =>
+      shellStore.getState().setActiveStoryWorkspaceKind(kind),
+    structurePanel: session ? (
+      <StoryStructureView
+        episodes={session.gameProject.episodes}
+        activeSceneId={session.activeSceneId}
+        questDefinitions={getAllQuestDefinitions(session)}
+        environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
+          (definition) => ({
+            definitionId: definition.definitionId,
+            displayName: definition.displayName
+          })
+        )}
+        regions={[...session.regions.values()].map((region) => ({
+          regionId: region.identity.id,
+          displayName: region.displayName
+        }))}
+        soundCueDefinitions={(
+          session.contentLibrary.soundCueDefinitions ?? []
+        ).map((cue) => ({
+          definitionId: cue.definitionId,
+          displayName: cue.displayName
+        }))}
+        onAddScene={handleAddScene}
+        onRenameScene={handleRenameScene}
+        onUpdateScene={handleUpdateScene}
+        onDeleteScene={handleDeleteScene}
+        onReorderScene={handleReorderScene}
+        onSelectScene={handleSceneSelect}
+        episodeEndRouting={session.gameProject.episodeEndRouting}
+        onUpdateEpisodeEndRouting={handleUpdateEpisodeEndRouting}
+        onAddEpisode={handleAddEpisode}
+        onUpdateEpisode={handleUpdateEpisode}
+        onDeleteEpisode={handleDeleteEpisode}
+        onReorderEpisode={handleReorderEpisode}
+        onMoveSceneToEpisode={handleMoveSceneToEpisode}
+        onMoveQuestToScene={handleMoveQuestToScene}
+      />
+    ) : null,
+    quests: {
+      isActive: false,
+      gameProjectId: session?.gameProject.identity.id ?? null,
+      questDefinitions: session ? getAllQuestDefinitions(session) : [],
+      regions: regionDocuments,
+      episodes: session?.gameProject.episodes ?? [],
+      soundCueDefinitions,
+      dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
+      itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+      npcDefinitions: session?.gameProject.npcDefinitions ?? [],
+      spellDefinitions: session?.gameProject.spellDefinitions ?? [],
+      onCommand: dispatchCommand,
+      navigationTarget: workspaceNavigationTarget,
+      onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
+      onNavigateToTarget: handleWorkspaceNavigation
+    },
+    dialogues: {
+      isActive: false,
+      gameProjectId: session?.gameProject.identity.id ?? null,
+      dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
+      itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+      npcDefinitions: session?.gameProject.npcDefinitions ?? [],
+      spellDefinitions: session?.gameProject.spellDefinitions ?? [],
+      onCommand: dispatchCommand
+    }
+  });
   const renderView = useRenderProductModeView({
     activeRenderKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
@@ -3762,44 +3850,6 @@ export function App() {
           });
         }}
       />
-      {session && (
-        <ManageScenesModal
-          opened={manageScenesOpen}
-          onClose={() => setManageScenesOpen(false)}
-          episodes={session.gameProject.episodes}
-          activeSceneId={session.activeSceneId}
-          questDefinitions={getAllQuestDefinitions(session)}
-          environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
-            (definition) => ({
-              definitionId: definition.definitionId,
-              displayName: definition.displayName
-            })
-          )}
-          regions={[...session.regions.values()].map((region) => ({
-            regionId: region.identity.id,
-            displayName: region.displayName
-          }))}
-          soundCueDefinitions={(
-            session.contentLibrary.soundCueDefinitions ?? []
-          ).map((cue) => ({
-            definitionId: cue.definitionId,
-            displayName: cue.displayName
-          }))}
-          onAddScene={handleAddScene}
-          onRenameScene={handleRenameScene}
-          onUpdateScene={handleUpdateScene}
-          onDeleteScene={handleDeleteScene}
-          onReorderScene={handleReorderScene}
-          onSelectScene={handleSceneSelect}
-          episodeEndRouting={session.gameProject.episodeEndRouting}
-          onUpdateEpisodeEndRouting={handleUpdateEpisodeEndRouting}
-          onAddEpisode={handleAddEpisode}
-          onUpdateEpisode={handleUpdateEpisode}
-          onDeleteEpisode={handleDeleteEpisode}
-          onReorderEpisode={handleReorderEpisode}
-          onMoveSceneToEpisode={handleMoveSceneToEpisode}
-        />
-      )}
       <Modal
         opened={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
@@ -4291,24 +4341,6 @@ export function App() {
                         ))}
                       </Fragment>
                     ))}
-                    <Menu.Divider
-                      styles={{
-                        divider: { borderColor: "var(--sm-panel-border)" }
-                      }}
-                    />
-                    <Menu.Item
-                      onClick={() => setManageScenesOpen(true)}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
-                        }
-                      }}
-                    >
-                      ⚙ Manage Story...
-                    </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               </Group>
@@ -4343,8 +4375,10 @@ export function App() {
           phase === "active"
             ? isBuild
               ? buildView.subHeaderPanel
-              : isDesign
-                ? designView.subHeaderPanel
+              : isStory
+                ? storyView.subHeaderPanel
+                : isDesign
+                  ? designView.subHeaderPanel
                 : isRender
                   ? renderView.subHeaderPanel
                   : isPublish
@@ -4355,8 +4389,10 @@ export function App() {
         leftPanel={
           isBuild
             ? buildView.leftPanel
-            : isDesign
-              ? activeDesignPanels.leftPanel
+            : isStory
+              ? storyView.leftPanel
+              : isDesign
+                ? activeDesignPanels.leftPanel
               : isRender
                 ? renderView.leftPanel
                 : isPublish
@@ -4366,8 +4402,10 @@ export function App() {
         rightPanel={
           isBuild
             ? buildView.rightPanel
-            : isDesign
-              ? activeDesignPanels.rightPanel
+            : isStory
+              ? storyView.rightPanel
+              : isDesign
+                ? activeDesignPanels.rightPanel
               : isRender
                 ? renderView.rightPanel
                 : isPublish
@@ -4384,6 +4422,8 @@ export function App() {
         centerPanel={
           phase === "active" && isBuild && buildView.centerPanel ? (
             buildView.centerPanel
+          ) : phase === "active" && isStory && storyView.centerPanel ? (
+            storyView.centerPanel
           ) : phase === "active" &&
             isDesign &&
             activeDesignPanels.centerPanel ? (

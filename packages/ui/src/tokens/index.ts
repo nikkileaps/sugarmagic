@@ -53,6 +53,7 @@ export const shellIcons = {
   pickup: "📦",
   trigger: "⚡",
   design: "✨",
+  story: "📖",
   build: "🗺️",
   render: "🔥",
   publish: "🚀"

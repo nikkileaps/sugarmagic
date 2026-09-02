@@ -14,13 +14,15 @@ import type {
   BuildWorkspaceKind,
   DesignWorkspaceKind,
   PublishWorkspaceKind,
-  RenderWorkspaceKind
+  RenderWorkspaceKind,
+  StoryWorkspaceKind
 } from "../index";
 
 export interface AuthoringContextSnapshot {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeDesignWorkspaceKind: DesignWorkspaceKind;
+  activeStoryWorkspaceKind: StoryWorkspaceKind;
   activeRenderWorkspaceKind: RenderWorkspaceKind;
   activePublishWorkspaceKind: PublishWorkspaceKind;
   activeRegionId: string | null;

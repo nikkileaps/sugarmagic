@@ -1,26 +1,27 @@
 /**
- * apps/studio/src/ManageScenesModal.tsx
+ * apps/studio/src/StoryStructureView.tsx
  *
- * Purpose: the "Manage Scenes" panel behind the top-bar selector.
- * Master-detail: the left column lists Episodes and Scenes and
- * creates / renames / reorders / deletes / activates them; the
- * right pane edits whichever is selected. The Scene pane renders a
- * static transition-card preview from the SAME styling constants
- * the runtime card uses.
+ * Purpose: the Story mode's structure workspace -- the Episodes a
+ * project has, the Scenes each one holds, and everything about them
+ * an author edits. Master-detail: the left column lists Episodes with
+ * their Scenes and creates / renames / reorders / deletes / activates
+ * them; the right pane edits whichever is selected. The Scene pane
+ * renders a static transition-card preview from the SAME styling
+ * constants the runtime card uses.
  *
  * Delete is guarded on both levels (the last Scene and the last
  * Episode are undeletable, and an Episode cannot be emptied by
  * moving its final Scene out; inline confirm instead of a browser
  * dialog per the Mantine-only rule).
  *
- * STOPGAP. Epic 207 story 2 deliberately kept this a flat list
- * rather than the two-level disclosure tree the design calls for,
- * because `docs/proposals/011-build-story-authoring-split.md`
- * proposes a `Story` product mode that owns Episodes, Scenes,
- * quests and dialogue -- and retires this modal. Building the
- * fuller surface here would be work thrown away twice. Revisit
- * when an author has more than about five Episodes, or when moving
- * Scenes between them becomes routine.
+ * This was a modal reached from a top-bar menu until epic #226 gave
+ * the narrative its own product mode. The editing surface moved here
+ * whole; what went away is its modal-ness and the menu item.
+ *
+ * Lives in the app rather than `@sugarmagic/workspaces` because it
+ * shares the runtime's transition-card styling constants, and
+ * workspaces may not import `@sugarmagic/target-web`. The Story mode
+ * hook takes this rendered panel instead of importing it.
  *
  * Status: active
  */
@@ -31,7 +32,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   NumberInput,
   Select,
   Stack,
@@ -53,9 +53,7 @@ import {
   TRANSITION_CARD_FONT_FAMILY
 } from "@sugarmagic/target-web";
 
-export interface ManageScenesModalProps {
-  opened: boolean;
-  onClose: () => void;
+export interface StoryStructureViewProps {
   episodes: Episode[];
   activeSceneId: string | null;
   questDefinitions: QuestDefinition[];
@@ -96,6 +94,7 @@ export interface ManageScenesModalProps {
   onDeleteEpisode: (episodeId: string) => void;
   onReorderEpisode: (episodeId: string, direction: "up" | "down") => void;
   onMoveSceneToEpisode: (sceneId: string, toEpisodeId: string) => void;
+  onMoveQuestToScene: (questDefinitionId: string, toSceneId: string) => void;
 }
 
 /** What the left column has selected — an Episode row or a Scene row. */
@@ -233,10 +232,8 @@ function EpisodeGateFields(props: {
   );
 }
 
-export function ManageScenesModal(props: ManageScenesModalProps) {
+export function StoryStructureView(props: StoryStructureViewProps) {
   const {
-    opened,
-    onClose,
     episodes,
     activeSceneId,
     questDefinitions,
@@ -255,7 +252,8 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
     onUpdateEpisode,
     onDeleteEpisode,
     onReorderEpisode,
-    onMoveSceneToEpisode
+    onMoveSceneToEpisode,
+    onMoveQuestToScene
   } = props;
   const [newSceneName, setNewSceneName] = useState("");
   const [newEpisodeName, setNewEpisodeName] = useState("");
@@ -355,29 +353,6 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={() => {
-        setPendingDeleteId(null);
-        onClose();
-      }}
-      title="Manage Story"
-      centered
-      size="62rem"
-      styles={{
-        header: {
-          background: "var(--sm-color-surface1)",
-          borderBottom: "1px solid var(--sm-panel-border)"
-        },
-        title: { color: "var(--sm-color-text)", fontWeight: 600 },
-        body: { background: "var(--sm-color-surface1)", padding: "20px" },
-        content: { background: "var(--sm-color-surface1)" },
-        close: {
-          color: "var(--sm-color-overlay1)",
-          "&:hover": { background: "var(--sm-active-bg)" }
-        }
-      }}
-    >
       <Group align="flex-start" gap="lg" wrap="nowrap">
         {/* --- Left: Episodes, each with its Scenes ------------ */}
         <Stack gap="md" style={{ width: 380, flexShrink: 0 }}>
@@ -775,6 +750,9 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
               }
               {...fieldLabelProps}
             />
+            {/* Paired on one row: both answer "where does this Scene
+                happen", one in the story and one in the world. */}
+            <Group gap="xs" grow align="flex-start">
             <Select
               size="xs"
               label="Move to Episode"
@@ -820,6 +798,9 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
               }
               {...fieldLabelProps}
             />
+            </Group>
+            {/* Paired on one row: both are Scene-scoped atmosphere. */}
+            <Group gap="xs" grow align="flex-start">
             <Select
               size="xs"
               label="Environment override"
@@ -871,6 +852,55 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
               }
               {...fieldLabelProps}
             />
+            </Group>
+
+            {/* Epic #226 -- a Scene HOLDS its quests, so this is where an
+                author sees which ones and moves them. The list is the
+                Scene's own `questDefinitions`, not a filter over a
+                project-wide list. */}
+            <Text size="xs" fw={600}>
+              Quests in this Scene
+            </Text>
+            {selectedScene.questDefinitions.length === 0 ? (
+              <Text size="xs" c="var(--sm-color-overlay0)">
+                None yet. A quest authored here happens in this Scene.
+              </Text>
+            ) : (
+              <Stack gap={6}>
+                {selectedScene.questDefinitions.map((quest) => (
+                  <Group
+                    key={quest.definitionId}
+                    gap="xs"
+                    wrap="nowrap"
+                    align="center"
+                  >
+                    <Text size="xs" style={{ flex: 1 }}>
+                      {quest.displayName}
+                    </Text>
+                    <Select
+                      size="xs"
+                      placeholder="Move to Scene..."
+                      style={{ width: 180 }}
+                      data={scenes
+                        .filter(
+                          (scene) => scene.sceneId !== selectedScene.sceneId
+                        )
+                        .map((scene) => ({
+                          value: scene.sceneId,
+                          label: scene.displayName
+                        }))}
+                      value={null}
+                      disabled={scenes.length <= 1}
+                      onChange={(value) => {
+                        if (!value) return;
+                        onMoveQuestToScene(quest.definitionId, value);
+                      }}
+                      {...fieldLabelProps}
+                    />
+                  </Group>
+                ))}
+              </Stack>
+            )}
 
             <Text
               size="xs"
@@ -1016,6 +1046,5 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
           </Stack>
         )}
       </Group>
-    </Modal>
   );
 }

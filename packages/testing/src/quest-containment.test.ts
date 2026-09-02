@@ -17,6 +17,10 @@ import {
   getAllQuestDefinitionsInEpisodes,
   getAllScenes,
   normalizeGameProject,
+  createAuthoringSession,
+  createDefaultRegion,
+  createDefaultScene,
+  moveQuestToSceneInSession,
   takeQuestContainmentNotes,
   type GameProject,
   type QuestDefinition
@@ -105,6 +109,50 @@ describe("quest containment", () => {
         (q) => q.definitionId
       )
     ).toEqual([QUEST_ID]);
+  });
+
+  it("moving a quest to another Scene keeps exactly one owner", () => {
+    takeQuestContainmentNotes();
+    const project = normalizeGameProject(legacyProjectRaw());
+    const region = createDefaultRegion({
+      regionId: "region:test",
+      displayName: "Test"
+    });
+    let session = createAuthoringSession(
+      {
+        ...project,
+        episodes: project.episodes.map((episode) => ({
+          ...episode,
+          scenes: [
+            ...episode.scenes.map((scene) => ({
+              ...scene,
+              regionId: "region:test"
+            })),
+            createDefaultScene({
+              sceneId: "scene:second",
+              displayName: "Second",
+              regionId: "region:test"
+            })
+          ]
+        }))
+      },
+      [region]
+    );
+
+    session = moveQuestToSceneInSession(session, QUEST_ID, "scene:second");
+
+    const owners = getAllScenes(session.gameProject.episodes).filter((scene) =>
+      scene.questDefinitions.some((q) => q.definitionId === QUEST_ID)
+    );
+    expect(owners.map((scene) => scene.sceneId)).toEqual(["scene:second"]);
+
+    // Moving it again is not a way to end up with two.
+    session = moveQuestToSceneInSession(session, QUEST_ID, "scene:second");
+    expect(
+      getAllQuestDefinitionsInEpisodes(session.gameProject.episodes).filter(
+        (q) => q.definitionId === QUEST_ID
+      )
+    ).toHaveLength(1);
   });
 
   it("the deploy bundle carries each quest exactly once", () => {

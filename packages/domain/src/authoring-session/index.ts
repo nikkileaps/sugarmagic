@@ -51,7 +51,9 @@ import {
   normalizeEpisodes,
   type Episode,
   type EpisodeEndRouting,
-  getAllQuestDefinitionsInEpisodes
+  getAllQuestDefinitionsInEpisodes,
+  findQuestDefinitionById,
+  findSceneByQuestDefinitionId
 } from "../episodes";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -2850,6 +2852,41 @@ export function moveSceneToEpisodeInSession(
         return { ...episode, scenes: [...episode.scenes, scene] };
       }
       return episode;
+    })
+  );
+}
+
+/**
+ * Move a quest to another Scene (epic #226).
+ *
+ * A Scene HOLDS its quests, so moving one is a remove-and-add across two
+ * Scenes rather than a field edit -- the same shape as moving a Scene
+ * between Episodes above. Single ownership stays true by construction:
+ * the quest is filtered out of every Scene before it is added to the
+ * destination, so a repeat call cannot leave two copies.
+ */
+export function moveQuestToSceneInSession(
+  session: AuthoringSession,
+  questDefinitionId: string,
+  toSceneId: string
+): AuthoringSession {
+  const episodes = session.gameProject.episodes;
+  const quest = findQuestDefinitionById(episodes, questDefinitionId);
+  const from = findSceneByQuestDefinitionId(episodes, questDefinitionId);
+  const to = findSceneById(episodes, toSceneId);
+  if (!quest || !to || from?.sceneId === toSceneId) return session;
+
+  return withEpisodes(
+    session,
+    mapScenes(episodes, (scene) => {
+      const without = scene.questDefinitions.filter(
+        (entry) => entry.definitionId !== questDefinitionId
+      );
+      return {
+        ...scene,
+        questDefinitions:
+          scene.sceneId === toSceneId ? [...without, quest] : without
+      };
     })
   );
 }

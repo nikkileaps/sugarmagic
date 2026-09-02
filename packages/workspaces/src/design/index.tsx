@@ -75,8 +75,6 @@ export const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "spells", label: "Spells", icon: "✨" },
   { id: "items", label: "Items", icon: "📦" },
   { id: "documents", label: "Documents", icon: "📚" },
-  { id: "dialogues", label: "Dialogues", icon: "💬" },
-  { id: "quests", label: "Quests", icon: "📜" },
   { id: "world-flags", label: "World Flags", icon: "🚩" },
   { id: "mechanics", label: "Mechanics", icon: "🎲" },
   { id: "game-ui", label: "Game UI", icon: "🖥️" }
@@ -291,35 +289,6 @@ export function useDesignProductModeView(
     onAppendDocumentPage
   });
 
-  const dialogueView = useDialogueWorkspaceView({
-    isActive: activeDesignKind === "dialogues",
-    gameProjectId,
-    dialogueDefinitions,
-    itemDefinitions,
-    npcDefinitions,
-    spellDefinitions,
-    onCommand,
-    renderDialogueInspectorSections
-  });
-
-  const questView = useQuestWorkspaceView({
-    isActive: activeDesignKind === "quests",
-    gameProjectId,
-    questDefinitions,
-    regions,
-    episodes,
-    soundCueDefinitions,
-    dialogueDefinitions,
-    itemDefinitions,
-    npcDefinitions,
-    spellDefinitions,
-    onCommand,
-    navigationTarget,
-    onConsumeNavigationTarget,
-    onNavigateToTarget,
-    renderInspectorSections: renderQuestInspectorSections
-  });
-
   const gameUIView = useGameUIWorkspaceView({
     isActive: activeDesignKind === "game-ui",
     gameProjectId,
@@ -361,14 +330,10 @@ export function useDesignProductModeView(
     leftPanel:
       activeDesignKind === "world-flags"
         ? worldFlagView.leftPanel
-        : activeDesignKind === "dialogues"
-        ? dialogueView.leftPanel
         : activeDesignKind === "mechanics"
           ? mechanicsView.leftPanel
           : activeDesignKind === "game-ui"
             ? gameUIView.leftPanel
-            : activeDesignKind === "quests"
-              ? questView.leftPanel
               : activeDesignKind === "npcs"
                 ? npcView.leftPanel
                 : activeDesignKind === "spells"
@@ -381,14 +346,10 @@ export function useDesignProductModeView(
     rightPanel:
       activeDesignKind === "world-flags"
         ? worldFlagView.rightPanel
-        : activeDesignKind === "dialogues"
-        ? dialogueView.rightPanel
         : activeDesignKind === "mechanics"
           ? mechanicsView.rightPanel
           : activeDesignKind === "game-ui"
             ? gameUIView.rightPanel
-            : activeDesignKind === "quests"
-              ? questView.rightPanel
               : activeDesignKind === "npcs"
                 ? npcView.rightPanel
                 : activeDesignKind === "spells"
@@ -399,14 +360,10 @@ export function useDesignProductModeView(
                       ? documentView.rightPanel
                       : playerView.rightPanel,
     centerPanel:
-      activeDesignKind === "dialogues"
-        ? dialogueView.centerPanel
-        : activeDesignKind === "mechanics"
+ activeDesignKind === "mechanics"
           ? mechanicsView.centerPanel
           : activeDesignKind === "game-ui"
             ? gameUIView.centerPanel
-            : activeDesignKind === "quests"
-              ? questView.centerPanel
               : activeDesignKind === "spells"
                 ? spellView.centerPanel
                 : activeDesignKind === "documents"
@@ -419,15 +376,11 @@ export function useDesignProductModeView(
     viewportOverlay:
       activeDesignKind === "world-flags"
         ? worldFlagView.viewportOverlay
-        : activeDesignKind === "dialogues"
-        ? dialogueView.viewportOverlay
         : activeDesignKind === "mechanics"
           ? mechanicsView.viewportOverlay
           : activeDesignKind === "game-ui"
             ? gameUIView.viewportOverlay
-            : activeDesignKind === "quests"
-              ? questView.viewportOverlay
-              : activeDesignKind === "spells"
+            : activeDesignKind === "spells"
                 ? spellView.viewportOverlay
                 : activeDesignKind === "documents"
                   ? documentView.viewportOverlay

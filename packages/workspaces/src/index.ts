@@ -4,6 +4,7 @@ export * from "./world-flags";
 export * from "./interaction";
 export * from "./publish";
 export * from "./render";
+export * from "./story";
 export * from "./design/npcInteractionOptions";
 export * from "./viewport";
 export * from "./workspace-view";
