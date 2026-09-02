@@ -1,7 +1,7 @@
 /**
  * SpatialWorkspaceView: the React view for Build > Spatial.
  *
- * Plan 069.7 — authors unified drawn Volumes (label / trigger / blocker /
+ * Plan 069.7 — authors unified drawn Volumes (label / blocker /
  * containment / nav roles), not just areas. The list + draw + inspector all
  * operate on `region.volumes`; the legacy `areas`/`ambience` stores are the
  * derived aliases (069.4). Runtime role behavior lands in 069.5 — this view
@@ -25,14 +25,17 @@ import {
   UnstyledButton
 } from "@mantine/core";
 import type {
+  Episode,
+  ItemDefinition,
+  NPCDefinition,
   RegionAreaBounds,
   RegionAreaKind,
   RegionDocument,
   RegionVolumeBlockDirection,
   RegionVolumeDefinition,
   RegionVolumeRole,
-  RegionVolumeTriggerTiming,
-  SemanticCommand
+  SemanticCommand,
+  SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
   createRegionBehaviorQuestBinding,
@@ -40,6 +43,7 @@ import {
   createRegionVolumeId,
   resolveRegionVolumes
 } from "@sugarmagic/domain";
+import { QuestActionsEditor } from "../../design/QuestWorkspaceView";
 import {
   Inspector,
   PanelSection,
@@ -66,7 +70,6 @@ const AREA_KIND_OPTIONS: Array<{ value: RegionAreaKind; label: string }> = [
 
 const VOLUME_ROLE_OPTIONS: Array<{ value: RegionVolumeRole; label: string }> = [
   { value: "label", label: "Label (semantic zone)" },
-  { value: "trigger", label: "Trigger" },
   { value: "blocker", label: "Blocker (wall)" },
   { value: "containment-boundary", label: "Containment (can't leave until…)" },
   { value: "nav-bounds", label: "Nav bounds (bake navmesh here)" },
@@ -80,14 +83,6 @@ const BLOCK_DIRECTION_OPTIONS: Array<{
   { value: "both", label: "Both" },
   { value: "in", label: "Block entry" },
   { value: "out", label: "Block exit" }
-];
-
-const TRIGGER_TIMING_OPTIONS: Array<{
-  value: RegionVolumeTriggerTiming;
-  label: string;
-}> = [
-  { value: "on-enter", label: "On enter" },
-  { value: "always", label: "Always" }
 ];
 
 type SpatialTool = "select" | "draw-rect";
@@ -105,6 +100,12 @@ export interface SpatialWorkspaceViewProps {
   onSelect: (ids: string[]) => void;
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
+  /** Picker sources for a volume's enter/exit action lists, which are the
+   *  same lists a quest node runs. */
+  itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
+  episodes: Episode[];
+  soundCueDefinitions: SoundCueDefinition[];
   /** Plan 069.8 — bake the region navmesh (studio host action). */
   onBakeNavMesh?: () => void | Promise<void>;
   /** Plan 069.8 — a collider/nav-volume edit postdates the bake. */
@@ -187,6 +188,10 @@ export function useSpatialWorkspaceView(
     onSelect,
     region,
     onCommand,
+    itemDefinitions,
+    npcDefinitions,
+    episodes,
+    soundCueDefinitions,
     onBakeNavMesh,
     navMeshStale
   } = props;
@@ -530,113 +535,27 @@ export function useSpatialWorkspaceView(
               </Stack>
             )}
 
-            {selectedVolume.roles.includes("trigger") && (
-              <Stack gap="xs">
-                <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-                  Trigger
-                </Text>
-                <Select
-                  label="Timing"
-                  size="xs"
-                  data={TRIGGER_TIMING_OPTIONS}
-                  value={selectedVolume.trigger?.timing ?? "on-enter"}
-                  onChange={(value) =>
-                    value &&
-                    updateVolume({
-                      trigger: {
-                        timing: value as RegionVolumeTriggerTiming,
-                        action: selectedVolume.trigger?.action ?? {
-                          audioCueId: null,
-                          setWorldFlag: null
-                        }
-                      }
-                    })
-                  }
-                />
-                <TextInput
-                  label="Audio Cue ID"
-                  size="xs"
-                  value={selectedVolume.trigger?.action.audioCueId ?? ""}
-                  onChange={(event) =>
-                    updateVolume({
-                      trigger: {
-                        timing: selectedVolume.trigger?.timing ?? "on-enter",
-                        action: {
-                          audioCueId: event.currentTarget.value || null,
-                          setWorldFlag:
-                            selectedVolume.trigger?.action.setWorldFlag ?? null
-                        }
-                      }
-                    })
-                  }
-                />
-                {/* Flag assignment fires only on the on-enter edge; "always"
-                    is the continuous ambient bed and runs no actions — hide
-                    the fields so an inert flag can't be authored. */}
-                {(selectedVolume.trigger?.timing ?? "on-enter") ===
-                  "on-enter" && (
-                <Group grow>
-                  <TextInput
-                    label="Set Flag Key"
-                    size="xs"
-                    value={
-                      selectedVolume.trigger?.action.setWorldFlag?.key ?? ""
-                    }
-                    onChange={(event) =>
-                      updateVolume({
-                        trigger: {
-                          timing: selectedVolume.trigger?.timing ?? "on-enter",
-                          action: {
-                            audioCueId:
-                              selectedVolume.trigger?.action.audioCueId ?? null,
-                            setWorldFlag: event.currentTarget.value
-                              ? {
-                                  key: event.currentTarget.value,
-                                  valueType:
-                                    selectedVolume.trigger?.action.setWorldFlag
-                                      ?.valueType ?? "boolean",
-                                  value:
-                                    selectedVolume.trigger?.action.setWorldFlag
-                                      ?.value ?? "true"
-                                }
-                              : null
-                          }
-                        }
-                      })
-                    }
-                  />
-                  <TextInput
-                    label="Value"
-                    size="xs"
-                    value={
-                      selectedVolume.trigger?.action.setWorldFlag?.value ?? ""
-                    }
-                    disabled={!selectedVolume.trigger?.action.setWorldFlag?.key}
-                    onChange={(event) =>
-                      selectedVolume.trigger?.action.setWorldFlag?.key &&
-                      updateVolume({
-                        trigger: {
-                          timing: selectedVolume.trigger.timing,
-                          action: {
-                            audioCueId:
-                              selectedVolume.trigger.action.audioCueId,
-                            setWorldFlag: {
-                              key: selectedVolume.trigger.action.setWorldFlag
-                                .key,
-                              valueType:
-                                selectedVolume.trigger.action.setWorldFlag
-                                  .valueType,
-                              value: event.currentTarget.value
-                            }
-                          }
-                        }
-                      })
-                    }
-                  />
-                </Group>
-                )}
-              </Stack>
-            )}
+            {/* What the volume DOES on a crossing. The same editor and the
+                same action list a quest node uses -- an ambient bed is a
+                Play Cue on enter paired with a Stop Cue on exit. */}
+            <QuestActionsEditor
+              label="On Enter"
+              actions={selectedVolume.onEnterActions}
+              itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
+              episodes={episodes}
+              soundCueDefinitions={soundCueDefinitions}
+              onChange={(onEnterActions) => updateVolume({ onEnterActions })}
+            />
+            <QuestActionsEditor
+              label="On Exit"
+              actions={selectedVolume.onExitActions}
+              itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
+              episodes={episodes}
+              soundCueDefinitions={soundCueDefinitions}
+              onChange={(onExitActions) => updateVolume({ onExitActions })}
+            />
 
             {(selectedVolume.roles.includes("blocker") ||
               selectedVolume.roles.includes("containment-boundary")) && (

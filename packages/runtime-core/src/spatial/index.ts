@@ -19,7 +19,7 @@ const regionAreaIndexCache = new WeakMap<
   Map<string, RegionAreaDefinition>
 >();
 
-/** Plan 069.5 — exported so the trigger tracker (and any role consumer)
+/** Exported so the volume-crossing tracker (and any role consumer)
  *  shares one box containment test. Y is honored (volumes are boxes). */
 export function containsPoint(
   bounds: RegionAreaBounds,
@@ -138,12 +138,12 @@ interface SpatialAreaResolutionCore {
 
 export interface SpatialAreaResolution extends SpatialAreaResolutionCore {
   /**
-   * Plan 069.5 — `on-enter` trigger volumes this entity crossed INTO / OUT
+   * Volumes this entity crossed INTO / OUT of since the last resolve. Edge
    * of since the previous resolve. Edge-detected off a per-entity inside
-   * set, so a trigger fires once per entry and re-arms only after an exit.
+   * set, so a volume runs once per entry and re-arms only after an exit.
    */
-  triggersEntered: RegionVolumeDefinition[];
-  triggersExited: RegionVolumeDefinition[];
+  volumesEntered: RegionVolumeDefinition[];
+  volumesExited: RegionVolumeDefinition[];
 }
 
 interface SpatialAreaTrackerState {
@@ -168,34 +168,33 @@ export function createSpatialAreaTracker(
   const states = new Map<string, SpatialAreaTrackerState>();
   const index = buildAreaIndex(region);
 
-  // Plan 069.5 — `on-enter` trigger volumes and the per-entity inside set we
-  // edge-detect against. Only on-enter triggers need edge tracking; "always"
-  // triggers are the continuous ambient bed played from the audio alias.
-  const triggerVolumes = resolveRegionVolumes(region).filter(
+  // Volumes that DO something on a crossing, and the per-entity inside set
+  // we edge-detect against. A volume with no actions on either side is not
+  // tracked -- there would be nothing to run.
+  const actionVolumes = resolveRegionVolumes(region).filter(
     (volume) =>
       volume.enabled &&
-      volume.roles.includes("trigger") &&
-      volume.trigger?.timing === "on-enter"
+      (volume.onEnterActions.length > 0 || volume.onExitActions.length > 0)
   );
-  const insideTriggerIdsByEntity = new Map<string, Set<string>>();
+  const insideVolumeIdsByEntity = new Map<string, Set<string>>();
 
-  function resolveTriggerEdges(
+  function resolveVolumeCrossings(
     entityId: string,
     position: { x: number; y: number; z: number }
   ): { entered: RegionVolumeDefinition[]; exited: RegionVolumeDefinition[] } {
     const entered: RegionVolumeDefinition[] = [];
     const exited: RegionVolumeDefinition[] = [];
-    if (triggerVolumes.length === 0) {
+    if (actionVolumes.length === 0) {
       return { entered, exited };
     }
-    const previous = insideTriggerIdsByEntity.get(entityId);
+    const previous = insideVolumeIdsByEntity.get(entityId);
     // First resolve for this entity: PRIME the inside-set (record where it
-    // already is) without emitting edges — spawning INSIDE an on-enter trigger
-    // is not a crossing, so it must not fire the cue / set the world flag on
-    // load. Only genuine enter/exit crossings on later frames fire.
+    // already is) without emitting edges — spawning INSIDE a volume is not a
+    // crossing, so loading a save there must not re-run its enter actions.
+    // Only genuine enter/exit crossings on later frames run anything.
     const isFirstResolve = previous === undefined;
     const current = new Set<string>();
-    for (const volume of triggerVolumes) {
+    for (const volume of actionVolumes) {
       const inside = containsPoint(
         volume.bounds,
         position.x,
@@ -211,7 +210,7 @@ export function createSpatialAreaTracker(
         exited.push(volume);
       }
     }
-    insideTriggerIdsByEntity.set(entityId, current);
+    insideVolumeIdsByEntity.set(entityId, current);
     return { entered, exited };
   }
 
@@ -304,16 +303,16 @@ export function createSpatialAreaTracker(
   return {
     resolve(entityId, position) {
       const areaResolution = resolveArea(entityId, position);
-      const triggers = resolveTriggerEdges(entityId, position);
+      const crossings = resolveVolumeCrossings(entityId, position);
       return {
         ...areaResolution,
-        triggersEntered: triggers.entered,
-        triggersExited: triggers.exited
+        volumesEntered: crossings.entered,
+        volumesExited: crossings.exited
       };
     },
     reset() {
       states.clear();
-      insideTriggerIdsByEntity.clear();
+      insideVolumeIdsByEntity.clear();
     }
   };
 }

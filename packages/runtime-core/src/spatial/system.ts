@@ -26,7 +26,7 @@ interface SpatialDebugSnapshot {
 
 /** Plan 069.5 — an `on-enter` trigger volume the player crossed a boundary
  *  of. Fired for the player only; NPC trigger firing is deferred. */
-export interface SpatialTriggerEvent {
+export interface SpatialVolumeCrossing {
   entityId: string;
   volume: RegionVolumeDefinition;
   kind: "enter" | "exit";
@@ -40,7 +40,7 @@ export interface RuntimeSpatialResolverSystemOptions {
   logDebug?: (event: string, payload?: Record<string, unknown>) => void;
   /** Plan 069.5 — player enter/exit of on-enter trigger volumes. The
    *  session consumer fires the authored action (audio cue + world flag). */
-  onTriggerEvent?: (event: SpatialTriggerEvent) => void;
+  onVolumeCrossing?: (event: SpatialVolumeCrossing) => void;
 }
 
 export interface RuntimeSpatialResolverSystemSyncInput {
@@ -74,7 +74,7 @@ export function createRuntimeSpatialResolverSystem(
     playerEntityId,
     confirmationFrames,
     logDebug,
-    onTriggerEvent
+    onVolumeCrossing
   } = options;
   const spatialAreaTracker = createSpatialAreaTracker(region, {
     confirmationFrames
@@ -97,12 +97,12 @@ export function createRuntimeSpatialResolverSystem(
     const area = resolution.area;
 
     // Plan 069.5 — fire on-enter trigger edges for the player only.
-    if (entityKind === "player" && onTriggerEvent) {
-      for (const volume of resolution.triggersEntered) {
-        onTriggerEvent({ entityId, volume, kind: "enter" });
+    if (entityKind === "player" && onVolumeCrossing) {
+      for (const volume of resolution.volumesEntered) {
+        onVolumeCrossing({ entityId, volume, kind: "enter" });
       }
-      for (const volume of resolution.triggersExited) {
-        onTriggerEvent({ entityId, volume, kind: "exit" });
+      for (const volume of resolution.volumesExited) {
+        onVolumeCrossing({ entityId, volume, kind: "exit" });
       }
     }
 

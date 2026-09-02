@@ -3,7 +3,6 @@ import type {
   RegionNPCBehaviorDefinition,
   RegionLandscapePaintPayload,
   RegionLayoutSketchState,
-  RegionAmbienceZone,
   RegionSoundEmitter,
   RegionBehaviorQuestBinding
 } from "../region-authoring";
@@ -350,28 +349,6 @@ export type DeleteRegionSoundEmitterCommand = SemanticCommandBase<
   "DeleteRegionSoundEmitter",
   {
     emitterId: string;
-  }
->;
-
-export type CreateRegionAmbienceZoneCommand = SemanticCommandBase<
-  "CreateRegionAmbienceZone",
-  {
-    zone: RegionAmbienceZone;
-  }
->;
-
-export type UpdateRegionAmbienceZoneCommand = SemanticCommandBase<
-  "UpdateRegionAmbienceZone",
-  {
-    zoneId: string;
-    patch: Partial<Omit<RegionAmbienceZone, "zoneId">>;
-  }
->;
-
-export type DeleteRegionAmbienceZoneCommand = SemanticCommandBase<
-  "DeleteRegionAmbienceZone",
-  {
-    zoneId: string;
   }
 >;
 
@@ -1127,9 +1104,6 @@ export type SemanticCommand =
   | CreateRegionSoundEmitterCommand
   | UpdateRegionSoundEmitterCommand
   | DeleteRegionSoundEmitterCommand
-  | CreateRegionAmbienceZoneCommand
-  | UpdateRegionAmbienceZoneCommand
-  | DeleteRegionAmbienceZoneCommand
   | UpdateEnvironmentDefinitionCommand
   | CreateShaderGraphCommand
   | RenameShaderGraphCommand

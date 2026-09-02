@@ -1,8 +1,8 @@
 /**
  * Unified Volume migration (Plan 069.4).
  *
- * The load-time migration of RegionAreaDefinition + RegionAmbienceZone into
- * canonical `volumes`, with the `@deprecated` area/ambience aliases
+ * The load-time migration of RegionAreaDefinition into canonical
+ * `volumes`, with the `@deprecated` area alias
  * re-derived so every legacy reader keeps working. The bar is INVISIBILITY:
  * every field + id survives, and the aliases are byte-identical to the
  * legacy stores.
@@ -17,8 +17,6 @@ import {
   executeCommand,
   normalizeRegionDocumentForLoad,
   reconcileRegionVolumesFromAreas,
-  reconcileRegionVolumesFromAmbienceZones,
-  type RegionAmbienceZone,
   type RegionAreaDefinition,
   type RegionDocument,
   type RegionVolumeDefinition,
@@ -44,17 +42,6 @@ const AREAS: RegionAreaDefinition[] = [
   }
 ];
 
-const AMBIENCE: RegionAmbienceZone[] = [
-  {
-    zoneId: "zone:crowd",
-    displayName: "Crowd Murmur",
-    cueDefinitionId: "cue:crowd",
-    center: [1, 0, 2],
-    size: [10, 4, 10],
-    trigger: "always",
-    enabled: true
-  }
-];
 
 function legacyRegion(): RegionDocument {
   return {
@@ -67,7 +54,7 @@ function legacyRegion(): RegionDocument {
     areas: AREAS.map((area) => ({ ...area })),
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({}),
-    audio: { emitters: [], ambienceZones: AMBIENCE.map((z) => ({ ...z })) },
+    audio: { emitters: [] },
     markers: [],
     gameplayPlacements: []
     // no `volumes` — a pre-069.4 file
@@ -79,9 +66,9 @@ const normalize = (region: RegionDocument): RegionDocument =>
   normalizeRegionDocumentForLoad(region, library);
 
 describe("unified Volume migration — invisibility", () => {
-  it("migrates areas + ambience into canonical volumes (ids preserved)", () => {
+  it("migrates areas into canonical volumes (ids preserved)", () => {
     const { volumes = [] } = normalize(legacyRegion());
-    expect(volumes).toHaveLength(3); // 2 areas + 1 ambience zone
+    expect(volumes).toHaveLength(2); // 2 areas
 
     const market = volumes.find((v) => v.volumeId === "area:market")!;
     expect(market.roles).toEqual(["label"]);
@@ -93,19 +80,6 @@ describe("unified Volume migration — invisibility", () => {
     const stall = volumes.find((v) => v.volumeId === "area:stall")!;
     expect(stall.parentVolumeId).toBe("area:market"); // nesting preserved
     expect(stall.labelKind).toBe("stall");
-
-    const crowd = volumes.find((v) => v.volumeId === "zone:crowd")!;
-    expect(crowd.roles).toEqual(["trigger"]);
-    expect(crowd.trigger).toEqual({
-      timing: "always",
-      action: { audioCueId: "cue:crowd", setWorldFlag: null }
-    });
-    expect(crowd.enabled).toBe(true);
-    expect(crowd.bounds).toEqual({
-      kind: "box",
-      center: [1, 0, 2],
-      size: [10, 4, 10]
-    });
   });
 
   it("re-derives the area alias identically to the legacy store", () => {
@@ -115,17 +89,11 @@ describe("unified Volume migration — invisibility", () => {
     expect(normalized.areas).toEqual(AREAS);
   });
 
-  it("re-derives the ambience-zone alias identically to the legacy store", () => {
-    const normalized = normalize(legacyRegion());
-    expect(normalized.audio?.ambienceZones).toEqual(AMBIENCE);
-  });
-
   it("is idempotent — re-loading a migrated region is a fixed point", () => {
     const once = normalize(legacyRegion());
     const twice = normalize(once);
     expect(twice.volumes).toEqual(once.volumes);
     expect(twice.areas).toEqual(once.areas);
-    expect(twice.audio?.ambienceZones).toEqual(once.audio?.ambienceZones);
   });
 
   it("preserves canonical volumes (incl. physical roles) when already migrated", () => {
@@ -142,7 +110,8 @@ describe("unified Volume migration — invisibility", () => {
       lorePageId: null,
       blockDirection: "both",
       condition: null,
-      trigger: null,
+      onEnterActions: [],
+      onExitActions: [],
       navCost: null,
       color: null
     };
@@ -158,11 +127,12 @@ describe("unified Volume migration — invisibility", () => {
       lorePageId: a.lorePageId,
       blockDirection: null,
       condition: null,
-      trigger: null,
+      onEnterActions: [],
+      onExitActions: [],
       navCost: null,
       color: null
     })), blocker];
-    // Legacy areas/ambience present too, but volumes is canonical.
+    // Legacy areas present too, but volumes is canonical.
     const normalized = normalize(region);
     expect(normalized.volumes?.some((v) => v.volumeId === "vol:wall")).toBe(true);
     // The blocker has no label role, so it doesn't leak into the area alias.
@@ -236,29 +206,6 @@ describe("unified Volume — write path (069.4)", () => {
     expect(written.areas.some((a) => a.areaId === "area:market")).toBe(true);
   });
 
-  it("creates the first ambience zone (creating audio) via the trigger role", () => {
-    // Region with NO audio at all.
-    const region = legacyRegion();
-    delete region.audio;
-    region.areas = [];
-    const migrated = normalize(region);
-    expect(migrated.audio?.ambienceZones ?? []).toHaveLength(0);
-
-    const zone: RegionAmbienceZone = {
-      zoneId: "zone:wind",
-      displayName: "Wind",
-      cueDefinitionId: "cue:wind",
-      center: [0, 0, 0],
-      size: [20, 4, 20],
-      trigger: "always",
-      enabled: true
-    };
-    const written = reconcileRegionVolumesFromAmbienceZones(migrated, [zone]);
-    expect(written.audio?.ambienceZones).toContainEqual(zone);
-    expect(
-      written.volumes?.find((v) => v.volumeId === "zone:wind")?.roles
-    ).toEqual(["trigger"]);
-  });
 });
 
 describe("unified Volume — authoring commands (069.7)", () => {

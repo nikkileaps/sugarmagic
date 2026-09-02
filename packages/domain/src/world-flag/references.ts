@@ -233,11 +233,8 @@ export function mapWorldFlagReferences(
   // Behavior task activations and containment-volume gates live in the region
   // file. `volumes` is absent in pre-069.4 files.
   //
-  // A volume's `trigger.action.setWorldFlag` is NOT walked here, and cannot be:
-  // it names a flag by store key rather than by id, so there is no reference to
-  // rewrite or resolve. `validateProjectContent` reports one whose key matches
-  // no registered flag name instead. #216 deletes the field, at which point the
-  // volume's flag write becomes a quest action and joins this walk.
+  // A volume's enter/exit actions name flags by id like everything else, so a
+  // rename follows them and a delete reports them.
   const mappedRegions: RegionDocument[] = regions.map((region) => ({
     ...region,
     behaviors: region.behaviors.map((behavior) => ({
@@ -255,21 +252,26 @@ export function mapWorldFlagReferences(
         })
       }))
     })),
-    volumes: region.volumes?.map((volume) =>
-      volume.condition
-        ? {
-            ...volume,
-            condition: binding(volume.condition, {
-              where: `region "${region.displayName}" volume "${volume.volumeId}" gate`,
-              target: {
-                kind: "volume",
-                regionId: region.identity.id,
-                volumeId: volume.volumeId
-              }
-            })
-          }
-        : volume
-    )
+    volumes: region.volumes?.map((volume) => {
+      const target = {
+        kind: "volume" as const,
+        regionId: region.identity.id,
+        volumeId: volume.volumeId
+      };
+      const where = `region "${region.displayName}" volume "${volume.volumeId}"`;
+      return {
+        ...volume,
+        condition: volume.condition
+          ? binding(volume.condition, { where: `${where} gate`, target })
+          : volume.condition,
+        onEnterActions: volume.onEnterActions.map((action) =>
+          questAction(action, { where: `${where} on-enter action`, target })
+        ),
+        onExitActions: volume.onExitActions.map((action) =>
+          questAction(action, { where: `${where} on-exit action`, target })
+        )
+      };
+    })
   }));
 
   // NPC presence conditions are Scene-scoped, not region-scoped: they live on
