@@ -3160,29 +3160,6 @@ export function App() {
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
-    // Scope conversion and cross-Scene copy.
-    onConvertAssetScope: (regionId, instanceId) => {
-      const { session } = projectStore.getState();
-      if (!session) return;
-      projectStore
-        .getState()
-        .updateSession(
-          convertAssetScopeInSession(session, { regionId, instanceId })
-        );
-    },
-    onCopyEntryToScene: (options) => {
-      const { session } = projectStore.getState();
-      const fromScene = session ? getActiveScene(session) : null;
-      if (!session || !fromScene) return;
-      projectStore
-        .getState()
-        .updateSession(
-          copyOverlayEntryToScene(session, {
-            fromSceneId: fromScene.sceneId,
-            ...options
-          })
-        );
-    },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
     onBakeNavMesh: handleBakeNavMesh,
     navMeshStale,
@@ -3467,6 +3444,19 @@ export function App() {
           if (scene?.regionId) {
             shellStore.getState().setActiveRegionId(scene.regionId);
           }
+        }}
+        onPromotePresence={(presenceId) => {
+          const scene = getActiveScene(session);
+          if (!scene) return;
+          dispatchCommand({
+            kind: "PromotePresenceToRegion",
+            target: {
+              aggregateKind: "game-project",
+              aggregateId: session.gameProject.identity.id
+            },
+            subject: { subjectKind: "scene", subjectId: scene.sceneId },
+            payload: { sceneId: scene.sceneId, presenceId }
+          });
         }}
         onSetSuppressed={(regionOwnedId, suppressed) => {
           const scene = getActiveScene(session);

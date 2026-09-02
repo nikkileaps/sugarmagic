@@ -110,15 +110,6 @@ export interface BuildProductModeViewProps {
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
-  /** Plan 058 §058.3 — scope conversion + cross-Scene copy,
-   *  wired by Studio to the session-level Scene functions. */
-  onConvertAssetScope: (regionId: string, instanceId: string) => void;
-  onCopyEntryToScene: (options: {
-    toSceneId: string;
-    regionId: string;
-    kind: "npc" | "item" | "player" | "asset";
-    id: string;
-  }) => void;
   /** Open Game > Libraries > Assets with this definition selected
    *  (asset definition editing lives in the library modal now). */
   onOpenAssetsLibrary: (definitionId: string) => void;
@@ -278,8 +269,6 @@ export function useBuildProductModeView(
       session ? getActiveRegionContents(session) : null,
     getActiveScene: () => (session ? getActiveScene(session) : null),
     getAllScenes: () => getAllScenes(session?.gameProject.episodes ?? []),
-    onConvertAssetScope: props.onConvertAssetScope,
-    onCopyEntryToScene: props.onCopyEntryToScene,
     assetDefinitions,
     surfaceDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,

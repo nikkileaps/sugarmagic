@@ -2564,6 +2564,71 @@ export function applyCommand(
     return applyCreateQuestDefinitionCommand(session, command);
   }
 
+  if (command.kind === "PromotePresenceToRegion") {
+    const { sceneId, presenceId } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    const region = scene ? session.regions.get(scene.regionId) : null;
+    if (!scene || !region) return session;
+
+    const npc = scene.overlay.npcPresences.find(
+      (presence) => presence.presenceId === presenceId
+    );
+    const item = scene.overlay.itemPresences.find(
+      (presence) => presence.presenceId === presenceId
+    );
+    const player =
+      scene.overlay.playerPresence?.presenceId === presenceId
+        ? scene.overlay.playerPresence
+        : null;
+    if (!npc && !item && !player) return session;
+
+    const transaction = createTransactionForCommand(command, [presenceId]);
+    const nextRegions = new Map(session.regions);
+    nextRegions.set(region.identity.id, {
+      ...region,
+      npcPresences: npc ? [...region.npcPresences, npc] : region.npcPresences,
+      itemPresences: item
+        ? [...region.itemPresences, item]
+        : region.itemPresences,
+      // The region keeps the start it already has: a Scene's spawn wins
+      // while that Scene runs, so promoting one must not silently
+      // replace where the player begins everywhere else.
+      playerPresence: player
+        ? (region.playerPresence ?? player)
+        : region.playerPresence
+    });
+
+    return {
+      ...withEpisodes(
+        {  ...session, regions: nextRegions },
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId
+            ? {
+                ...entry,
+                overlay: {
+                  ...entry.overlay,
+                  npcPresences: entry.overlay.npcPresences.filter(
+                    (presence) => presence.presenceId !== presenceId
+                  ),
+                  itemPresences: entry.overlay.itemPresences.filter(
+                    (presence) => presence.presenceId !== presenceId
+                  ),
+                  playerPresence:
+                    entry.overlay.playerPresence?.presenceId === presenceId
+                      ? null
+                      : entry.overlay.playerPresence
+                }
+              }
+            : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
   if (command.kind === "SetSceneSuppression") {
     const { sceneId, regionOwnedId, suppressed } = command.payload;
     const scene = findSceneById(session.gameProject.episodes, sceneId);

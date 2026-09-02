@@ -772,6 +772,23 @@ export type CreateQuestDefinitionCommand = SemanticCommandBase<
 >;
 
 /**
+ * Hand a Scene's own presence over to the region (epic #226): it stops
+ * being something this Scene adds and becomes a resident, present
+ * whenever the region is.
+ *
+ * The counterpart to suppression. Assets have had this since 058 as
+ * scope conversion; presences never did, which is why a world authored
+ * before this epic has its whole cast trapped in one Scene's overlay.
+ */
+export type PromotePresenceToRegionCommand = SemanticCommandBase<
+  "PromotePresenceToRegion",
+  {
+    sceneId: string;
+    presenceId: string;
+  }
+>;
+
+/**
  * Hide a region-owned thing for the duration of one Scene (epic #226).
  *
  * Names a region id -- a placed asset's `instanceId` or a presence's
@@ -1216,6 +1233,7 @@ export type SemanticCommand =
   | CreateQuestDefinitionCommand
   | MoveQuestToSceneCommand
   | SetSceneSuppressionCommand
+  | PromotePresenceToRegionCommand
   | UpdateNPCDefinitionCommand
   | UpdateSpellDefinitionCommand
   | UpdateItemDefinitionCommand

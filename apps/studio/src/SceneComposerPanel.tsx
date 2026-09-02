@@ -15,7 +15,7 @@
  * Status: active
  */
 
-import { Checkbox, Select, Stack, Text } from "@mantine/core";
+import { Button, Checkbox, Group, Select, Stack, Text } from "@mantine/core";
 import type { RegionDocument, Scene } from "@sugarmagic/domain";
 
 export interface SceneComposerPanelProps {
@@ -26,6 +26,9 @@ export interface SceneComposerPanelProps {
   region: RegionDocument | null;
   onSelectScene: (sceneId: string) => void;
   onSetSuppressed: (regionOwnedId: string, suppressed: boolean) => void;
+  /** Hand one of this Scene's presences to the region, so it is present
+   *  whenever the region is rather than only during this Scene. */
+  onPromotePresence: (presenceId: string) => void;
 }
 
 interface SuppressibleRow {
@@ -57,7 +60,8 @@ export function SceneComposerPanel({
   selectedScene,
   region,
   onSelectScene,
-  onSetSuppressed
+  onSetSuppressed,
+  onPromotePresence
 }: SceneComposerPanelProps) {
   const suppressed = new Set(selectedScene?.overlay.suppressedRegionIds ?? []);
   const rows = region ? suppressibleRows(region) : [];
@@ -119,6 +123,57 @@ export function SceneComposerPanel({
           )}
         </>
       )}
+      {selectedScene && (
+        <>
+          <Text size="xs" fw={600}>
+            This Scene adds
+          </Text>
+          {overlayPresences(selectedScene).length === 0 ? (
+            <Text size="xs" c="var(--sm-color-overlay0)">
+              Nothing yet. What you place here belongs to this Scene alone.
+            </Text>
+          ) : (
+            <Stack gap={4}>
+              {overlayPresences(selectedScene).map((row) => (
+                <Group key={row.id} gap="xs" wrap="nowrap" align="center">
+                  <Text size="xs" style={{ flex: 1 }}>
+                    {row.label}
+                  </Text>
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={() => onPromotePresence(row.id)}
+                  >
+                    Give to region
+                  </Button>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </>
+      )}
     </Stack>
   );
+}
+
+/** What this Scene adds that could instead belong to the region. */
+function overlayPresences(scene: Scene): SuppressibleRow[] {
+  return [
+    ...scene.overlay.npcPresences.map((presence) => ({
+      id: presence.presenceId,
+      label: presence.placementLabel ?? presence.npcDefinitionId
+    })),
+    ...scene.overlay.itemPresences.map((presence) => ({
+      id: presence.presenceId,
+      label: presence.itemDefinitionId
+    })),
+    ...(scene.overlay.playerPresence
+      ? [
+          {
+            id: scene.overlay.playerPresence.presenceId,
+            label: "Player start"
+          }
+        ]
+      : [])
+  ];
 }

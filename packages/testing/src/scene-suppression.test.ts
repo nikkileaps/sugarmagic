@@ -62,6 +62,54 @@ function suppress(
   };
 }
 
+describe("giving a Scene's presence to the region", () => {
+  it("moves it out of the overlay and onto the region", () => {
+    const { session } = sessionWithResident();
+    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const seeded = {
+      ...session,
+      gameProject: {
+        ...session.gameProject,
+        episodes: session.gameProject.episodes.map((episode) => ({
+          ...episode,
+          scenes: episode.scenes.map((scene) =>
+            scene.sceneId === sceneId
+              ? {
+                  ...scene,
+                  overlay: {
+                    ...scene.overlay,
+                    npcPresences: [
+                      createRegionNPCPresence({
+                        presenceId: "presence:visitor",
+                        npcDefinitionId: "npc:visitor"
+                      })
+                    ]
+                  }
+                }
+              : scene
+          )
+        }))
+      }
+    };
+
+    const next = applyCommand(seeded, {
+      kind: "PromotePresenceToRegion",
+      target: { aggregateKind: "game-project", aggregateId: "test" },
+      subject: { subjectKind: "scene", subjectId: sceneId },
+      payload: { sceneId, presenceId: "presence:visitor" }
+    });
+
+    // A world authored before this epic has its whole cast in one
+    // Scene's overlay; without this there is no way out of it.
+    expect(
+      next.regions.get(REGION_ID)!.npcPresences.map((p) => p.presenceId)
+    ).toContain("presence:visitor");
+    expect(
+      findSceneById(next.gameProject.episodes, sceneId)!.overlay.npcPresences
+    ).toEqual([]);
+  });
+});
+
 describe("suppressing region content for a Scene", () => {
   it("hides the resident in that Scene and composition drops it", () => {
     const { session, region } = sessionWithResident();

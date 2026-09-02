@@ -143,15 +143,8 @@ export interface LayoutWorkspaceViewProps {
   getAllScenes: () => Scene[];
   /** Plan 058 §058.3 — move an asset between region base and the
    *  active Scene's overlay. */
-  onConvertAssetScope: (regionId: string, instanceId: string) => void;
   /** Plan 058 §058.3 — copy a presence / overlay asset from the
    *  active Scene into another Scene's overlay. */
-  onCopyEntryToScene: (options: {
-    toSceneId: string;
-    regionId: string;
-    kind: "npc" | "item" | "player" | "asset";
-    id: string;
-  }) => void;
   assetDefinitions: AssetDefinition[];
   /** Library surfaces for the Surface Brush palette (Plan 068.9). */
   surfaceDefinitions: SurfaceDefinition[];
@@ -375,8 +368,6 @@ export function useLayoutWorkspaceView(
     getRegionContents,
     getActiveScene,
     getAllScenes,
-    onConvertAssetScope,
-    onCopyEntryToScene,
     assetDefinitions,
     surfaceDefinitions,
     playerDefinition,
@@ -852,9 +843,10 @@ export function useLayoutWorkspaceView(
           folderId,
           displayName: displayName.trim(),
           parentFolderId,
-          // Plan 058 §058.2 — folders follow the same ambient
-          // scoping as the assets they'll group.
-          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+          // Build authors the region (epic #226). A folder made here
+          // groups region content; Scene-scoped grouping belongs to the
+          // composer, with the rest of the overlay.
+          scope: "base" as const
         }
       });
     },
@@ -1124,10 +1116,10 @@ export function useLayoutWorkspaceView(
           position: [0, 0.5, 0],
           rotation: [0, 0, 0],
           scale: [1, 1, 1],
-          // Plan 058 §058.2 — Ambient Context: new placements land
-          // in the active Scene's overlay. Promote to Base via the
-          // scope-conversion action (Plan 058.3).
-          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+          // Build authors the world at rest, so a placement made here
+          // belongs to the region (epic #226). What a Scene temporarily
+          // adds is authored in the composer instead.
+          scope: "base" as const
         }
       });
       onSelect([instanceId]);
@@ -1328,30 +1320,6 @@ export function useLayoutWorkspaceView(
     return null;
   }, [contextMenu, regionContents, overlayAssetIds]);
 
-  const otherScenes = useMemo(() => {
-    const activeId = activeScene?.sceneId;
-    return getAllScenes().filter((scene) => scene.sceneId !== activeId);
-  }, [getAllScenes, activeScene]);
-
-  const handleConvertScope = useCallback(() => {
-    if (!region || !contextMenuEntry) return;
-    onConvertAssetScope(region.identity.id, contextMenuEntry.id);
-    setContextMenu(null);
-  }, [region, contextMenuEntry, onConvertAssetScope]);
-
-  const handleCopyToScene = useCallback(
-    (toSceneId: string) => {
-      if (!region || !contextMenuEntry) return;
-      onCopyEntryToScene({
-        toSceneId,
-        regionId: region.identity.id,
-        kind: contextMenuEntry.kind,
-        id: contextMenuEntry.id
-      });
-      setContextMenu(null);
-    },
-    [region, contextMenuEntry, onCopyEntryToScene]
-  );
 
   const filteredNPCDefinitions = useMemo(() => {
     const query = npcQuery.trim().toLowerCase();
@@ -1472,25 +1440,6 @@ export function useLayoutWorkspaceView(
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
             onMoveEntityToFolder={handleMoveEntityToFolder}
-            getEntityScopeAction={(instanceId) => {
-              // Same action pair as the viewport context menu
-              // (Plan 058.3); placed assets only.
-              if (
-                !region ||
-                !regionContents.placedAssets.some(
-                  (entry) => entry.instanceId === instanceId
-                )
-              ) {
-                return null;
-              }
-              return {
-                label: overlayAssetIds.has(instanceId)
-                  ? "Promote to Base"
-                  : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`,
-                onClick: () =>
-                  onConvertAssetScope(region.identity.id, instanceId)
-              };
-            }}
           />
         </Stack>
         <Modal
@@ -2448,61 +2397,6 @@ export function useLayoutWorkspaceView(
             >
               <Text size="sm">Snap to Origin</Text>
             </UnstyledButton>
-            {/* Plan 058 §058.3 — scope conversion (assets only:
-                presences are inherently Scene-scoped). */}
-            {contextMenuEntry?.kind === "asset" && (
-              <UnstyledButton
-                onClick={handleConvertScope}
-                styles={{
-                  root: {
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "8px 10px",
-                    borderRadius: "var(--sm-radius-sm)",
-                    color: "var(--sm-color-text)",
-                    background: "transparent",
-                    transition: "var(--sm-transition-fast)",
-                    "&:hover": {
-                      background: "var(--sm-active-bg)"
-                    }
-                  }
-                }}
-              >
-                <Text size="sm">
-                  {contextMenuEntry.inOverlay
-                    ? "Promote to Base"
-                    : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`}
-                </Text>
-              </UnstyledButton>
-            )}
-            {/* Plan 058 §058.3 — cross-Scene copy for overlay
-                entries. Hidden with a single Scene, or for base
-                assets (they're already visible everywhere). */}
-            {contextMenuEntry?.inOverlay &&
-              otherScenes.map((scene) => (
-                <UnstyledButton
-                  key={scene.sceneId}
-                  onClick={() => handleCopyToScene(scene.sceneId)}
-                  styles={{
-                    root: {
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "8px 10px",
-                      borderRadius: "var(--sm-radius-sm)",
-                      color: "var(--sm-color-text)",
-                      background: "transparent",
-                      transition: "var(--sm-transition-fast)",
-                      "&:hover": {
-                        background: "var(--sm-active-bg)"
-                      }
-                    }
-                  }}
-                >
-                  <Text size="sm">Copy to 🎬 {scene.displayName}</Text>
-                </UnstyledButton>
-              ))}
           </Box>
         )}
       </>
