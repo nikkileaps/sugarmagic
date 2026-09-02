@@ -142,7 +142,6 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
-  findSceneById
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -3427,24 +3426,12 @@ export function App() {
       <SceneComposerPanel
         scenes={getAllScenes(session.gameProject.episodes)}
         selectedScene={getActiveScene(session)}
-        region={
-          [...session.regions.values()].find(
-            (candidate) =>
-              candidate.identity.id === getActiveScene(session)?.regionId
-          ) ?? null
-        }
-        onSelectScene={(sceneId) => {
-          // Staging a Scene means looking at its region: the viewport
-          // reads the session's active region, so both move together or
-          // the composer shows the wrong place.
-          const { session: current } = projectStore.getState();
-          if (!current) return;
-          handleSceneSelect(sceneId);
-          const scene = findSceneById(current.gameProject.episodes, sceneId);
-          if (scene?.regionId) {
-            shellStore.getState().setActiveRegionId(scene.regionId);
-          }
-        }}
+        region={session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null}
+        // Only the Scene changes. The composer's region is derived from
+        // it in `selectViewportProjection`, so writing the shell's active
+        // region here would be a second copy of an answer the Scene
+        // already holds -- and would move Build's region under the author.
+        onSelectScene={handleSceneSelect}
         onPromotePresence={(presenceId) => {
           const scene = getActiveScene(session);
           if (!scene) return;

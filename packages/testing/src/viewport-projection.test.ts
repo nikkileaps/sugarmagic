@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createAuthoringSession,
   createDefaultGameProject,
-  createDefaultRegion
+  createDefaultRegion,
+  switchActiveRegion
 } from "@sugarmagic/domain";
 import {
   createAssetSourceStore,
@@ -177,5 +178,85 @@ describe("viewport projection", () => {
     unsubscribe();
 
     expect(notifications).toEqual(["3:0,0,0,1"]);
+  });
+});
+
+/**
+ * Which region the viewport shows (epic #226 story 8).
+ *
+ * Build's region dropdown answers "what am I editing". The scene
+ * composer's region is not a choice at all -- a Scene names its region,
+ * so the composer derives it. Keeping a second copy in shell state is
+ * how Build's dropdown ended up dragging the composer to a region the
+ * Scene does not happen in.
+ */
+describe("the composer's region comes from its Scene", () => {
+  function harness() {
+    const gameProject = createDefaultGameProject("Test", "test");
+    const station = createDefaultRegion({
+      regionId: "station",
+      displayName: "Station"
+    });
+    const harbour = createDefaultRegion({
+      regionId: "harbour",
+      displayName: "Harbour"
+    });
+    const withScene = {
+      ...gameProject,
+      episodes: gameProject.episodes.map((episode) => ({
+        ...episode,
+        scenes: episode.scenes.map((scene) => ({
+          ...scene,
+          regionId: "station"
+        }))
+      }))
+    };
+    // Build's dropdown writes BOTH stores (`handleRegionSelect`), and
+    // the session's is what the viewport reads -- so point it away from
+    // the Scene's region the way selecting Harbour in Build would.
+    const session = switchActiveRegion(
+      createAuthoringSession(withScene, [station, harbour]),
+      "harbour"
+    );
+
+    const projectStore = createProjectStore();
+    const shellStore = createShellStore("story");
+    const viewportStore = createViewportStore();
+    const assetSourceStore = createAssetSourceStore();
+    projectStore.getState().setActive(
+      {} as FileSystemDirectoryHandle,
+      { gameRootPath: "." } as never,
+      session
+    );
+    shellStore.getState().setActiveRegionId("harbour");
+    return { projectStore, shellStore, viewportStore, assetSourceStore };
+  }
+
+  it("shows the Scene's region, not the one Build has selected", () => {
+    const h = harness();
+    h.shellStore.getState().setActiveStoryWorkspaceKind("composer");
+
+    const projection = selectViewportProjection(
+      h.projectStore.getState(),
+      h.shellStore.getState(),
+      h.viewportStore.getState(),
+      h.assetSourceStore.getState()
+    );
+
+    expect(projection.region?.identity.id).toBe("station");
+  });
+
+  it("outside the composer, Build's selection still rules", () => {
+    const h = harness();
+    h.shellStore.getState().setActiveProductMode("build");
+
+    const projection = selectViewportProjection(
+      h.projectStore.getState(),
+      h.shellStore.getState(),
+      h.viewportStore.getState(),
+      h.assetSourceStore.getState()
+    );
+
+    expect(projection.region?.identity.id).toBe("harbour");
   });
 });
