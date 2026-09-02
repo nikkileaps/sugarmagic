@@ -269,7 +269,7 @@ interface RegionBehaviorQuestBinding {
   questStageId: string | null
   questNodeId?: string | null
   storyPointSide?: "while" | "after"
-  worldFlagEquals: { key: string | null; valueType: "boolean"|"number"|"string"; value: string | null } | null
+  worldFlagEquals: { worldFlagId: string | null; valueType: "boolean"|"number"|"string"; value: string | null } | null
 }
 ```
 
@@ -686,11 +686,38 @@ without requiring the author to script specific dialogue responses.
 ### Pattern A: NPC B reacts only after player talked to NPC A
 
 1. NPC A has a scripted Talk node bound to a quest Talk objective.
-2. On that node's `onCompleteActions`: `{ type: "setFlag", key: "talkedToNpcA", value: true }`.
+2. On that node's `onCompleteActions`:
+   `{ type: "setFlag", worldFlagId: "<flag id>", value: true }`.
 3. NPC B (agentified). In their task list, add a task with:
-   - `activation.worldFlagEquals = { key: "talkedToNpcA", valueType: "boolean", value: "true" }`
+   - `activation.worldFlagEquals = { worldFlagId: "<flag id>", valueType: "boolean", value: "true" }`
 4. When the compound holds, NPC B's task drives their behavior; otherwise they
    are behaviorally neutral (default task or idle).
+
+Flags are referenced by id, not by name, so renaming a flag does not break the
+content pointing at it. The runtime resolves the id to the flag's name; a
+reference naming no flag fails closed rather than guessing.
+
+### Pattern C: talking to an NPC grants a side quest
+
+The same first two steps, with a quest reading the flag instead of a task.
+
+1. NPC A has a scripted Talk node bound to a quest Talk objective.
+2. On that node's `onCompleteActions`:
+   `{ type: "setFlag", worldFlagId: "<flag id>", value: true }`.
+3. The side quest declares a start condition:
+   `{ type: "hasFlag", worldFlagId: "<flag id>", value: true }`. In Studio that
+   is the quest inspector's "Starts on a condition" checkbox.
+4. The side quest is not running when the game boots. It starts the moment the
+   conversation ends, with no reload, and a save restores it as granted.
+
+To grant it only when the player agreed, set the Talk objective's `completeOn`
+to the dialogue node the conversation ends on for that answer. `completeOn`
+takes `"dialogueEnd"` (any ending) or a dialogue node id; the objective
+completes only when the conversation ended on that line, so a branch the player
+did not take grants nothing.
+
+A quest with no start condition starts at session start, which is how every
+quest behaved before start conditions existed.
 
 ### Pattern B: NPC only available in the morning
 

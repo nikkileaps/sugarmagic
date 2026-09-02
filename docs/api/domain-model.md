@@ -256,8 +256,11 @@ owns every cross-system bridge described below.
 
 `QuestManager` (`packages/runtime-core/src/quest`) holds active quests as
 per-stage, per-node progress (`inactive | active | completed` +
-`branchResult`). Every loaded quest auto-starts at session start; there is
-no quest-giver or accept step. A fixed-point refresh loop activates nodes
+`branchResult`). A quest with no `startCondition` starts at session start;
+one with a condition starts when it holds, which `update()` re-checks as
+quest and flag state moves. There is no accept step -- a quest granted by
+an NPC is one whose start condition reads a flag that NPC's dialogue sets.
+A fixed-point refresh loop activates nodes
 whose prerequisites completed, completes condition/collect/branch nodes,
 and advances the stage when every non-optional node is completed or
 unreachable. External completions arrive by notification: dialogue finished

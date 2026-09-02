@@ -144,7 +144,7 @@ Defined in `ConversationActionProposal` (`packages/runtime-core/src/conversation
 
 Handled by `handleConversationActionProposal` in `gameplay-session.ts`. This
 is a WORLD-NARRATIVE FACT write, distinct from `set-conversation-flag` (which
-writes a QUEST FLAG via `questManager.setFlag`).
+writes a QUEST FLAG via `WorldFlagManager.setFlag`).
 
 ## How It Reaches the Prompt
 
@@ -477,15 +477,24 @@ state rather than left to invent a person.
 
 Quest-gated scene changes use existing seams, not new infrastructure:
 
-- **Flag set from scripted NPC dialogue:** Put a `setFlag` action in the quest
-  Talk node's `onCompleteActions`. When the player finishes the scripted
-  dialogue, `questManager.notifyDialogueFinished` auto-completes the Talk node,
-  which fires `onCompleteActions`, which calls `questManager.setFlag(targetId, value)`.
-  The Talk node's `targetId` is the flag key; `value` is the flag value.
+- **Flag set from scripted NPC dialogue:** Put a
+  `{ type: "setFlag", worldFlagId, value }` action in the quest Talk node's
+  `onCompleteActions`. When the player finishes the scripted dialogue,
+  `questManager.notifyDialogueFinished` auto-completes the Talk node, which
+  fires `onCompleteActions`, which writes through
+  `WorldFlagManager.setFlagByIdWithoutNotifying`. The write does not notify
+  because it runs reentrantly inside the quest refresh loop, which would
+  otherwise refresh again.
 - **Flag set from agentified NPC turn:** PlanStage emits
   `{ kind: "set-conversation-flag", key, value }` -> `handleConversationActionProposal`
-  -> `questManager.setFlag`. This is for runtime-emergent flag writes from AI
-  NPC turns, not scripted dialogue.
+  -> `WorldFlagManager.setFlag`. This is for runtime-emergent flag writes from
+  AI NPC turns, not scripted dialogue.
+
+  The two routes address a flag differently, deliberately. Authored content
+  references a `worldFlagId` so renaming a flag does not break it, and an id
+  naming no flag fails closed. A conversation proposal carries a `key`, which
+  is the store key directly, because a model naming a flag it invented has no
+  id to carry.
 - **Compound AND gate:** `evaluateRegionQuestBinding({ questDefinitionId, questStageId, worldFlagEquals })`
   in `packages/runtime-core/src/region-conditions/index.ts` evaluates stage
   AND flag together. Used by behavior-task activation, collision volumes, and
