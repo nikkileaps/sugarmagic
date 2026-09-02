@@ -34,14 +34,36 @@ import { DEFAULT_SCENE_ID, type SaveSlice } from "@sugarmagic/domain";
 import type { SaveParticipant } from "../save/participant";
 
 export const WORLD_PRESENCE_PARTICIPANT_ID = "world.presence";
-export const WORLD_PRESENCE_SLICE_SCHEMA_VERSION = 2;
+export const WORLD_PRESENCE_SLICE_SCHEMA_VERSION = 3;
 
 /**
- * Persisted slice shape, v2. Sets flatten to arrays for JSON.
- * v1 was `Record<regionId, string[]>` (Scene-agnostic); the
- * tracker's deserialize upgrades v1 in place by wrapping each
- * region's array under `DEFAULT_SCENE_ID` — pre-Scenes saves
- * were implicitly playing the default Scene.
+ * Where collections go when no Scene is active -- a region entered with
+ * nothing dressing it (epic #226).
+ *
+ * Deliberately NOT a `scene:` id, so it can never collide with a real
+ * Scene: `createSceneId` mints `scene:<uuid>`, and the one literal Scene
+ * id in the domain is `scene:default`. Before this, a null Scene filed
+ * under `DEFAULT_SCENE_ID` -- which IS a real Scene in a live project, so
+ * picking an item up with no Scene active also marked it collected in
+ * that Scene, and the reverse.
+ */
+export const NO_SCENE_COLLECTION_BUCKET = "__no-scene__";
+
+/**
+ * Persisted slice shape. Sets flatten to arrays for JSON.
+ *
+ * v1 was `Record<regionId, string[]>` (Scene-agnostic); deserialize
+ * upgrades it by wrapping each region's array under `DEFAULT_SCENE_ID` --
+ * pre-Scenes saves were implicitly playing the default Scene.
+ *
+ * v2 -> v3 carries the data across UNCHANGED, deliberately. The shape is
+ * identical; what changed is that a null Scene now files under
+ * `NO_SCENE_COLLECTION_BUCKET` rather than `DEFAULT_SCENE_ID`. A v2 save
+ * cannot say which of its `scene:default` entries were collected with no
+ * Scene active, and re-keying them would move real Scene collections into
+ * the free-roam bucket. Leaving them where the player earned them is the
+ * answer that cannot be wrong; the version marks that a save was written
+ * after the split.
  */
 export interface WorldPresenceSlice {
   collectedByRegion: Record<string, Record<string, string[]>>;
@@ -67,7 +89,7 @@ export class WorldPresenceTracker {
     presenceId: string
   ): void {
     if (!regionId) return;
-    const scene = sceneId ?? DEFAULT_SCENE_ID;
+    const scene = sceneId ?? NO_SCENE_COLLECTION_BUCKET;
     let byScene = this.collected.get(regionId);
     if (!byScene) {
       byScene = new Map();
@@ -87,7 +109,7 @@ export class WorldPresenceTracker {
     presenceId: string
   ): boolean {
     if (!regionId) return false;
-    const scene = sceneId ?? DEFAULT_SCENE_ID;
+    const scene = sceneId ?? NO_SCENE_COLLECTION_BUCKET;
     return (
       this.collected.get(regionId)?.get(scene)?.has(presenceId) ?? false
     );
