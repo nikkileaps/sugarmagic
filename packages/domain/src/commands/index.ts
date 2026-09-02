@@ -761,6 +761,27 @@ export type CreateQuestDefinitionCommand = SemanticCommandBase<
   "CreateQuestDefinition",
   {
     definition: QuestDefinition;
+    /**
+     * The Scene the quest happens in (epic #226). Named by the caller
+     * rather than read from ambient session state: a quest belongs to
+     * exactly one Scene, and which one is the author's choice, not a
+     * side effect of what they last clicked.
+     */
+    sceneId: string;
+  }
+>;
+
+/**
+ * Move a quest to another Scene (epic #226). A command rather than a
+ * plain session edit so it joins the transaction history like every
+ * other quest edit -- create, update and delete all undo, and a move
+ * that did not would be the odd one out.
+ */
+export type MoveQuestToSceneCommand = SemanticCommandBase<
+  "MoveQuestToScene",
+  {
+    questDefinitionId: string;
+    toSceneId: string;
   }
 >;
 
@@ -1174,6 +1195,7 @@ export type SemanticCommand =
   | CreateDocumentDefinitionCommand
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
+  | MoveQuestToSceneCommand
   | UpdateNPCDefinitionCommand
   | UpdateSpellDefinitionCommand
   | UpdateItemDefinitionCommand

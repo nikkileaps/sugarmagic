@@ -1735,6 +1735,18 @@ function applyCreateQuestDefinitionCommand(
   session: AuthoringSession,
   command: CreateQuestDefinitionCommand
 ): AuthoringSession {
+  // A quest with nowhere to happen is not a quest. Reading the ambient
+  // Scene here used to mean a null or stale `activeSceneId` matched no
+  // Scene and the new quest was silently discarded -- created, then gone.
+  const target = findSceneById(
+    session.gameProject.episodes,
+    command.payload.sceneId
+  );
+  if (!target) {
+    throw new Error(
+      `[authoring-session] CreateQuestDefinition names Scene "${command.payload.sceneId}", which does not exist. Pick a Scene that does.`
+    );
+  }
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
   ]);
@@ -1744,7 +1756,7 @@ function applyCreateQuestDefinitionCommand(
     gameProject: {
       ...session.gameProject,
       episodes: mapScenes(session.gameProject.episodes, (scene) =>
-        scene.sceneId === session.activeSceneId
+        scene.sceneId === target.sceneId
           ? {
               ...scene,
               questDefinitions: [
@@ -2550,6 +2562,25 @@ export function applyCommand(
 
   if (command.kind === "CreateQuestDefinition") {
     return applyCreateQuestDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "MoveQuestToScene") {
+    const moved = moveQuestToSceneInSession(
+      session,
+      command.payload.questDefinitionId,
+      command.payload.toSceneId
+    );
+    if (moved === session) return session;
+    const transaction = createTransactionForCommand(command, [
+      command.payload.questDefinitionId
+    ]);
+    return {
+      ...moved,
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
   }
 
   if (command.kind === "UpdateNPCDefinition") {

@@ -75,7 +75,8 @@ import {
   createDefaultQuestStageDefinition,
   createNodeGroup,
   createQuestNodeId,
-  getAllScenes
+  getAllScenes,
+  findSceneByQuestDefinitionId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
 import { WorldFlagSelect } from "../world-flags";
@@ -966,6 +967,18 @@ export function useQuestWorkspaceView({
   renderInspectorSections
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
   const [searchQuery, setSearchQuery] = useState("");
+  /** Every Scene a quest could happen in, in narrative order. */
+  const storyScenes = useMemo(() => getAllScenes(episodes), [episodes]);
+  const [newQuestSceneId, setNewQuestSceneId] = useState<string | null>(null);
+  // Follow the project: default to the first Scene, and recover if the
+  // chosen one is deleted while this workspace is open.
+  useEffect(() => {
+    setNewQuestSceneId((current) =>
+      current && storyScenes.some((scene) => scene.sceneId === current)
+        ? current
+        : (storyScenes[0]?.sceneId ?? null)
+    );
+  }, [storyScenes]);
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(
     questDefinitions[0]?.definitionId ?? null
   );
@@ -1211,7 +1224,9 @@ export function useQuestWorkspaceView({
   );
 
   const createQuest = useCallback(() => {
-    if (!gameProjectId) return;
+    // A quest happens somewhere: no Scene to put it in means no quest,
+    // and the button is disabled rather than creating one that vanishes.
+    if (!gameProjectId || !newQuestSceneId) return;
     const definition = createDefaultQuestDefinition();
     onCommand({
       kind: "CreateQuestDefinition",
@@ -1220,12 +1235,12 @@ export function useQuestWorkspaceView({
         subjectKind: "quest-definition",
         subjectId: definition.definitionId
       },
-      payload: { definition }
+      payload: { definition, sceneId: newQuestSceneId }
     });
     setSelectedQuestId(definition.definitionId);
     setGraphStageId(null);
     setSelectedNodeId(null);
-  }, [gameProjectId, onCommand]);
+  }, [gameProjectId, newQuestSceneId, onCommand]);
 
   const deleteQuest = useCallback(
     (definitionId: string) => {
@@ -1600,16 +1615,40 @@ export function useQuestWorkspaceView({
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Quests
         </Text>
-        <Tooltip label="Add Quest">
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            onClick={createQuest}
-            aria-label="Add Quest"
+        <Group gap={6} wrap="nowrap">
+          {/* Which Scene a new quest happens in -- shown, not inferred
+              from whatever was last selected elsewhere. */}
+          <Select
+            size="xs"
+            aria-label="New quest in Scene"
+            placeholder="No Scenes"
+            style={{ width: 150 }}
+            data={storyScenes.map((scene) => ({
+              value: scene.sceneId,
+              label: scene.displayName
+            }))}
+            value={newQuestSceneId}
+            disabled={storyScenes.length === 0}
+            onChange={(value) => setNewQuestSceneId(value)}
+          />
+          <Tooltip
+            label={
+              storyScenes.length === 0
+                ? "Add a Scene first -- a quest happens in one"
+                : "Add Quest"
+            }
           >
-            +
-          </ActionIcon>
-        </Tooltip>
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={createQuest}
+              disabled={!newQuestSceneId}
+              aria-label="Add Quest"
+            >
+              +
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
       <Box p="sm" style={{ borderBottom: "1px solid var(--sm-panel-border)" }}>
         <TextInput
@@ -1993,6 +2032,42 @@ export function useQuestWorkspaceView({
                   displayName: event.currentTarget.value
                 })
               }
+            />
+            {/* Where this quest happens. The Scene HOLDS its quests
+                (epic #226), so this is the same operation the Scene's
+                own quest list performs -- one command, two doors. */}
+            <Select
+              label="Scene"
+              description="The Scene this quest happens in"
+              data={storyScenes.map((scene) => ({
+                value: scene.sceneId,
+                label: scene.displayName
+              }))}
+              value={
+                findSceneByQuestDefinitionId(
+                  episodes,
+                  selectedQuest.definitionId
+                )?.sceneId ?? null
+              }
+              allowDeselect={false}
+              onChange={(value) => {
+                if (!value || !gameProjectId) return;
+                onCommand({
+                  kind: "MoveQuestToScene",
+                  target: {
+                    aggregateKind: "game-project",
+                    aggregateId: gameProjectId
+                  },
+                  subject: {
+                    subjectKind: "quest-definition",
+                    subjectId: selectedQuest.definitionId
+                  },
+                  payload: {
+                    questDefinitionId: selectedQuest.definitionId,
+                    toSceneId: value
+                  }
+                });
+              }}
             />
             <Textarea
               label="Description"

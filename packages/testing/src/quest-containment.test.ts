@@ -17,6 +17,7 @@ import {
   getAllQuestDefinitionsInEpisodes,
   getAllScenes,
   normalizeGameProject,
+  applyCommand,
   createAuthoringSession,
   createDefaultRegion,
   createDefaultScene,
@@ -153,6 +154,67 @@ describe("quest containment", () => {
         (q) => q.definitionId === QUEST_ID
       )
     ).toHaveLength(1);
+  });
+
+  it("creating a quest into a Scene that does not exist refuses loudly", () => {
+    takeQuestContainmentNotes();
+    const project = normalizeGameProject(legacyProjectRaw());
+    const session = createAuthoringSession(project, [
+      createDefaultRegion({ regionId: "region:test", displayName: "Test" })
+    ]);
+    const definition = createDefaultQuestDefinition({
+      definitionId: "quest:new",
+      displayName: "New"
+    });
+
+    // Before this story the command read the ambient `activeSceneId`, so
+    // a null or stale one matched no Scene and the quest was created and
+    // then silently DISCARDED. A visible error beats a vanished quest.
+    expect(() =>
+      applyCommand(session, {
+        kind: "CreateQuestDefinition",
+        target: {
+          aggregateKind: "game-project",
+          aggregateId: session.gameProject.identity.id
+        },
+        subject: {
+          subjectKind: "quest-definition",
+          subjectId: definition.definitionId
+        },
+        payload: { definition, sceneId: "scene:does-not-exist" }
+      })
+    ).toThrow(/does not exist/);
+  });
+
+  it("a created quest lands in the Scene it named", () => {
+    takeQuestContainmentNotes();
+    const project = normalizeGameProject(legacyProjectRaw());
+    const session = createAuthoringSession(project, [
+      createDefaultRegion({ regionId: "region:test", displayName: "Test" })
+    ]);
+    const target = getAllScenes(session.gameProject.episodes)[0]!;
+    const definition = createDefaultQuestDefinition({
+      definitionId: "quest:new",
+      displayName: "New"
+    });
+
+    const next = applyCommand(session, {
+      kind: "CreateQuestDefinition",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: session.gameProject.identity.id
+      },
+      subject: {
+        subjectKind: "quest-definition",
+        subjectId: definition.definitionId
+      },
+      payload: { definition, sceneId: target.sceneId }
+    });
+
+    expect(
+      findSceneByQuestDefinitionId(next.gameProject.episodes, "quest:new")
+        ?.sceneId
+    ).toBe(target.sceneId);
   });
 
   it("the deploy bundle carries each quest exactly once", () => {

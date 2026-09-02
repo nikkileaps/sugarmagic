@@ -140,7 +140,6 @@ import {
   createDefaultRegion,
   createScopedId,
   sceneOverlayForRegion,
-  moveQuestToSceneInSession
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -802,13 +801,20 @@ function handleMoveSceneToEpisode(sceneId: string, toEpisodeId: string) {
 }
 
 function handleMoveQuestToScene(questDefinitionId: string, toSceneId: string) {
+  // Through the command, not the session function directly: the quest
+  // inspector performs the same move, and routing both here keeps one
+  // enforcer -- and gives the Scene-side list undo for free.
   const { session } = projectStore.getState();
   if (!session) return;
-  projectStore
-    .getState()
-    .updateSession(
-      moveQuestToSceneInSession(session, questDefinitionId, toSceneId)
-    );
+  dispatchCommand({
+    kind: "MoveQuestToScene",
+    target: {
+      aggregateKind: "game-project",
+      aggregateId: session.gameProject.identity.id
+    },
+    subject: { subjectKind: "quest-definition", subjectId: questDefinitionId },
+    payload: { questDefinitionId, toSceneId }
+  });
 }
 
 function handleUpdateEpisodeEndRouting(routing: EpisodeEndRouting) {
