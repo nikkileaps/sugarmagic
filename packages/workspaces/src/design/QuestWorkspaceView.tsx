@@ -663,6 +663,7 @@ function QuestActionFields({
       );
 
     case "playCue":
+    case "stopCue":
       return (
         <Select
           size="xs"
@@ -844,7 +845,7 @@ function QuestActionFields({
   }
 }
 
-function QuestActionsEditor({
+export function QuestActionsEditor({
   actions,
   itemDefinitions,
   npcDefinitions,

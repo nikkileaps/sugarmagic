@@ -454,6 +454,10 @@ export function useBuildProductModeView(
     onSelect,
     region: activeRegion,
     onCommand,
+    itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+    npcDefinitions,
+    episodes: session?.gameProject.episodes ?? [],
+    soundCueDefinitions,
     onBakeNavMesh: props.onBakeNavMesh,
     navMeshStale: props.navMeshStale
   });

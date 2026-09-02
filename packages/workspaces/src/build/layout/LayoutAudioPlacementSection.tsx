@@ -1,9 +1,13 @@
 /**
  * Layout audio placement inspector section.
  *
- * Layout owns region application sites for sound: emitters and ambience zones
- * live on `RegionDocument.audio` and bind to reusable cues authored in
- * Build > Audio. This keeps cue definitions and scene placement separate.
+ * Layout owns one region application site for sound: emitters live on
+ * `RegionDocument.audio` and bind to reusable cues authored in Build > Audio.
+ * This keeps cue definitions and scene placement separate.
+ *
+ * A sound that plays while the player is inside an area is a volume with
+ * Play Cue on enter and Stop Cue on exit, authored in Spatial. Volume
+ * authoring has one home and this is not it.
  */
 
 import { useMemo, useState } from "react";
@@ -19,9 +23,7 @@ import {
   TextInput
 } from "@mantine/core";
 import {
-  createRegionAmbienceZone,
   createRegionSoundEmitter,
-  type RegionAmbienceZone,
   type RegionDocument,
   type RegionSoundEmitter,
   type SemanticCommand,
@@ -29,9 +31,7 @@ import {
 } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
 
-type AudioSelection =
-  | { kind: "emitter"; id: string }
-  | { kind: "zone"; id: string };
+type AudioSelection = { kind: "emitter"; id: string };
 
 export interface LayoutAudioPlacementSectionProps {
   region: RegionDocument;
@@ -54,18 +54,12 @@ export function LayoutAudioPlacementSection({
   soundCueDefinitions,
   onCommand
 }: LayoutAudioPlacementSectionProps) {
-  const regionAudio = region.audio ?? { emitters: [], ambienceZones: [] };
+  const regionAudio = region.audio ?? { emitters: [] };
   const [selection, setSelection] = useState<AudioSelection | null>(null);
   const selectedEmitter =
     selection?.kind === "emitter"
       ? (regionAudio.emitters.find(
           (emitter) => emitter.emitterId === selection.id
-        ) ?? null)
-      : null;
-  const selectedZone =
-    selection?.kind === "zone"
-      ? (regionAudio.ambienceZones.find(
-          (zone) => zone.zoneId === selection.id
         ) ?? null)
       : null;
   const cueOptions = useMemo(
@@ -94,23 +88,6 @@ export function LayoutAudioPlacementSection({
     setSelection({ kind: "emitter", id: emitter.emitterId });
   }
 
-  function createZone() {
-    const zone = createRegionAmbienceZone({
-      displayName: `Ambience Zone ${regionAudio.ambienceZones.length + 1}`,
-      cueDefinitionId: soundCueDefinitions[0]?.definitionId ?? null
-    });
-    onCommand({
-      kind: "CreateRegionAmbienceZone",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: { subjectKind: "region-audio", subjectId: zone.zoneId },
-      payload: { zone }
-    });
-    setSelection({ kind: "zone", id: zone.zoneId });
-  }
-
   function updateEmitter(
     emitter: RegionSoundEmitter,
     patch: Partial<RegionSoundEmitter>
@@ -123,21 +100,6 @@ export function LayoutAudioPlacementSection({
       },
       subject: { subjectKind: "region-audio", subjectId: emitter.emitterId },
       payload: { emitterId: emitter.emitterId, patch }
-    });
-  }
-
-  function updateZone(
-    zone: RegionAmbienceZone,
-    patch: Partial<RegionAmbienceZone>
-  ) {
-    onCommand({
-      kind: "UpdateRegionAmbienceZone",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: { subjectKind: "region-audio", subjectId: zone.zoneId },
-      payload: { zoneId: zone.zoneId, patch }
     });
   }
 
@@ -154,19 +116,6 @@ export function LayoutAudioPlacementSection({
     setSelection(null);
   }
 
-  function deleteZone(zone: RegionAmbienceZone) {
-    onCommand({
-      kind: "DeleteRegionAmbienceZone",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: { subjectKind: "region-audio", subjectId: zone.zoneId },
-      payload: { zoneId: zone.zoneId }
-    });
-    setSelection(null);
-  }
-
   return (
     <PanelSection title="Audio Placement">
       <Stack gap="sm">
@@ -174,17 +123,16 @@ export function LayoutAudioPlacementSection({
           <Button size="xs" variant="light" onClick={createEmitter}>
             Add Emitter
           </Button>
-          <Button size="xs" variant="light" onClick={createZone}>
-            Add Ambience Zone
-          </Button>
         </Group>
-        {regionAudio.emitters.length === 0 &&
-        regionAudio.ambienceZones.length === 0 ? (
+        {regionAudio.emitters.length === 0 ? (
           <Text size="xs" c="var(--sm-color-overlay0)">
-            Place emitters or ambience zones here, then bind them to cues from
-            Build &gt; Audio.
+            Place emitters here, then bind them to cues from Build &gt; Audio.
           </Text>
         ) : null}
+        <Text size="xs" c="var(--sm-color-overlay0)">
+          For a sound that plays while the player is in an area, draw a volume
+          in Spatial and give it Play Cue on enter and Stop Cue on exit.
+        </Text>
         {regionAudio.emitters.map((emitter) => (
           <Group key={emitter.emitterId} gap="xs" justify="space-between">
             <Button
@@ -206,28 +154,6 @@ export function LayoutAudioPlacementSection({
               color="red"
               aria-label={`Remove ${emitter.displayName}`}
               onClick={() => deleteEmitter(emitter)}
-            >
-              x
-            </ActionIcon>
-          </Group>
-        ))}
-        {regionAudio.ambienceZones.map((zone) => (
-          <Group key={zone.zoneId} gap="xs" justify="space-between">
-            <Button
-              size="xs"
-              variant={
-                selectedZone?.zoneId === zone.zoneId ? "light" : "subtle"
-              }
-              onClick={() => setSelection({ kind: "zone", id: zone.zoneId })}
-            >
-              {zone.displayName}
-            </Button>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="red"
-              aria-label={`Remove ${zone.displayName}`}
-              onClick={() => deleteZone(zone)}
             >
               x
             </ActionIcon>
@@ -306,122 +232,6 @@ export function LayoutAudioPlacementSection({
                 onChange={(value) =>
                   updateEmitter(selectedEmitter, {
                     position: updateTuple(selectedEmitter.position, 2, value)
-                  })
-                }
-              />
-            </Group>
-          </Stack>
-        ) : null}
-        {selectedZone ? (
-          <Stack gap="sm">
-            <TextInput
-              label="Zone Name"
-              size="xs"
-              value={selectedZone.displayName}
-              onChange={(event) =>
-                updateZone(selectedZone, {
-                  displayName: event.currentTarget.value
-                })
-              }
-            />
-            <Select
-              label="Cue"
-              size="xs"
-              data={cueOptions}
-              value={selectedZone.cueDefinitionId}
-              onChange={(value) =>
-                updateZone(selectedZone, { cueDefinitionId: value })
-              }
-              placeholder="Select cue..."
-            />
-            <Select
-              label="Trigger"
-              size="xs"
-              data={[
-                { value: "always", label: "Always" },
-                { value: "on-enter", label: "On Enter" }
-              ]}
-              value={selectedZone.trigger}
-              onChange={(value) =>
-                value &&
-                updateZone(selectedZone, {
-                  trigger: value as RegionAmbienceZone["trigger"]
-                })
-              }
-            />
-            <Switch
-              label="Enabled"
-              size="xs"
-              checked={selectedZone.enabled}
-              onChange={(event) =>
-                updateZone(selectedZone, {
-                  enabled: event.currentTarget.checked
-                })
-              }
-            />
-            <Group grow>
-              <NumberInput
-                label="Center X"
-                size="xs"
-                value={selectedZone.center[0]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    center: updateTuple(selectedZone.center, 0, value)
-                  })
-                }
-              />
-              <NumberInput
-                label="Center Y"
-                size="xs"
-                value={selectedZone.center[1]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    center: updateTuple(selectedZone.center, 1, value)
-                  })
-                }
-              />
-              <NumberInput
-                label="Center Z"
-                size="xs"
-                value={selectedZone.center[2]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    center: updateTuple(selectedZone.center, 2, value)
-                  })
-                }
-              />
-            </Group>
-            <Group grow>
-              <NumberInput
-                label="Width"
-                size="xs"
-                min={0.1}
-                value={selectedZone.size[0]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    size: updateTuple(selectedZone.size, 0, value)
-                  })
-                }
-              />
-              <NumberInput
-                label="Height"
-                size="xs"
-                min={0.1}
-                value={selectedZone.size[1]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    size: updateTuple(selectedZone.size, 1, value)
-                  })
-                }
-              />
-              <NumberInput
-                label="Depth"
-                size="xs"
-                min={0.1}
-                value={selectedZone.size[2]}
-                onChange={(value) =>
-                  updateZone(selectedZone, {
-                    size: updateTuple(selectedZone.size, 2, value)
                   })
                 }
               />

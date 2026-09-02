@@ -20,6 +20,7 @@ describe("quest action type options", () => {
       "giveItem",
       "removeItem",
       "playCue",
+      "stopCue",
       "playAnimation",
       "emitEvent",
       "unlockEpisode",

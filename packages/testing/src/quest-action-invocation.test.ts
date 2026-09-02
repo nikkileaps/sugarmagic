@@ -70,9 +70,12 @@ describe("quest action invocation", () => {
     expect(invocations).toEqual([
       {
         action: { type: "playCue", cueDefinitionId: "cue:bell" },
-        questDefinitionId: "quest:bell",
-        stageId: definition.stageId,
-        nodeId
+        source: {
+          kind: "quest-node",
+          questDefinitionId: "quest:bell",
+          stageId: definition.stageId,
+          nodeId
+        }
       }
     ]);
   });
@@ -94,8 +97,8 @@ describe("quest action invocation", () => {
     manager.notifyEvent("bell-rung");
 
     expect(invocations).toHaveLength(1);
-    expect(invocations[0]?.nodeId).toBe(nodeId);
-    expect(invocations[0]?.stageId).toBe(definition.stageId);
+    expect(invocations[0]?.source).toMatchObject({ kind: "quest-node", nodeId });
+    expect(invocations[0]?.source).toMatchObject({ stageId: definition.stageId });
   });
 
   it("keeps each node's source straight when one action completes another node", () => {
@@ -152,7 +155,7 @@ describe("quest action invocation", () => {
         invocation.action.type === "playCue"
           ? invocation.action.cueDefinitionId
           : null,
-        invocation.nodeId
+        invocation.source.kind === "quest-node" ? invocation.source.nodeId : null
       ])
     ).toEqual([
       ["cue:answer", secondNodeId],

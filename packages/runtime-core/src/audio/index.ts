@@ -280,18 +280,6 @@ export function createRuntimeAudioController(
         });
       }
 
-      for (const zone of region.audio?.ambienceZones ?? []) {
-        if (!zone.enabled || zone.trigger !== "always") {
-          continue;
-        }
-        const instanceKey = `region:${region.identity.id}:ambience-zone:${zone.zoneId}`;
-        activeRegionInstances.add(instanceKey);
-        playCue({
-          cueDefinitionId: zone.cueDefinitionId,
-          instanceKey,
-          position: zone.center
-        });
-      }
     },
     drainCommands() {
       const drained = commands.splice(0, commands.length);

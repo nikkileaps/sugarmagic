@@ -12,19 +12,60 @@ import type { WorldFlagManager } from "../world-flags/WorldFlagManager";
 import { coerceAuthoredWorldFlagValue } from "../world-flags/WorldFlagManager";
 
 /**
- * An action together with the node that fired it. Handlers need the source to
- * name what they act on -- an audio instance key, a warning that tells the
- * author which node holds the bad reference.
+ * An action together with what fired it. Handlers need the source to name
+ * what they act on -- an audio instance key, a warning that tells the
+ * author which node or volume holds the bad reference.
  *
  * The ids are passed rather than read back from the manager because the only
  * quest state readable from outside is the tracked quest, which is not
  * necessarily the quest whose node is running.
  */
+/**
+ * Where an action ran. The runtime keys a sounding instance off this, so
+ * two sources playing the same cue are separate instances and a volume's
+ * exit list stops what its own enter list started.
+ *
+ * [LAW:types-are-the-program] The flat quest-shaped source admitted no
+ * volume, so sharing the action list meant either inventing quest ids for
+ * volumes or making every field optional. The union makes both callers
+ * expressible and neither one's fields reachable from the other.
+ */
+export type QuestActionSource =
+  | {
+      kind: "quest-node";
+      questDefinitionId: string;
+      stageId: string;
+      nodeId: string;
+    }
+  | { kind: "volume"; regionId: string; volumeId: string };
+
+/**
+ * Names the sounding instance an action acts on.
+ *
+ * [LAW:single-enforcer] One place derives this. A volume's exit list stops
+ * what its enter list started only because both ask here; a second derivation
+ * would let them name different instances and leave a cue playing forever.
+ */
+export function questActionInstanceKey(
+  source: QuestActionSource,
+  cueDefinitionId: string | null
+): string {
+  const cue = cueDefinitionId ?? "";
+  return source.kind === "volume"
+    ? `region:${source.regionId}:volume:${source.volumeId}:${cue}`
+    : `quest:${source.questDefinitionId}:${source.stageId}:${source.nodeId}:${cue}`;
+}
+
+/** How the source reads in a log line or a warning. */
+export function describeQuestActionSource(source: QuestActionSource): string {
+  return source.kind === "volume"
+    ? `volume "${source.volumeId}"`
+    : `quest "${source.questDefinitionId}" node "${source.nodeId}"`;
+}
+
 export interface QuestActionInvocation {
   action: QuestActionDefinition;
-  questDefinitionId: string;
-  stageId: string;
-  nodeId: string;
+  source: QuestActionSource;
 }
 
 export interface QuestRuntimeActionHandler {
@@ -927,6 +968,7 @@ export class QuestManager {
     actions: QuestActionDefinition[],
     source: { questDefinitionId: string; stageId: string; nodeId: string }
   ): void {
+    const invocationSource = { kind: "quest-node" as const, ...source };
     for (const action of actions) {
       if (action.type === "setFlag" && action.worldFlagId) {
         // The write that does not notify: this runs reentrantly inside
@@ -943,7 +985,7 @@ export class QuestManager {
         continue;
       }
 
-      this.onAction?.({ action, ...source });
+      this.onAction?.({ action, source: invocationSource });
     }
   }
 

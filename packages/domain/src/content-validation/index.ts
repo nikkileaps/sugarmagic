@@ -330,28 +330,6 @@ export function validateProjectContent(
     }
   }
 
-  // A volume trigger's flag write names a flag by store key, not by id, so the
-  // reference walk cannot see it and a rename cannot follow it. A key matching
-  // no registered flag writes a flag nothing reads -- the silent miss this
-  // registry exists to remove. A warning rather than an error: the field is
-  // legacy and #216 deletes it, and refusing the save over it would block a
-  // project that plays correctly today.
-  const knownFlagNames = new Set(
-    gameProject.worldFlagDefinitions.map((definition) => definition.name)
-  );
-  for (const region of regions) {
-    for (const volume of region.volumes ?? []) {
-      const key = volume.trigger?.action.setWorldFlag?.key;
-      if (!key || knownFlagNames.has(key)) continue;
-      issues.push(
-        warning(
-          `region "${region.displayName}" volume "${volume.volumeId}" trigger`,
-          `Sets world flag "${key}", which is not a registered flag name. Nothing reads it.`
-        )
-      );
-    }
-  }
-
   // A story point is authored as ids with no validation anywhere else, so a
   // quest or node that has since been deleted is only caught here.
   const nodeIdsByQuest = new Map(
