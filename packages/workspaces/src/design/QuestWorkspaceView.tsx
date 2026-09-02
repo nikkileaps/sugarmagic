@@ -332,13 +332,71 @@ function MiniStageGraph({ stage }: { stage: QuestStageDefinition }) {
   );
 }
 
+/**
+ * Options for a picker whose current value may name content that has
+ * since been deleted. The stale id stays on the list, labelled, so the
+ * picker shows what the condition actually says rather than looking
+ * like nothing was ever picked.
+ */
+function pickerOptions(
+  available: { value: string; label: string }[],
+  current: string
+): { value: string; label: string }[] {
+  if (!current || available.some((option) => option.value === current)) {
+    return available;
+  }
+  return [...available, { value: current, label: `${current} (missing)` }];
+}
+
+/** Pick a quest from the project. The ids exist already; an author
+ *  retyping one is how a condition ends up naming nothing. */
+function QuestPicker({
+  label,
+  questDefinitions,
+  value,
+  excludeQuestDefinitionId,
+  onChange
+}: {
+  label: string;
+  questDefinitions: QuestDefinition[];
+  value: string;
+  /** A quest to leave off the list, where naming it would be a condition
+   *  that can never come true. */
+  excludeQuestDefinitionId?: string;
+  onChange: (questDefinitionId: string) => void;
+}) {
+  const available = questDefinitions
+    .filter((quest) => quest.definitionId !== excludeQuestDefinitionId)
+    .map((quest) => ({
+      value: quest.definitionId,
+      label: quest.displayName
+    }));
+
+  return (
+    <Select
+      size="xs"
+      label={label}
+      searchable
+      data={pickerOptions(available, value)}
+      value={value || null}
+      onChange={(next) => next && onChange(next)}
+    />
+  );
+}
+
 function QuestConditionEditor({
   condition,
   spellDefinitions,
+  questDefinitions,
+  excludeQuestDefinitionId,
   onChange
 }: {
   condition: QuestConditionDefinition;
   spellDefinitions: SpellDefinition[];
+  /** Every quest in the project: the conditions that name one pick from
+   *  this rather than asking the author to type an id. */
+  questDefinitions: QuestDefinition[];
+  excludeQuestDefinitionId?: string;
   onChange: (condition: QuestConditionDefinition) => void;
 }) {
   function handleTypeChange(type: string) {
@@ -386,6 +444,8 @@ function QuestConditionEditor({
         <QuestConditionEditor
           condition={condition.condition}
           spellDefinitions={spellDefinitions}
+          questDefinitions={questDefinitions}
+          excludeQuestDefinitionId={excludeQuestDefinitionId}
           onChange={(inner) => onChange({ type: "not", condition: inner })}
         />
       </Paper>
@@ -464,51 +524,61 @@ function QuestConditionEditor({
           }
         />
       )}
-      {condition.type === "questActive" && (
-        <TextInput
-          size="xs"
-          label="Quest ID"
+      {(condition.type === "questActive" ||
+        condition.type === "questCompleted") && (
+        <QuestPicker
+          label="Quest"
+          questDefinitions={questDefinitions}
           value={condition.questDefinitionId}
-          onChange={(event) =>
-            onChange({
-              ...condition,
-              questDefinitionId: event.currentTarget.value
-            })
-          }
-        />
-      )}
-      {condition.type === "questCompleted" && (
-        <TextInput
-          size="xs"
-          label="Quest ID"
-          value={condition.questDefinitionId}
-          onChange={(event) =>
-            onChange({
-              ...condition,
-              questDefinitionId: event.currentTarget.value
-            })
+          excludeQuestDefinitionId={excludeQuestDefinitionId}
+          onChange={(questDefinitionId) =>
+            onChange({ ...condition, questDefinitionId })
           }
         />
       )}
       {condition.type === "questStage" && (
         <>
-          <TextInput
-            size="xs"
-            label="Quest ID"
+          <QuestPicker
+            label="Quest"
+            questDefinitions={questDefinitions}
             value={condition.questDefinitionId}
-            onChange={(event) =>
+            excludeQuestDefinitionId={excludeQuestDefinitionId}
+            onChange={(questDefinitionId) =>
               onChange({
                 ...condition,
-                questDefinitionId: event.currentTarget.value
+                questDefinitionId,
+                // The old stage belonged to the old quest. Move to the
+                // new quest's first stage rather than keep an id that
+                // names nothing in it.
+                stageId:
+                  questDefinitions.find(
+                    (quest) => quest.definitionId === questDefinitionId
+                  )?.startStageId ?? ""
               })
             }
           />
-          <TextInput
+          <Select
             size="xs"
-            label="Stage ID"
-            value={condition.stageId}
-            onChange={(event) =>
-              onChange({ ...condition, stageId: event.currentTarget.value })
+            label="Stage"
+            searchable
+            data={pickerOptions(
+              (
+                questDefinitions.find(
+                  (quest) =>
+                    quest.definitionId === condition.questDefinitionId
+                )?.stageDefinitions ?? []
+              ).map((stage) => ({
+                value: stage.stageId,
+                label: stage.displayName
+              })),
+              condition.stageId
+            )}
+            value={condition.stageId || null}
+            placeholder={
+              condition.questDefinitionId ? undefined : "Pick a quest first"
+            }
+            onChange={(value) =>
+              value && onChange({ ...condition, stageId: value })
             }
           />
           <Select
@@ -2069,6 +2139,32 @@ export function useQuestWorkspaceView({
                 });
               }}
             />
+            {/* When this quest starts on its own. Unticked means at boot,
+                which is what every quest did before conditions existed. */}
+            <Checkbox
+              size="xs"
+              label="Starts on a condition"
+              checked={selectedQuest.startCondition !== undefined}
+              onChange={(event) =>
+                commitQuest({
+                  ...selectedQuest,
+                  startCondition: event.currentTarget.checked
+                    ? createWorldFlagCondition()
+                    : undefined
+                })
+              }
+            />
+            {selectedQuest.startCondition && (
+              <QuestConditionEditor
+                condition={selectedQuest.startCondition}
+                spellDefinitions={spellDefinitions}
+                questDefinitions={questDefinitions}
+                excludeQuestDefinitionId={selectedQuest.definitionId}
+                onChange={(startCondition) =>
+                  commitQuest({ ...selectedQuest, startCondition })
+                }
+              />
+            )}
             <Textarea
               label="Description"
               value={selectedQuest.description}
@@ -2591,6 +2687,7 @@ export function useQuestWorkspaceView({
                   selectedNode.condition ?? createWorldFlagCondition()
                 }
                 spellDefinitions={spellDefinitions}
+                questDefinitions={questDefinitions}
                 onChange={(condition) =>
                   updateNode({ ...selectedNode, condition })
                 }

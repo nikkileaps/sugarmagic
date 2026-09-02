@@ -31,7 +31,6 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
   const npcDialogueBindings = new Map<string, string>();
   const questScopedNpcDefinitionIds = new Set<string>();
   let currentDialogueNodeId: string | null = null;
-  let loadedQuestDefinitions: QuestDefinition[] = [];
   let dialogueManager: DialogueManager | null = null;
   let questManager: QuestManager | null = null;
   let worldFlagManager: WorldFlagManager | null = null;
@@ -65,7 +64,6 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
     loadDefinitions(dialogueDefinitions, questDefinitions) {
       npcDialogueBindings.clear();
       questScopedNpcDefinitionIds.clear();
-      loadedQuestDefinitions = questDefinitions;
 
       for (const definition of dialogueDefinitions) {
         const npcDefinitionId = definition.interactionBinding.npcDefinitionId;
@@ -130,15 +128,15 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
 
     startInitialQuests() {
       if (!questManager) return;
-      for (const questDefinition of loadedQuestDefinitions) {
-        questManager.startQuest(questDefinition.definitionId);
-      }
+      // Starts what qualifies rather than everything: a quest with a
+      // start condition waits for it, and the same call keeps watching
+      // for it during play.
+      questManager.update();
     },
 
     reset() {
       npcDialogueBindings.clear();
       questScopedNpcDefinitionIds.clear();
-      loadedQuestDefinitions = [];
       currentDialogueNodeId = null;
       dialogueManager = null;
       questManager = null;

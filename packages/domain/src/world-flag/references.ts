@@ -29,6 +29,7 @@ export type WorldFlagReferenceTarget =
       stageId: string;
       nodeId: string;
     }
+  | { kind: "quest-start-condition"; questDefinitionId: string }
   | { kind: "dialogue-node"; dialogueDefinitionId: string; nodeId: string }
   | { kind: "spell"; spellDefinitionId: string }
   | {
@@ -157,6 +158,13 @@ export function mapWorldFlagReferences(
       quest.definitionId,
       {
       ...quest,
+      startCondition: questCondition(quest.startCondition, {
+        where: `quest "${quest.displayName}" start condition`,
+        target: {
+          kind: "quest-start-condition" as const,
+          questDefinitionId: quest.definitionId
+        }
+      }),
       stageDefinitions: quest.stageDefinitions.map((stage) => ({
         ...stage,
         nodeDefinitions: stage.nodeDefinitions.map((node) => {

@@ -319,6 +319,17 @@ export interface QuestDefinition {
   definitionId: string;
   displayName: string;
   description: string;
+  /**
+   * When this quest becomes active (epic #226). Absent means at boot,
+   * which is what every quest did before this existed -- so a project
+   * written without it behaves exactly as it always has.
+   *
+   * The same grammar quest NODES use, deliberately: `questCompleted`
+   * chains one quest to another, which is how an errand spanning two
+   * Scenes is authored, and `QuestManager` already evaluates every case
+   * against quest state.
+   */
+  startCondition?: QuestConditionDefinition;
   startStageId: string;
   stageDefinitions: QuestStageDefinition[];
   rewardDefinitions: QuestRewardDefinition[];
@@ -722,6 +733,7 @@ export function normalizeQuestDefinition(
       definition.startStageId && validStageIds.has(definition.startStageId)
         ? definition.startStageId
         : normalizedStages[0]!.stageId,
+    startCondition: normalizeQuestCondition(definition.startCondition),
     stageDefinitions: normalizedStages,
     rewardDefinitions: (definition.rewardDefinitions ?? [])
       .map((reward) => normalizeQuestRewardDefinition(reward))

@@ -127,6 +127,23 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
     issues.push(warning(path, message));
   }
 
+  // The quest's own start condition, which decides whether it ever runs.
+  // Same grammar as a node condition and the same ways of being broken.
+  for (const flagCondition of worldFlagConditions(quest.startCondition)) {
+    if (!flagCondition.worldFlagId) {
+      issues.push(
+        warning(path, "Start condition has a flag condition with no flag picked.")
+      );
+    } else if (isBlankWorldFlagValue(flagCondition.value)) {
+      issues.push(
+        warning(
+          path,
+          "Start condition checks a flag with no value, so this quest never starts."
+        )
+      );
+    }
+  }
+
   for (const stage of quest.stageDefinitions) {
     if (stage.nextStageId && !stageIds.has(stage.nextStageId)) {
       issues.push(
