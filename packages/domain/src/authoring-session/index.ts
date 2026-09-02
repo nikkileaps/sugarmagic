@@ -2564,6 +2564,39 @@ export function applyCommand(
     return applyCreateQuestDefinitionCommand(session, command);
   }
 
+  if (command.kind === "SetSceneSuppression") {
+    const { sceneId, regionOwnedId, suppressed } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    if (!scene) return session;
+    const already = scene.overlay.suppressedRegionIds.includes(regionOwnedId);
+    if (already === suppressed) return session;
+    const transaction = createTransactionForCommand(command, [regionOwnedId]);
+    return {
+      ...withEpisodes(
+        session,
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId
+            ? {
+                ...entry,
+                overlay: {
+                  ...entry.overlay,
+                  suppressedRegionIds: suppressed
+                    ? [...entry.overlay.suppressedRegionIds, regionOwnedId]
+                    : entry.overlay.suppressedRegionIds.filter(
+                        (id) => id !== regionOwnedId
+                      )
+                }
+              }
+            : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
   if (command.kind === "MoveQuestToScene") {
     const moved = moveQuestToSceneInSession(
       session,

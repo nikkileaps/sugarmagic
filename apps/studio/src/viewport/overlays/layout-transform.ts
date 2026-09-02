@@ -54,6 +54,27 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     getActiveScene() {
       const session = context.stateAccess.getSession();
       return session ? getActiveScene(session) : null;
+    },
+    /**
+     * In the scene composer the region is shown but not edited: an
+     * author sees where the station is while placing what this Scene
+     * adds to it (epic #226). Everywhere else -- Build -- every drawn
+     * object is editable, which is what returning true means.
+     */
+    isSelectable(instanceId: string) {
+      const shell = context.stateAccess.getShellState?.();
+      const inComposer =
+        shell?.activeProductMode === "story" &&
+        shell?.activeStoryWorkspaceKind === "composer";
+      if (!inComposer) return true;
+      const region = context.stateAccess.getActiveRegion();
+      if (!region) return true;
+      const regionOwned =
+        region.placedAssets.some((asset) => asset.instanceId === instanceId) ||
+        region.npcPresences.some((p) => p.presenceId === instanceId) ||
+        region.itemPresences.some((p) => p.presenceId === instanceId) ||
+        region.playerPresence?.presenceId === instanceId;
+      return !regionOwned;
     }
   });
 

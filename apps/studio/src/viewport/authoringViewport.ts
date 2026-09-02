@@ -638,6 +638,9 @@ export function createAuthoringViewport(
           updateSession(session: AuthoringSession) {
             options.stores.projectStore.getState().updateSession(session);
           },
+          getShellState() {
+            return options.stores.shellStore.getState();
+          },
           getSelectionIds(): string[] {
             return options.stores.shellStore.getState().selection.entityIds;
           },

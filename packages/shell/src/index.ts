@@ -50,7 +50,11 @@ export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
 // Epic #226 -- Story productmode workspaces. `structure` is the
 // Episodes-and-Scenes hierarchy; quests and dialogue moved here from
 // Design, which keeps the definitions that exist independent of a story.
-export type CoreStoryWorkspaceKind = "structure" | "quests" | "dialogues";
+export type CoreStoryWorkspaceKind =
+  | "structure"
+  | "composer"
+  | "quests"
+  | "dialogues";
 export type StoryWorkspaceKind = CoreStoryWorkspaceKind | (string & {});
 export type RenderWorkspaceKind = "shaders" | (string & {});
 // Story 46.1 — Publish productmode workspaces. Studio core contributes
@@ -74,6 +78,7 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
 
 export const CORE_STORY_WORKSPACE_KINDS: CoreStoryWorkspaceKind[] = [
   "structure",
+  "composer",
   "quests",
   "dialogues"
 ];

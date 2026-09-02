@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { StoryStructureView } from "./StoryStructureView";
+import { SceneComposerPanel } from "./SceneComposerPanel";
 import { CreditsPreview } from "./CreditsPreview";
 import { createCharacterWizardServices } from "./character-wizard/characterWizardServices";
 import type {
@@ -140,6 +141,8 @@ import {
   createDefaultRegion,
   createScopedId,
   sceneOverlayForRegion,
+  getAllScenes,
+  findSceneById
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -3443,6 +3446,43 @@ export function App() {
         onMoveQuestToScene={handleMoveQuestToScene}
       />
     ) : null,
+    composerPanel: session ? (
+      <SceneComposerPanel
+        scenes={getAllScenes(session.gameProject.episodes)}
+        selectedScene={getActiveScene(session)}
+        region={
+          [...session.regions.values()].find(
+            (candidate) =>
+              candidate.identity.id === getActiveScene(session)?.regionId
+          ) ?? null
+        }
+        onSelectScene={(sceneId) => {
+          // Staging a Scene means looking at its region: the viewport
+          // reads the session's active region, so both move together or
+          // the composer shows the wrong place.
+          const { session: current } = projectStore.getState();
+          if (!current) return;
+          handleSceneSelect(sceneId);
+          const scene = findSceneById(current.gameProject.episodes, sceneId);
+          if (scene?.regionId) {
+            shellStore.getState().setActiveRegionId(scene.regionId);
+          }
+        }}
+        onSetSuppressed={(regionOwnedId, suppressed) => {
+          const scene = getActiveScene(session);
+          if (!scene) return;
+          dispatchCommand({
+            kind: "SetSceneSuppression",
+            target: {
+              aggregateKind: "game-project",
+              aggregateId: session.gameProject.identity.id
+            },
+            subject: { subjectKind: "scene", subjectId: scene.sceneId },
+            payload: { sceneId: scene.sceneId, regionOwnedId, suppressed }
+          });
+        }}
+      />
+    ) : null,
     quests: {
       isActive: false,
       gameProjectId: session?.gameProject.identity.id ?? null,
@@ -3644,7 +3684,8 @@ export function App() {
     activeBuildKind,
     activeDesignKind,
     buildCenterPanelVisible: Boolean(buildView.centerPanel),
-    designCenterPanelVisible: Boolean(activeDesignPanels.centerPanel)
+    designCenterPanelVisible: Boolean(activeDesignPanels.centerPanel),
+    activeStoryKind
   });
 
   useEffect(() => {

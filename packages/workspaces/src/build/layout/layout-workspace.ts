@@ -44,6 +44,13 @@ export interface LayoutWorkspaceConfig {
    *  region. Without it the gizmo can't find Scene-scoped
    *  placements/presences and silently hides. */
   getActiveScene: () => Scene | null;
+  /**
+   * Whether an object may be selected or dragged (epic #226). The scene
+   * composer draws the region's own content so the author can see where
+   * things sit, and lets them edit only the Scene's overlay. Omitted
+   * means everything drawn is editable, which is Build.
+   */
+  isSelectable?: (instanceId: string) => boolean;
 }
 
 export interface LayoutWorkspaceInstance {
@@ -117,6 +124,7 @@ export function createLayoutWorkspace(
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedId: config.getSelectedId,
+      isSelectable: config.isSelectable,
       getTransform,
       onPreview(instanceId, values) {
         gizmo.setPosition(values.position);

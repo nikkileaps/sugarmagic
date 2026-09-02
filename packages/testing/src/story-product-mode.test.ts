@@ -29,14 +29,16 @@ describe("Story product mode", () => {
     expect(getProductModeDescriptor("story")).toBe(storyProductMode);
   });
 
-  it("owns structure, quests, and dialogues", () => {
+  it("owns structure, the composer, quests, and dialogues", () => {
     expect(CORE_STORY_WORKSPACE_KINDS).toEqual([
       "structure",
+      "composer",
       "quests",
       "dialogues"
     ]);
     expect(storyProductMode.workspaceKinds).toEqual([
       "structure",
+      "composer",
       "quests",
       "dialogues"
     ]);

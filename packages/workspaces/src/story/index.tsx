@@ -26,6 +26,7 @@ import { useQuestWorkspaceView } from "../design/QuestWorkspaceView";
 
 export const storyWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "structure", label: "Structure", icon: "🗂️" },
+  { id: "composer", label: "Composer", icon: "🎬" },
   { id: "quests", label: "Quests", icon: "📜" },
   { id: "dialogues", label: "Dialogues", icon: "💬" }
 ];
@@ -39,6 +40,9 @@ export interface StoryProductModeViewProps {
    * package may not import.
    */
   structurePanel: ReactNode;
+  /** The composer's side panel: Scene picker plus what the region owns.
+   *  Rendered by the app for the same reason the structure panel is. */
+  composerPanel: ReactNode;
   quests: Parameters<typeof useQuestWorkspaceView>[0];
   dialogues: Parameters<typeof useDialogueWorkspaceView>[0];
 }
@@ -53,8 +57,14 @@ export interface StoryProductModeViewResult {
 export function useStoryProductModeView(
   props: StoryProductModeViewProps
 ): StoryProductModeViewResult {
-  const { activeStoryKind, onSelectKind, structurePanel, quests, dialogues } =
-    props;
+  const {
+    activeStoryKind,
+    onSelectKind,
+    structurePanel,
+    composerPanel,
+    quests,
+    dialogues
+  } = props;
 
   const questView = useQuestWorkspaceView({
     ...quests,
@@ -74,11 +84,13 @@ export function useStoryProductModeView(
       />
     ),
     leftPanel:
-      activeStoryKind === "quests"
-        ? questView.leftPanel
-        : activeStoryKind === "dialogues"
-          ? dialogueView.leftPanel
-          : null,
+      activeStoryKind === "composer"
+        ? composerPanel
+        : activeStoryKind === "quests"
+          ? questView.leftPanel
+          : activeStoryKind === "dialogues"
+            ? dialogueView.leftPanel
+            : null,
     rightPanel:
       activeStoryKind === "quests"
         ? questView.rightPanel
@@ -90,8 +102,12 @@ export function useStoryProductModeView(
         ? questView.centerPanel
         : activeStoryKind === "dialogues"
           ? dialogueView.centerPanel
-          : // Structure is master-detail in one surface: the Episode and
-            // Scene lists and the editor for whichever is selected.
-            structurePanel
+          : activeStoryKind === "composer"
+            ? // The composer stages the Scene in the shared viewport,
+              // which App renders when no centerPanel claims the space.
+              undefined
+            : // Structure is master-detail in one surface: the Episode
+              // and Scene lists and the editor for whichever is selected.
+              structurePanel
   };
 }

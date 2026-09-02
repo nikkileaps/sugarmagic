@@ -79,6 +79,13 @@ export interface TransformControllerConfig {
   onCommit: (instanceId: string, values: TransformValues) => void;
   onCancel: (instanceId: string, values: TransformValues) => void;
   onSelect: (instanceId: string | null) => void;
+  /**
+   * Whether a scene object may be selected or dragged (epic #226). The
+   * scene composer draws the region's own content so the author can see
+   * where things go, but only the Scene's overlay is editable there.
+   * Omitted means everything drawn is editable, which is Build.
+   */
+  isSelectable?: (instanceId: string) => boolean;
   /** Hover affordances (no gesture active): the gizmo handle under
    *  the cursor, or null to clear the brighten. */
   onHoverHandle: (handleName: string | null) => void;
@@ -105,6 +112,11 @@ export function createTransformController(
   config: TransformControllerConfig
 ): InteractionController {
   let session: TransformSession | null = null;
+
+  /** One gate for picking, hovering and dragging: a locked object must
+   *  not be selectable by any of them, or "locked" is only cosmetic. */
+  const isSelectable = (instanceId: string): boolean =>
+    config.isSelectable?.(instanceId) ?? true;
 
   function anchorForPointer(
     event: NormalizedPointerEvent,
@@ -258,6 +270,9 @@ export function createTransformController(
         if (parsed) {
           const selectedId = config.getSelectedId();
           if (!selectedId) return false;
+          // Also here, not only at selection: a locked object must stay
+          // undraggable however it came to be selected.
+          if (!isSelectable(selectedId)) return false;
 
           const transform = config.getTransform(selectedId);
           if (!transform) return false;
@@ -283,7 +298,14 @@ export function createTransformController(
         event.normalizedX,
         event.normalizedY
       );
-      config.onSelect(selectHit ? selectHit.objectName : null);
+      // A locked object is not a miss that falls through to something
+      // behind it -- clicking the station selects nothing, which is what
+      // "you cannot edit this here" looks like.
+      config.onSelect(
+        selectHit && isSelectable(selectHit.objectName)
+          ? selectHit.objectName
+          : null
+      );
       return false;
     },
 
@@ -371,7 +393,9 @@ export function createTransformController(
         event.normalizedY
       );
       config.onHoverTarget(
-        selectHit && selectHit.objectName ? selectHit.object : null
+        selectHit && isSelectable(selectHit.objectName)
+          ? selectHit.object
+          : null
       );
     },
 

@@ -772,6 +772,25 @@ export type CreateQuestDefinitionCommand = SemanticCommandBase<
 >;
 
 /**
+ * Hide a region-owned thing for the duration of one Scene (epic #226).
+ *
+ * Names a region id -- a placed asset's `instanceId` or a presence's
+ * `presenceId` -- rather than copying the thing into the overlay, so
+ * there is never a second copy to drift. An id that matches nothing is
+ * ignored on compose, so deleting a suppressed asset does not break the
+ * Scene that hid it.
+ */
+export type SetSceneSuppressionCommand = SemanticCommandBase<
+  "SetSceneSuppression",
+  {
+    sceneId: string;
+    /** The region-owned id to hide or reveal. */
+    regionOwnedId: string;
+    suppressed: boolean;
+  }
+>;
+
+/**
  * Move a quest to another Scene (epic #226). A command rather than a
  * plain session edit so it joins the transaction history like every
  * other quest edit -- create, update and delete all undo, and a move
@@ -1196,6 +1215,7 @@ export type SemanticCommand =
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
   | MoveQuestToSceneCommand
+  | SetSceneSuppressionCommand
   | UpdateNPCDefinitionCommand
   | UpdateSpellDefinitionCommand
   | UpdateItemDefinitionCommand
