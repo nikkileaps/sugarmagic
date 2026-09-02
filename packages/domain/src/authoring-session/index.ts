@@ -145,7 +145,10 @@ import {
 } from "../npc-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
-import type { QuestDefinition } from "../quest-definition";
+import type {
+  QuestActionDefinition,
+  QuestDefinition
+} from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
 import {
   normalizeHUDDefinition,
@@ -3629,16 +3632,35 @@ export function removeSoundCueDefinitionFromSession(
             ...region.audio,
             emitters: (region.audio?.emitters ?? []).filter(
               (emitter) => emitter.cueDefinitionId !== definitionId
-            ),
-            ambienceZones: (region.audio?.ambienceZones ?? []).filter(
-              (zone) => zone.cueDefinitionId !== definitionId
             )
-          }
+          },
+          // A volume's enter/exit actions name cues too, so they are
+          // scrubbed on the same pass as the emitters. Without this,
+          // deleting a cue leaves an action pointing at nothing.
+          // [LAW:no-silent-failure] The dangling action would run and do
+          // nothing, with no error saying which volume held it.
+          volumes: (region.volumes ?? []).map((volume) => ({
+            ...volume,
+            onEnterActions: volume.onEnterActions.filter(
+              (action) => !namesCue(action, definitionId)
+            ),
+            onExitActions: volume.onExitActions.filter(
+              (action) => !namesCue(action, definitionId)
+            )
+          }))
         }
       ])
     ),
     isDirty: true
   };
+}
+
+/** Whether a quest action plays or stops the given sound cue. */
+function namesCue(action: QuestActionDefinition, cueDefinitionId: string): boolean {
+  return (
+    (action.type === "playCue" || action.type === "stopCue") &&
+    action.cueDefinitionId === cueDefinitionId
+  );
 }
 
 export function setSoundEventBindingInSession(

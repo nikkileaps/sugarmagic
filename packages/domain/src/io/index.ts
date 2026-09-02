@@ -23,7 +23,6 @@ import {
   createRegionVolumeDefinition,
   migrateRegionVolumesFromLegacy,
   deriveRegionAreasFromVolumes,
-  deriveRegionAmbienceZonesFromVolumes,
   createRegionAudioState,
   createRegionItemPresence,
   createLandscapeSurfaceSlot,
@@ -271,13 +270,8 @@ export function normalizeRegionDocumentForLoad(
   );
   const regionVolumes = Array.isArray(region.volumes)
     ? region.volumes.map((volume) => createRegionVolumeDefinition(volume))
-    : migrateRegionVolumesFromLegacy(
-        normalizedAreas,
-        normalizedAudio.ambienceZones
-      );
+    : migrateRegionVolumesFromLegacy(normalizedAreas);
   const derivedAreas = deriveRegionAreasFromVolumes(regionVolumes);
-  const derivedAmbienceZones =
-    deriveRegionAmbienceZonesFromVolumes(regionVolumes);
 
   // Pre-#226 files carry a reader-less `gameplayPlacements` field; stripped
   // here so a save stops persisting it.
@@ -389,8 +383,7 @@ export function normalizeRegionDocumentForLoad(
       ),
       paintPayload: legacyLandscape?.paintPayload ?? null
     }),
-    // Plan 069.4 — ambience zones re-derived from the trigger-role volumes.
-    audio: { ...normalizedAudio, ambienceZones: derivedAmbienceZones },
+    audio: normalizedAudio,
     // Plan 065 §065.1 — authoring-only Layout Sketch. Coerced on
     // load so a malformed payload can't leak into the session;
     // absent stays null (the common case).

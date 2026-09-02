@@ -112,6 +112,11 @@ export type QuestActionDefinition =
   | { type: "unlockEpisode"; episodeId: string | null }
   | { type: "advanceToNextScene"; sceneId: string | null }
   | { type: "playCue"; cueDefinitionId: string | null }
+  // Stops a cue this same source started. The runtime keys a sounding
+  // instance by where the action ran -- a quest node, or a volume -- so a
+  // volume's exit list stops what its enter list began without naming an
+  // instance.
+  | { type: "stopCue"; cueDefinitionId: string | null }
   // Overrides an NPC's interaction mode from here on, or clears the override
   // with a null `mode` so the NPC falls back to its authored definition.
   // Targets the DEFINITION, so it reaches every presence of that NPC --
@@ -183,6 +188,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
+  stopCue: "Stop Cue",
   setNpcInteractionMode: "Set NPC Interaction Mode",
   playAnimation: "Play Animation"
 };
@@ -222,6 +228,7 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "advanceToNextScene":
       return { type, sceneId: null };
     case "playCue":
+    case "stopCue":
       return { type, cueDefinitionId: null };
     case "setNpcInteractionMode":
       // Null mode = clear the override. The author picks the NPC and
@@ -496,7 +503,7 @@ function readString(value: unknown): string | null {
  * a count, a flag value, or display text. Each case below reads its named field
  * and falls back to those, so an older project keeps working.
  */
-function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
+export function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
   if (!action || typeof action !== "object") return null;
   const source = action as Record<string, unknown>;
   const rawType = source.type;
@@ -549,8 +556,9 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         sceneId: readString(source.sceneId) ?? legacyTargetId
       };
     case "playCue":
+    case "stopCue":
       return {
-        type: "playCue",
+        type,
         cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
       };
     case "setNpcInteractionMode": {

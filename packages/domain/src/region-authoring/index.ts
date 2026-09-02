@@ -1,5 +1,5 @@
-import type { TimeOfDayBand } from "../quest-definition";
-import { TIME_OF_DAY_BAND_OPTIONS } from "../quest-definition";
+import type { QuestActionDefinition, TimeOfDayBand } from "../quest-definition";
+import { TIME_OF_DAY_BAND_OPTIONS, normalizeQuestAction } from "../quest-definition";
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
 import type {
@@ -165,19 +165,8 @@ export interface RegionSoundEmitter {
   enabled: boolean;
 }
 
-export interface RegionAmbienceZone {
-  zoneId: string;
-  displayName: string;
-  cueDefinitionId: string | null;
-  center: [number, number, number];
-  size: [number, number, number];
-  trigger: "on-enter" | "always";
-  enabled: boolean;
-}
-
 export interface RegionAudioState {
   emitters: RegionSoundEmitter[];
-  ambienceZones: RegionAmbienceZone[];
 }
 
 export type RegionAreaKind =
@@ -264,8 +253,8 @@ export interface RegionBehaviorWorldFlagCondition {
 
 // ---------------------------------------------------------------------------
 // Plan 069.4 — unified drawn Volume. ONE box primitive with attachable
-// roles, subsuming RegionAreaDefinition (label role) and RegionAmbienceZone
-// (trigger role). Areas/ambience zones remain as `@deprecated` aliases
+// roles, subsuming RegionAreaDefinition (label role). Areas remain as a
+// `@deprecated` alias
 // derived from volumes (see the migration + derive helpers below). Only
 // `label` + `trigger` roles are produced by migration; the physical roles
 // (blocker / containment-boundary / nav-bounds / non-walkable) are authored
@@ -283,27 +272,6 @@ export type RegionVolumeRole =
 
 export type RegionVolumeBlockDirection = "in" | "out" | "both";
 
-export type RegionVolumeTriggerTiming = "on-enter" | "always";
-
-/** Flag written when a trigger fires (069.5); null for migrated ambience
- *  triggers (which only played audio). Same shape as the flag condition. */
-export interface RegionVolumeFlagAssignment {
-  key: string | null;
-  valueType: "boolean" | "number" | "string";
-  value: string | null;
-}
-
-/** What firing a trigger DOES: an audio cue and/or a world-flag set. */
-export interface RegionVolumeTriggerAction {
-  audioCueId: string | null;
-  setWorldFlag: RegionVolumeFlagAssignment | null;
-}
-
-export interface RegionVolumeTriggerConfig {
-  timing: RegionVolumeTriggerTiming;
-  action: RegionVolumeTriggerAction;
-}
-
 export interface RegionVolumeDefinition {
   volumeId: string;
   displayName: string;
@@ -319,8 +287,22 @@ export interface RegionVolumeDefinition {
    *  block, and (for containment) the condition under which it opens. */
   blockDirection: RegionVolumeBlockDirection | null;
   condition: RegionBehaviorQuestBinding | null;
-  /** `trigger` role (from RegionAmbienceZone). */
-  trigger: RegionVolumeTriggerConfig | null;
+  /**
+   * What the volume DOES when the player crosses into it and back out.
+   * The same action list a quest node runs, so every action gets the
+   * editor and the runtime handler it already has.
+   *
+   * [LAW:one-type-per-behavior] This replaced a private trigger config
+   * that could play one cue and set one flag. Two types described one
+   * behaviour -- running actions -- and only one of them could reach the
+   * pickers or the rest of the action set.
+   *
+   * An ambient bed is authored as a pair: `playCue` on enter, `stopCue`
+   * on exit. Both resolve to one sounding instance because the runtime
+   * keys it by the volume, not by the action.
+   */
+  onEnterActions: QuestActionDefinition[];
+  onExitActions: QuestActionDefinition[];
   /** `non-walkable` / cost role: extra nav path cost. */
   navCost: number | null;
   /** Plan 069.8 QoL — authoring-only viewport tint (hex, e.g. "#f38ba8") so
@@ -586,7 +568,12 @@ export function createRegionVolumeDefinition(
       blocksAnything && overrides.condition
         ? createRegionBehaviorQuestBinding(overrides.condition)
         : null,
-    trigger: roles.includes("trigger") ? overrides.trigger ?? null : null,
+    onEnterActions: (overrides.onEnterActions ?? [])
+      .map(normalizeQuestAction)
+      .filter((action): action is QuestActionDefinition => action !== null),
+    onExitActions: (overrides.onExitActions ?? [])
+      .map(normalizeQuestAction)
+      .filter((action): action is QuestActionDefinition => action !== null),
     navCost: roles.includes("non-walkable") ? overrides.navCost ?? null : null,
     color: overrides.color ?? null
   };
@@ -604,23 +591,6 @@ export function regionAreaToVolume(
     roles: ["label"],
     labelKind: area.kind,
     lorePageId: area.lorePageId
-  });
-}
-
-/** RegionAmbienceZone -> trigger-role Volume (id preserved). */
-export function regionAmbienceZoneToVolume(
-  zone: RegionAmbienceZone
-): RegionVolumeDefinition {
-  return createRegionVolumeDefinition({
-    volumeId: zone.zoneId,
-    displayName: zone.displayName,
-    enabled: zone.enabled,
-    bounds: { kind: "box", center: zone.center, size: zone.size },
-    roles: ["trigger"],
-    trigger: {
-      timing: zone.trigger,
-      action: { audioCueId: zone.cueDefinitionId, setWorldFlag: null }
-    }
   });
 }
 
@@ -642,24 +612,6 @@ export function volumeToRegionArea(
   };
 }
 
-/** Derived `@deprecated` ambience-zone alias — null unless trigger role. */
-export function volumeToRegionAmbienceZone(
-  volume: RegionVolumeDefinition
-): RegionAmbienceZone | null {
-  if (!volume.roles.includes("trigger") || !volume.trigger) {
-    return null;
-  }
-  return {
-    zoneId: volume.volumeId,
-    displayName: volume.displayName,
-    cueDefinitionId: volume.trigger.action.audioCueId,
-    center: volume.bounds.center,
-    size: volume.bounds.size,
-    trigger: volume.trigger.timing,
-    enabled: volume.enabled
-  };
-}
-
 export function deriveRegionAreasFromVolumes(
   volumes: readonly RegionVolumeDefinition[]
 ): RegionAreaDefinition[] {
@@ -668,23 +620,11 @@ export function deriveRegionAreasFromVolumes(
     .filter((area): area is RegionAreaDefinition => area !== null);
 }
 
-export function deriveRegionAmbienceZonesFromVolumes(
-  volumes: readonly RegionVolumeDefinition[]
-): RegionAmbienceZone[] {
-  return volumes
-    .map(volumeToRegionAmbienceZone)
-    .filter((zone): zone is RegionAmbienceZone => zone !== null);
-}
-
-/** Build volumes from the legacy area + ambience-zone stores (pre-069.4). */
+/** Build volumes from the legacy area store (pre-069.4). */
 export function migrateRegionVolumesFromLegacy(
-  areas: readonly RegionAreaDefinition[],
-  ambienceZones: readonly RegionAmbienceZone[]
+  areas: readonly RegionAreaDefinition[]
 ): RegionVolumeDefinition[] {
-  return [
-    ...areas.map(regionAreaToVolume),
-    ...ambienceZones.map(regionAmbienceZoneToVolume)
-  ];
+  return areas.map(regionAreaToVolume);
 }
 
 /** The canonical volume list for a region: the stored `volumes` when
@@ -698,10 +638,7 @@ export function resolveRegionVolumes(
       createRegionVolumeDefinition(volume)
     );
   }
-  return migrateRegionVolumesFromLegacy(
-    region.areas ?? [],
-    region.audio?.ambienceZones ?? []
-  );
+  return migrateRegionVolumesFromLegacy(region.areas ?? []);
 }
 
 /** Return a region with canonical `volumes` set and the `@deprecated`
@@ -712,19 +649,10 @@ export function withDerivedRegionAliases(
   region: RegionDocument,
   volumes: RegionVolumeDefinition[]
 ): RegionDocument {
-  const ambienceZones = deriveRegionAmbienceZonesFromVolumes(volumes);
-  // Preserve any existing audio (emitters); create it only when a trigger
-  // volume needs an ambience alias and there's no audio state yet.
-  const audio = region.audio
-    ? { ...region.audio, ambienceZones }
-    : ambienceZones.length > 0
-      ? { emitters: [], ambienceZones }
-      : region.audio;
   return {
     ...region,
     volumes,
-    areas: deriveRegionAreasFromVolumes(volumes),
-    audio
+    areas: deriveRegionAreasFromVolumes(volumes)
   };
 }
 
@@ -774,52 +702,6 @@ export function reconcileRegionVolumesFromAreas(
   for (const area of nextAreas) {
     if (!seen.has(area.areaId)) {
       volumes.push(regionAreaToVolume(area));
-    }
-  }
-  return withDerivedRegionAliases(region, volumes);
-}
-
-/** As `reconcileRegionVolumesFromAreas`, but for the `trigger`-role set
- *  driven by the ambience-zone command executors. */
-export function reconcileRegionVolumesFromAmbienceZones(
-  region: RegionDocument,
-  nextZones: readonly RegionAmbienceZone[]
-): RegionDocument {
-  const canonical = resolveRegionVolumes(region);
-  const nextById = new Map(nextZones.map((zone) => [zone.zoneId, zone]));
-  const seen = new Set<string>();
-  const volumes: RegionVolumeDefinition[] = [];
-  for (const volume of canonical) {
-    if (!volume.roles.includes("trigger")) {
-      volumes.push(volume);
-      continue;
-    }
-    const zone = nextById.get(volume.volumeId);
-    if (!zone) {
-      const remaining = volume.roles.filter((role) => role !== "trigger");
-      if (remaining.length > 0) {
-        volumes.push({ ...volume, roles: remaining, trigger: null });
-      }
-      continue;
-    }
-    seen.add(zone.zoneId);
-    volumes.push({
-      ...volume,
-      displayName: zone.displayName,
-      enabled: zone.enabled,
-      bounds: { kind: "box", center: zone.center, size: zone.size },
-      trigger: {
-        timing: zone.trigger,
-        action: {
-          audioCueId: zone.cueDefinitionId,
-          setWorldFlag: volume.trigger?.action.setWorldFlag ?? null
-        }
-      }
-    });
-  }
-  for (const zone of nextZones) {
-    if (!seen.has(zone.zoneId)) {
-      volumes.push(regionAmbienceZoneToVolume(zone));
     }
   }
   return withDerivedRegionAliases(region, volumes);
@@ -1042,10 +924,6 @@ export function createRegionSoundEmitterId(): string {
   return createUuid();
 }
 
-export function createRegionAmbienceZoneId(): string {
-  return createUuid();
-}
-
 export function createRegionSoundEmitter(
   overrides: Partial<RegionSoundEmitter> = {}
 ): RegionSoundEmitter {
@@ -1060,29 +938,12 @@ export function createRegionSoundEmitter(
   };
 }
 
-export function createRegionAmbienceZone(
-  overrides: Partial<RegionAmbienceZone> = {}
-): RegionAmbienceZone {
-  return {
-    zoneId: overrides.zoneId ?? createRegionAmbienceZoneId(),
-    displayName: overrides.displayName ?? "Ambience Zone",
-    cueDefinitionId: overrides.cueDefinitionId ?? null,
-    center: overrides.center ?? [0, DEFAULT_REGION_AREA_HEIGHT / 2, 0],
-    size: overrides.size ?? [12, DEFAULT_REGION_AREA_HEIGHT, 12],
-    trigger: overrides.trigger ?? "on-enter",
-    enabled: overrides.enabled ?? true
-  };
-}
-
 export function createRegionAudioState(
   overrides: Partial<RegionAudioState> = {}
 ): RegionAudioState {
   return {
     emitters: (overrides.emitters ?? []).map((emitter) =>
       createRegionSoundEmitter(emitter)
-    ),
-    ambienceZones: (overrides.ambienceZones ?? []).map((zone) =>
-      createRegionAmbienceZone(zone)
     )
   };
 }

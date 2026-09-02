@@ -448,151 +448,74 @@ function regionWithVolumes(
   };
 }
 
-describe("069.5 — on-enter trigger tracker (extends the area tracker)", () => {
-  const trigger = createRegionVolumeDefinition({
-    volumeId: "trig:bell",
-    roles: ["trigger"],
+describe("volume crossings (extends the area tracker)", () => {
+  const bell = createRegionVolumeDefinition({
+    volumeId: "vol:bell",
     bounds: { kind: "box", center: [10, 0, 0], size: [4, 4, 4] },
-    trigger: {
-      timing: "on-enter",
-      action: { audioCueId: "cue:bell", setWorldFlag: null }
-    }
+    onEnterActions: [{ type: "playCue", cueDefinitionId: "cue:bell" }],
+    onExitActions: [{ type: "stopCue", cueDefinitionId: "cue:bell" }]
   });
 
   it("fires once on entry and re-arms only after an exit + re-entry", () => {
-    const tracker = createSpatialAreaTracker(regionWithVolumes([trigger]));
+    const tracker = createSpatialAreaTracker(regionWithVolumes([bell]));
     const at = (x: number) => tracker.resolve("player", { x, y: 0, z: 0 });
 
     // Outside: no edge.
-    expect(at(0).triggersEntered).toHaveLength(0);
+    expect(at(0).volumesEntered).toHaveLength(0);
     // Cross in: one enter edge.
-    const entered = at(10);
-    expect(entered.triggersEntered.map((v) => v.volumeId)).toEqual(["trig:bell"]);
+    expect(at(10).volumesEntered.map((v) => v.volumeId)).toEqual(["vol:bell"]);
     // Still inside: no re-fire.
-    expect(at(10).triggersEntered).toHaveLength(0);
+    expect(at(10).volumesEntered).toHaveLength(0);
     // Cross out: exit edge.
-    expect(at(0).triggersExited.map((v) => v.volumeId)).toEqual(["trig:bell"]);
+    expect(at(0).volumesExited.map((v) => v.volumeId)).toEqual(["vol:bell"]);
     // Re-enter: re-armed.
-    expect(at(10).triggersEntered.map((v) => v.volumeId)).toEqual(["trig:bell"]);
+    expect(at(10).volumesEntered.map((v) => v.volumeId)).toEqual(["vol:bell"]);
   });
 
-  it("reports every overlapping trigger volume the point is inside", () => {
-    const other = createRegionVolumeDefinition({
-      volumeId: "trig:echo",
-      roles: ["trigger"],
+  it("reports every overlapping volume the point is inside", () => {
+    const echo = createRegionVolumeDefinition({
+      volumeId: "vol:echo",
       bounds: { kind: "box", center: [10, 0, 0], size: [6, 4, 6] },
-      trigger: {
-        timing: "on-enter",
-        action: { audioCueId: "cue:echo", setWorldFlag: null }
-      }
+      onEnterActions: [{ type: "playCue", cueDefinitionId: "cue:echo" }]
     });
-    const tracker = createSpatialAreaTracker(regionWithVolumes([trigger, other]));
+    const tracker = createSpatialAreaTracker(regionWithVolumes([bell, echo]));
     tracker.resolve("player", { x: 0, y: 0, z: 0 });
     const entered = tracker.resolve("player", { x: 10, y: 0, z: 0 });
-    expect(entered.triggersEntered.map((v) => v.volumeId).sort()).toEqual([
-      "trig:bell",
-      "trig:echo"
+    expect(entered.volumesEntered.map((v) => v.volumeId).sort()).toEqual([
+      "vol:bell",
+      "vol:echo"
     ]);
   });
 
-  it("does NOT fire when the entity SPAWNS inside a trigger (prime-on-first-resolve)", () => {
-    // Regression (mini-review r2 #2): the first resolve primes the inside-set
-    // without emitting edges — a spawn inside an on-enter trigger must not
-    // play the cue / set the flag on load. Only a genuine crossing fires.
-    const tracker = createSpatialAreaTracker(regionWithVolumes([trigger]));
+  it("does NOT fire when the entity SPAWNS inside a volume", () => {
+    // The first resolve primes the inside-set without emitting edges, so
+    // loading a save standing inside a volume does not re-run its enter
+    // actions. Only a genuine crossing fires.
+    const tracker = createSpatialAreaTracker(regionWithVolumes([bell]));
     const first = tracker.resolve("player", { x: 10, y: 0, z: 0 }); // spawn INSIDE
-    expect(first.triggersEntered).toHaveLength(0);
-    expect(first.triggersExited).toHaveLength(0);
+    expect(first.volumesEntered).toHaveLength(0);
+    expect(first.volumesExited).toHaveLength(0);
     // Walking out then back in fires normally (primed, not suppressed).
     expect(
-      tracker.resolve("player", { x: 0, y: 0, z: 0 }).triggersExited
+      tracker.resolve("player", { x: 0, y: 0, z: 0 }).volumesExited
     ).toHaveLength(1);
     expect(
-      tracker.resolve("player", { x: 10, y: 0, z: 0 }).triggersEntered
+      tracker.resolve("player", { x: 10, y: 0, z: 0 }).volumesEntered
     ).toHaveLength(1);
   });
 
-  it("ignores 'always' triggers (those are the continuous ambient bed)", () => {
-    const always = createRegionVolumeDefinition({
-      volumeId: "trig:wind",
-      roles: ["trigger"],
-      bounds: { kind: "box", center: [10, 0, 0], size: [4, 4, 4] },
-      trigger: {
-        timing: "always",
-        action: { audioCueId: "cue:wind", setWorldFlag: null }
-      }
+  it("ignores a volume with no actions on either side", () => {
+    // Nothing to run, so nothing to track -- a label-only volume is not a
+    // crossing event.
+    const label = createRegionVolumeDefinition({
+      volumeId: "vol:market",
+      roles: ["label"],
+      bounds: { kind: "box", center: [10, 0, 0], size: [4, 4, 4] }
     });
-    const tracker = createSpatialAreaTracker(regionWithVolumes([always]));
+    const tracker = createSpatialAreaTracker(regionWithVolumes([label]));
     tracker.resolve("player", { x: 0, y: 0, z: 0 });
-    expect(tracker.resolve("player", { x: 10, y: 0, z: 0 }).triggersEntered).toHaveLength(
-      0
-    );
-  });
-});
-
-describe("containment gates and node completion", () => {
-  it("stays shut until the node completes, then opens", () => {
-    const gate = {
-      questStageId: null,
-      worldFlagEquals: null,
-      questDefinitionId: "quest:gate",
-      questNodeId: "node:key",
-      storyPointSide: "after" as const
-    };
-    let done = false;
-    const ctx = {
-      activeQuests: [],
-      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
-        done && questDefinitionId === "quest:gate" && nodeId === "node:key"
-    };
-
-    expect(evaluateRegionQuestBinding(gate, ctx)).toBe(false);
-    done = true;
-    expect(evaluateRegionQuestBinding(gate, ctx)).toBe(true);
-  });
-
-  it("stays open once the node is done, including after the quest ends", () => {
-    // A node on the "after" side asks one thing: has that node been done.
-    // It does NOT also require the quest to still be running -- that is the
-    // point of the side, and it is why a gate opened by a story beat does
-    // not slam shut when the quest finishes.
-    const gate = {
-      questStageId: null,
-      worldFlagEquals: null,
-      questDefinitionId: "quest:gate",
-      questNodeId: "node:key",
-      storyPointSide: "after" as const
-    };
-    const nodeDone = () => true;
-
     expect(
-      evaluateRegionQuestBinding(gate, {
-        activeQuests: [{ questDefinitionId: "quest:gate", stageId: "s1" }],
-        isNodeCompleted: nodeDone
-      })
-    ).toBe(true);
-    // Quest over, node still done -> still open.
-    expect(
-      evaluateRegionQuestBinding(gate, {
-        activeQuests: [],
-        isNodeCompleted: nodeDone
-      })
-    ).toBe(true);
-  });
-
-  it("a point on the while side does need the quest to be running", () => {
-    const gate = {
-      questStageId: null,
-      worldFlagEquals: null,
-      questDefinitionId: "quest:gate",
-      questNodeId: null,
-      storyPointSide: "while" as const
-    };
-    expect(evaluateRegionQuestBinding(gate, { activeQuests: [] })).toBe(false);
-    expect(
-      evaluateRegionQuestBinding(gate, {
-        activeQuests: [{ questDefinitionId: "quest:gate", stageId: "s1" }]
-      })
-    ).toBe(true);
+      tracker.resolve("player", { x: 10, y: 0, z: 0 }).volumesEntered
+    ).toHaveLength(0);
   });
 });

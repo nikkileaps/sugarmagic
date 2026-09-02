@@ -190,7 +190,7 @@ describe("sound system", () => {
       addSoundCueDefinitionToSession(
         addAudioClipDefinitionToSession(
           createAuthoringSession(project, [
-            { ...region, audio: { emitters: [emitter], ambienceZones: [] } }
+            { ...region, audio: { emitters: [emitter] } }
           ]),
           clip
         ),

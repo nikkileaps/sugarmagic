@@ -11,7 +11,6 @@ import {
   resolveRegionVolumes,
   withDerivedRegionAliases,
   reconcileRegionVolumesFromAreas,
-  reconcileRegionVolumesFromAmbienceZones,
   createRegionNPCBehaviorDefinition,
   MAX_REGION_LANDSCAPE_CHANNELS
 } from "../region-authoring";
@@ -60,9 +59,6 @@ import type {
   CreateRegionSoundEmitterCommand,
   UpdateRegionSoundEmitterCommand,
   DeleteRegionSoundEmitterCommand,
-  CreateRegionAmbienceZoneCommand,
-  UpdateRegionAmbienceZoneCommand,
-  DeleteRegionAmbienceZoneCommand,
   CreatePlayerPresenceCommand,
   TransformPlayerPresenceCommand,
   RemovePlayerPresenceCommand,
@@ -1641,8 +1637,7 @@ function applyCreateRegionSoundEmitter(
     ...region,
     audio: {
       ...region.audio,
-      emitters: [...(region.audio?.emitters ?? []), command.payload.emitter],
-      ambienceZones: region.audio?.ambienceZones ?? []
+      emitters: [...(region.audio?.emitters ?? []), command.payload.emitter]
     }
   };
 }
@@ -1659,8 +1654,7 @@ function applyUpdateRegionSoundEmitter(
         emitter.emitterId === command.payload.emitterId
           ? { ...emitter, ...command.payload.patch }
           : emitter
-      ),
-      ambienceZones: region.audio?.ambienceZones ?? []
+      )
     }
   };
 }
@@ -1675,45 +1669,9 @@ function applyDeleteRegionSoundEmitter(
       ...region.audio,
       emitters: (region.audio?.emitters ?? []).filter(
         (emitter) => emitter.emitterId !== command.payload.emitterId
-      ),
-      ambienceZones: region.audio?.ambienceZones ?? []
+      )
     }
   };
-}
-
-function applyCreateRegionAmbienceZone(
-  region: RegionDocument,
-  command: CreateRegionAmbienceZoneCommand
-): RegionDocument {
-  // Plan 069.4 — reconcile the trigger-role volumes from the intended zone
-  // list (re-derives the ambience alias; preserves emitters).
-  const nextZones = [
-    ...(region.audio?.ambienceZones ?? []),
-    command.payload.zone
-  ];
-  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
-}
-
-function applyUpdateRegionAmbienceZone(
-  region: RegionDocument,
-  command: UpdateRegionAmbienceZoneCommand
-): RegionDocument {
-  const nextZones = (region.audio?.ambienceZones ?? []).map((zone) =>
-    zone.zoneId === command.payload.zoneId
-      ? { ...zone, ...command.payload.patch }
-      : zone
-  );
-  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
-}
-
-function applyDeleteRegionAmbienceZone(
-  region: RegionDocument,
-  command: DeleteRegionAmbienceZoneCommand
-): RegionDocument {
-  const nextZones = (region.audio?.ambienceZones ?? []).filter(
-    (zone) => zone.zoneId !== command.payload.zoneId
-  );
-  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 export function executeCommand(
@@ -1869,15 +1827,6 @@ export function executeCommand(
       break;
     case "DeleteRegionSoundEmitter":
       updatedRegion = applyDeleteRegionSoundEmitter(region, command);
-      break;
-    case "CreateRegionAmbienceZone":
-      updatedRegion = applyCreateRegionAmbienceZone(region, command);
-      break;
-    case "UpdateRegionAmbienceZone":
-      updatedRegion = applyUpdateRegionAmbienceZone(region, command);
-      break;
-    case "DeleteRegionAmbienceZone":
-      updatedRegion = applyDeleteRegionAmbienceZone(region, command);
       break;
     case "CreatePlayerPresence":
       updatedScene = applyCreatePlayerPresence(context, command);

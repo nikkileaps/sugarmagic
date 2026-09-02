@@ -43,7 +43,8 @@ import {
   type SpellDefinition,
   type RegionDocument,
   type RegionVolumeDefinition,
-  type SoundEventBindingMap
+  type SoundEventBindingMap,
+  type QuestActionDefinition
 } from "@sugarmagic/domain";
 import {
   WorldFlagManager,
@@ -125,6 +126,9 @@ import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
   type QuestTrackerView,
+  type QuestActionSource,
+  questActionInstanceKey,
+  describeQuestActionSource,
   QuestManager,
   QuestSystem
 } from "../quest";
@@ -793,32 +797,26 @@ export function createRuntimeGameplaySessionController(
 
   // Plan 069.5 — fire an authored on-enter trigger action: play (enter) /
   // stop (exit) the cue and, on enter, set the world flag. Player-only.
-  function fireTriggerAction(volume: RegionVolumeDefinition, kind: "enter" | "exit") {
-    const trigger = volume.trigger;
-    if (!trigger) {
-      return;
-    }
-    const instanceKey = `region:${activeRegion?.identity.id ?? "region"}:trigger:${volume.volumeId}`;
-    if (kind === "exit") {
-      if (trigger.action.audioCueId) {
-        audioController.stopInstance(instanceKey);
-      }
-      return;
-    }
-    if (trigger.action.audioCueId) {
-      audioController.playCue({
-        cueDefinitionId: trigger.action.audioCueId,
-        instanceKey,
-        position: volume.bounds.center,
-        source: `trigger volume "${volume.volumeId}"`
-      });
-    }
-    const flag = trigger.action.setWorldFlag;
-    if (flag?.key) {
-      // The one writer that still names a flag by store key rather than by
-      // reference. #216 replaces this trigger action with QuestActionDefinition,
-      // at which point it goes through setFlagById like everything else.
-      worldFlagManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
+  /**
+   * A volume runs its own actions when the player crosses in and back out,
+   * from the same list a quest node runs. An ambient bed is a `playCue` on
+   * enter paired with a `stopCue` on exit; both resolve to one instance
+   * because the key names the volume.
+   */
+  function runVolumeActions(
+    volume: RegionVolumeDefinition,
+    kind: "enter" | "exit"
+  ) {
+    const actions =
+      kind === "enter" ? volume.onEnterActions : volume.onExitActions;
+    if (actions.length === 0) return;
+    const source = {
+      kind: "volume" as const,
+      regionId: activeRegion?.identity.id ?? "region",
+      volumeId: volume.volumeId
+    };
+    for (const action of actions) {
+      runQuestAction(action, source);
     }
   }
 
@@ -831,8 +829,8 @@ export function createRuntimeGameplaySessionController(
         logDebug(event, payload) {
           console.info(`[runtime-core] ${event}`, payload ?? {});
         },
-        onTriggerEvent({ volume, kind }) {
-          fireTriggerAction(volume, kind);
+        onVolumeCrossing({ volume, kind }) {
+          runVolumeActions(volume, kind);
         }
       })
     : null;
@@ -2108,7 +2106,10 @@ export function createRuntimeGameplaySessionController(
     }
   });
   questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));
-  questManager.setActionHandler(({ action, questDefinitionId, stageId, nodeId }) => {
+  // [LAW:single-enforcer] One runner for every action, whatever ran it.
+  // A volume with its own copy would drift from the quest one the first
+  // time an action is added.
+  function runQuestAction(action: QuestActionDefinition, source: QuestActionSource) {
     switch (action.type) {
       case "giveItem":
         if (action.itemDefinitionId) {
@@ -2122,15 +2123,21 @@ export function createRuntimeGameplaySessionController(
         }
         return;
 
-      // The instance key names the node, so two nodes playing the same cue are
-      // separate instances -- a cue set to restart or ignore-while-playing
-      // applies per node, not across the quest.
+      // The instance key names the source, so two nodes playing the same cue
+      // are separate instances -- a cue set to restart or ignore-while-playing
+      // applies per source, not across the quest.
       case "playCue":
         audioController.playCue({
           cueDefinitionId: action.cueDefinitionId,
-          instanceKey: `quest:${questDefinitionId}:${stageId}:${nodeId}:${action.cueDefinitionId ?? ""}`,
-          source: `quest "${questDefinitionId}" node "${nodeId}"`
+          instanceKey: questActionInstanceKey(source, action.cueDefinitionId),
+          source: describeQuestActionSource(source)
         });
+        return;
+
+      case "stopCue":
+        audioController.stopInstance(
+          questActionInstanceKey(source, action.cueDefinitionId)
+        );
         return;
 
       case "setNpcInteractionMode": {
@@ -2200,10 +2207,14 @@ export function createRuntimeGameplaySessionController(
         console.warn(
           "[runtime-core] unhandled quest action",
           exhaustive,
-          { questDefinitionId, nodeId }
+          describeQuestActionSource(source)
         );
       }
     }
+  }
+
+  questManager.setActionHandler(({ action, source }) => {
+    runQuestAction(action, source);
   });
   questManager.setStateChangeHandler(() => {
     syncQuestUi();
