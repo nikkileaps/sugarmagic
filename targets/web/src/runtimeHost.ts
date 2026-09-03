@@ -3029,7 +3029,6 @@ export function createWebRuntimeHost(
         )
       );
     }
-    world = new World();
     uiContextStore = createUIContextStore();
     // Story 47.10.5 — the store always boots in the same "no
     // menu, not paused" baseline; whether the start menu opens at
@@ -3141,6 +3140,10 @@ export function createWebRuntimeHost(
         })();
       }
     });
+    // The ECS world belongs to the region, not to the boot: everything
+    // above this point is per-page setup that never touches it. Created at
+    // its first use so the two do not interleave.
+    world = new World();
     world.addSystem(
       new UIContextSystem({
         contextStore: uiContextStore,
