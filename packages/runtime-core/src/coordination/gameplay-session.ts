@@ -239,6 +239,18 @@ export interface RuntimeGameplaySessionControllerOptions {
     sceneId: string | null;
   }) => void;
   /**
+   * Walk the player into another region, landing on one of its markers.
+   *
+   * Separate from `onSceneAction` on purpose: that one is campaign
+   * progression -- the story moves on and the Scene changes. This is a
+   * doorway. The story does not change; the player is just somewhere else.
+   * The host owns it either way, because standing a region up is its job.
+   */
+  onRegionChange?: (input: {
+    regionId: string;
+    markerId: string | null;
+  }) => void;
+  /**
    * Plays one of an NPC's bound animation slots as a one-shot, on every
    * presence of that NPC. The mixer lives in the host, so the quest action
    * handler forwards here rather than reaching for it.
@@ -2202,23 +2214,21 @@ export function createRuntimeGameplaySessionController(
       case "emitEvent":
         return;
 
-      // Authoring landed ahead of the runtime move, which needs the
-      // assembly to be able to swap regions mid-session. Loud rather than
-      // silent: a door that quietly does nothing is indistinguishable from
-      // one that is wired wrong.
-      // [LAW:no-silent-failure] The player keeps playing -- this is the
-      // runtime, and a doorway that does not open yet is not a reason to
-      // stop the game -- but the author hears about it.
+      // Standing a region up is the host's job, so this forwards rather
+      // than acting. A link with no region picked is authored breakage,
+      // reported rather than silently doing nothing.
       case "goToRegion":
-        console.warn(
-          "[runtime-core] goToRegion is authored but not yet walkable; " +
-            "mid-session region transition is not implemented.",
-          {
-            regionId: action.regionId,
-            markerId: action.markerId,
-            source: describeQuestActionSource(source)
-          }
-        );
+        if (!action.regionId) {
+          console.warn(
+            "[runtime-core] a Go to Region action names no region.",
+            describeQuestActionSource(source)
+          );
+          return;
+        }
+        options.onRegionChange?.({
+          regionId: action.regionId,
+          markerId: action.markerId
+        });
         return;
 
       default: {

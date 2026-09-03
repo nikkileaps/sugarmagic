@@ -2292,6 +2292,18 @@ export function createWebRuntimeHost(
    * Deliberately NOT reordered out of the boot: the statements stay where
    * they were and in the order they were. Only their home changed.
    */
+  /**
+   * What a mid-session region change needs that only the boot knows.
+   * Captured once the world is standing; null before that, which is why
+   * `swapRegion` refuses rather than guessing.
+   */
+  let regionSwapContext: {
+    state: WebRuntimeStartState;
+    migratedContent: ReturnType<typeof migrateToScenes>;
+    activeScene: Scene | null;
+    pluginManager: ReturnType<typeof createResolvedRuntimePluginManager>;
+  } | null = null;
+
   async function buildRegionWorld(input: {
     state: WebRuntimeStartState;
     migratedContent: ReturnType<typeof migrateToScenes>;
@@ -2616,6 +2628,13 @@ export function createWebRuntimeHost(
     /** Both are non-null by the time this runs; the caller has them. */
     pluginManager: ReturnType<typeof createResolvedRuntimePluginManager>;
     uiContextStore: UIContextStore;
+    /**
+     * Where the player lands, when something other than the region's own
+     * player start decides. Null on a boot -- the restored save or the
+     * authored spawn answers. A region transition sets it to the marker
+     * the doorway named.
+     */
+    arriveAt?: { position: [number, number, number]; rotation: [number, number, number] } | null;
   }): Promise<{
     movementSystem: MovementSystem;
     /** Returned rather than read back off the outer variables, so the
@@ -2639,7 +2658,8 @@ export function createWebRuntimeHost(
       renderView,
       scene,
       pluginManager,
-      uiContextStore
+      uiContextStore,
+      arriveAt = null
     } = input;
       // The ECS world belongs to the region, not to the boot: everything
       // above this point is per-page setup that never touches it. Created at
@@ -2704,7 +2724,12 @@ export function createWebRuntimeHost(
         state.playerDefinition,
         state.mechanics,
         {
-          positionOverride: hostPlayerRestore?.playerPosition ?? null
+          // Arriving through a doorway beats both, because the player just
+          // walked through it; the save and the authored spawn are only
+          // right when nothing else placed them.
+          positionOverride: arriveAt
+            ? { x: arriveAt.position[0], y: arriveAt.position[1], z: arriveAt.position[2] }
+            : hostPlayerRestore?.playerPosition ?? null
         }
       );
       playerEyeHeight = playerSpawn.eyeHeight;
@@ -2717,6 +2742,7 @@ export function createWebRuntimeHost(
       // spawn rotation and stands at yaw 0 until it first moves. Only yaw
       // matters for an upright character, matching the velocity heading.
       const authoredSpawnRotation =
+        arriveAt?.rotation ??
         activeRegionContents?.playerPresence?.transform.rotation;
       if (authoredSpawnRotation) {
         playerVisualController.root.rotation.y = authoredSpawnRotation[1];
@@ -2787,6 +2813,11 @@ export function createWebRuntimeHost(
         // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
         getPathfinder: () => navMeshPathfinder,
         onSceneAction: hostHandleSceneAction,
+        onRegionChange: (change) => {
+          // Released, not awaited: the action handler runs inside the quest
+          // refresh loop, and the swap tears that loop's world down.
+          void swapRegion(change);
+        },
         onPlayNpcAnimation: playNpcAnimation,
         // NO TRACK YET. The assembly is now built while the loading screen is
         // still up, and a track handed over here starts playing under it. The
@@ -2861,6 +2892,96 @@ export function createWebRuntimeHost(
       world,
       inputManager
     };
+  }
+
+  /**
+   * Walk the player into another region without reloading the page.
+   *
+   * The two builders already know how to stand a region up; this frees the
+   * one that is standing and runs them again with a different id. What it
+   * deliberately does NOT do is re-run the boot: no save restore, no
+   * participant registration, no readiness gate, no start menu. Those are
+   * per-page and re-running them would throw away the session.
+   *
+   * [LAW:no-silent-failure] Refuses loudly rather than half-swapping. A
+   * doorway that cannot fire leaves the player where they were, which is
+   * recoverable; a half-built world is not.
+   */
+  async function swapRegion(input: {
+    regionId: string;
+    markerId: string | null;
+  }): Promise<void> {
+    const context = regionSwapContext;
+    if (!context || !renderView || !scene || !uiContextStore) {
+      console.warn(
+        "[web-runtime] region change ignored — the world is not standing yet.",
+        input
+      );
+      return;
+    }
+
+    const destination = context.migratedContent.regions.find(
+      (candidate) => candidate.identity.id === input.regionId
+    );
+    if (!destination) {
+      console.warn(
+        `[web-runtime] region change ignored — no region "${input.regionId}".`
+      );
+      return;
+    }
+
+    // A named marker that is gone is authored breakage, not a reason to
+    // strand the player: land them on the region's own start instead and
+    // say so. `validateProjectContent` reports it at save time.
+    const marker = input.markerId
+      ? (destination.markers ?? []).find(
+          (candidate) => candidate.markerId === input.markerId
+        ) ?? null
+      : null;
+    if (input.markerId && !marker) {
+      console.warn(
+        `[web-runtime] region "${input.regionId}" has no marker ` +
+          `"${input.markerId}"; arriving at its player start instead.`
+      );
+    }
+
+    disposeRegionRuntime();
+
+    const { activeRegion, activeRegionContents, collisionWorld } =
+      await buildRegionWorld({
+        state: context.state,
+        migratedContent: context.migratedContent,
+        activeScene: context.activeScene,
+        resolvedActiveRegionId: input.regionId,
+        renderView,
+        scene
+      });
+
+    const built = await buildRegionGameplay({
+      state: context.state,
+      activeScene: context.activeScene,
+      activeRegion,
+      activeRegionContents,
+      collisionWorld,
+      renderView,
+      scene,
+      pluginManager: context.pluginManager,
+      uiContextStore,
+      arriveAt: marker
+        ? {
+            position: marker.transform.position,
+            rotation: marker.transform.rotation
+          }
+        : null
+    });
+
+    gameplayAssembly = built.gameplayAssembly;
+    gameplaySession = built.gameplaySession;
+    world = built.world;
+    inputManager = built.inputManager;
+    // The save records where the player is; after a swap that is here.
+    // Without this the next autosave would still name the region they left.
+    activeRegionIdForSave = input.regionId;
   }
 
   async function runStart(state: WebRuntimeStartState): Promise<void> {
@@ -3501,6 +3622,14 @@ export function createWebRuntimeHost(
     gameplaySession = builtSession;
     world = builtWorld;
     inputManager = builtInput;
+    // A region change later needs what only the boot resolved. Captured
+    // here, once the world is standing, so `swapRegion` never has to guess.
+    regionSwapContext = {
+      state,
+      migratedContent,
+      activeScene,
+      pluginManager
+    };
     // Plan 055 §055.4 — Phase 2: register participants whose
     // subsystems only exist now that gameplayAssembly is
     // constructed, then run the region-aware + default tier
