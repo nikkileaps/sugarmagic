@@ -417,12 +417,78 @@ export function validateProjectContent(
     }
   }
 
+  issues.push(...findMissingPlaceReferences(regions));
   issues.push(...findAmbiguousBehaviorTasks(gameProject, regions));
 
   return {
     valid: !issues.some((issue) => issue.severity === "error"),
     issues
   };
+}
+
+/**
+ * Places named by id that no longer exist: a link to a deleted region, an
+ * arrival on a deleted marker, a behavior task sent to one.
+ *
+ * Errors rather than warnings. A door to nowhere and an NPC with no spot
+ * to stand are broken content, not a question of taste, and both fail
+ * quietly at runtime -- the door does nothing, the NPC reports blocked.
+ * The save gate is where the author finds out.
+ */
+function findMissingPlaceReferences(
+  regions: readonly RegionDocument[]
+): ContentValidationIssue[] {
+  const issues: ContentValidationIssue[] = [];
+  const markerIdsByRegion = new Map(
+    regions.map((region) => [
+      region.identity.id,
+      new Set((region.markers ?? []).map((marker) => marker.markerId))
+    ])
+  );
+
+  for (const region of regions) {
+    const at = `region "${region.displayName}"`;
+
+    for (const volume of region.volumes ?? []) {
+      for (const action of [...volume.onEnterActions, ...volume.onExitActions]) {
+        if (action.type !== "goToRegion" || !action.regionId) continue;
+        const destinationMarkers = markerIdsByRegion.get(action.regionId);
+        if (!destinationMarkers) {
+          issues.push(
+            error(
+              `${at} volume "${volume.volumeId}"`,
+              `Leads to region "${action.regionId}", which does not exist.`
+            )
+          );
+          continue;
+        }
+        if (action.markerId && !destinationMarkers.has(action.markerId)) {
+          issues.push(
+            error(
+              `${at} volume "${volume.volumeId}"`,
+              `Arrives at marker "${action.markerId}", which that region does not have.`
+            )
+          );
+        }
+      }
+    }
+
+    const ownMarkers = markerIdsByRegion.get(region.identity.id)!;
+    for (const behavior of region.behaviors) {
+      for (const task of behavior.tasks) {
+        if (task.target?.kind !== "marker") continue;
+        if (ownMarkers.has(task.target.markerId)) continue;
+        issues.push(
+          error(
+            `${at} behavior "${behavior.displayName}" task "${task.displayName}"`,
+            `Sends the NPC to marker "${task.target.markerId}", which this region does not have.`
+          )
+        );
+      }
+    }
+  }
+
+  return issues;
 }
 
 /**

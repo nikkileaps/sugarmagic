@@ -621,6 +621,7 @@ function QuestActionFields({
   npcDefinitions,
   episodes,
   soundCueDefinitions,
+  regions,
   onChange
 }: {
   action: QuestActionDefinition;
@@ -628,6 +629,8 @@ function QuestActionFields({
   npcDefinitions: NPCDefinition[];
   episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
+  /** Destination sources for `goToRegion`: the regions and their markers. */
+  regions: RegionDocument[];
   onChange: (action: QuestActionDefinition) => void;
 }) {
   switch (action.type) {
@@ -732,6 +735,47 @@ function QuestActionFields({
           onChange={(value) => onChange({ ...action, sceneId: value })}
         />
       );
+
+    case "goToRegion": {
+      const destination = regions.find(
+        (candidate) => candidate.identity.id === action.regionId
+      );
+      return (
+        <Stack gap="xs">
+          <Select
+            size="xs"
+            label="Region"
+            searchable
+            placeholder="Pick a region"
+            data={regions.map((candidate) => ({
+              value: candidate.identity.id,
+              label: candidate.displayName
+            }))}
+            value={action.regionId}
+            onChange={(value) =>
+              // The marker belongs to the old region, so it cannot survive
+              // the region changing.
+              onChange({ ...action, regionId: value, markerId: null })
+            }
+          />
+          <Select
+            size="xs"
+            label="Arrive at"
+            searchable
+            clearable
+            placeholder={
+              action.regionId ? "That region's player start" : "Pick a region first"
+            }
+            data={(destination?.markers ?? []).map((marker) => ({
+              value: marker.markerId,
+              label: marker.displayName
+            }))}
+            value={action.markerId}
+            onChange={(value) => onChange({ ...action, markerId: value })}
+          />
+        </Stack>
+      );
+    }
 
     case "playCue":
     case "stopCue":
@@ -922,6 +966,7 @@ export function QuestActionsEditor({
   npcDefinitions,
   episodes,
   soundCueDefinitions,
+  regions,
   onChange,
   label
 }: {
@@ -930,6 +975,7 @@ export function QuestActionsEditor({
   npcDefinitions: NPCDefinition[];
   episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
+  regions: RegionDocument[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -1006,6 +1052,7 @@ export function QuestActionsEditor({
                 npcDefinitions={npcDefinitions}
                 episodes={episodes}
                 soundCueDefinitions={soundCueDefinitions}
+                regions={regions}
                 onChange={(updated) => {
                   const next = [...actions];
                   next[index] = updated;
@@ -2709,6 +2756,7 @@ export function useQuestWorkspaceView({
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onEnterActions) =>
                 updateNode({ ...selectedNode, onEnterActions })
               }
@@ -2720,6 +2768,7 @@ export function useQuestWorkspaceView({
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onCompleteActions) =>
                 updateNode({ ...selectedNode, onCompleteActions })
               }

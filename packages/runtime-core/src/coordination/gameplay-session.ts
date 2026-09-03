@@ -2202,6 +2202,25 @@ export function createRuntimeGameplaySessionController(
       case "emitEvent":
         return;
 
+      // Authoring landed ahead of the runtime move, which needs the
+      // assembly to be able to swap regions mid-session. Loud rather than
+      // silent: a door that quietly does nothing is indistinguishable from
+      // one that is wired wrong.
+      // [LAW:no-silent-failure] The player keeps playing -- this is the
+      // runtime, and a doorway that does not open yet is not a reason to
+      // stop the game -- but the author hears about it.
+      case "goToRegion":
+        console.warn(
+          "[runtime-core] goToRegion is authored but not yet walkable; " +
+            "mid-session region transition is not implemented.",
+          {
+            regionId: action.regionId,
+            markerId: action.markerId,
+            source: describeQuestActionSource(source)
+          }
+        );
+        return;
+
       default: {
         const exhaustive: never = action;
         console.warn(

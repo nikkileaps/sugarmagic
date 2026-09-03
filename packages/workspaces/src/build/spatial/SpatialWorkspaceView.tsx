@@ -106,6 +106,9 @@ export interface SpatialWorkspaceViewProps {
   npcDefinitions: NPCDefinition[];
   episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
+  /** Every region, so a volume's actions can name another one as a
+   *  destination. `region` above is the one being edited. */
+  regions: RegionDocument[];
   /** Plan 069.8 — bake the region navmesh (studio host action). */
   onBakeNavMesh?: () => void | Promise<void>;
   /** Plan 069.8 — a collider/nav-volume edit postdates the bake. */
@@ -192,6 +195,7 @@ export function useSpatialWorkspaceView(
     npcDefinitions,
     episodes,
     soundCueDefinitions,
+    regions,
     onBakeNavMesh,
     navMeshStale
   } = props;
@@ -545,6 +549,7 @@ export function useSpatialWorkspaceView(
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onEnterActions) => updateVolume({ onEnterActions })}
             />
             <QuestActionsEditor
@@ -554,6 +559,7 @@ export function useSpatialWorkspaceView(
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onExitActions) => updateVolume({ onExitActions })}
             />
 

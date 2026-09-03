@@ -21,6 +21,7 @@ describe("quest action type options", () => {
       "removeItem",
       "playCue",
       "stopCue",
+      "goToRegion",
       "playAnimation",
       "emitEvent",
       "unlockEpisode",

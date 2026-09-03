@@ -447,6 +447,9 @@ export function useBuildProductModeView(
     npcDefinitions,
     episodes: session?.gameProject.episodes ?? [],
     soundCueDefinitions,
+    // The full documents, not the `regions` summary prop: a destination
+    // picker needs each region's markers.
+    regions: session ? Array.from(session.regions.values()) : [],
     onBakeNavMesh: props.onBakeNavMesh,
     navMeshStale: props.navMeshStale
   });
