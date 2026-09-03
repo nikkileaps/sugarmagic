@@ -88,7 +88,38 @@ async function main() {
     log("attaching to Chrome already on :" + PORT);
   }
 
-  const browser = await chromium.connectOverCDP(cdp);
+  // Attaching to a long-lived Chrome sometimes fails with a CDP protocol
+  // error ("Browser context management is not supported") once the browser
+  // has been connected to and dropped a few times. The browser is wedged,
+  // not the run -- so retire it and launch a clean one rather than making
+  // the caller kill it by hand.
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(cdp);
+  } catch (error) {
+    if (launchedByUs) throw error;
+    log("could not attach (" + error.message.split("\n")[0] + "); relaunching Chrome ...");
+    spawn("pkill", ["-f", PROFILE], { stdio: "ignore" });
+    await sleep(2000);
+    const child = spawn(
+      CHROME,
+      [
+        `--remote-debugging-port=${PORT}`,
+        `--user-data-dir=${PROFILE}`,
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--enable-unsafe-webgpu",
+        "--disable-frame-rate-limit",
+        STUDIO
+      ],
+      { detached: true, stdio: "ignore" }
+    );
+    child.unref();
+    launchedByUs = true;
+    for (let i = 0; i < 40 && !(await portUp()); i += 1) await sleep(500);
+    if (!(await portUp())) throw new Error("Chrome debug port never came up");
+    browser = await chromium.connectOverCDP(cdp);
+  }
   const ctx = browser.contexts()[0];
   const findStudio = () => ctx.pages().find((p) => p.url().includes("5173") && !p.url().includes("preview.html"));
   const findPreview = () => ctx.pages().find((p) => p.url().includes("preview.html"));
