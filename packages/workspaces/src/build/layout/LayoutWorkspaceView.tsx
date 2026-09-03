@@ -50,6 +50,7 @@ import {
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
+  createRegionMarker,
   createSceneFolderId,
   type ComposedRegionContents,
   type Scene,
@@ -635,6 +636,15 @@ export function useLayoutWorkspaceView(
     return regionContents.playerPresence;
   }, [region, selectedIds]);
 
+  const selectedMarker = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      (region.markers ?? []).find(
+        (marker) => marker.markerId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, selectedIds]);
+
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
@@ -1203,6 +1213,26 @@ export function useLayoutWorkspaceView(
     onSelect([presenceId]);
   }, [onCommand, onSelect, playerDefinition, region]);
 
+  const handleAddMarker = useCallback(() => {
+    if (!region) return;
+    // Dropped at the origin like every other add, then dragged into place
+    // with the gizmo. Numbered so two markers are distinguishable before
+    // either has been named.
+    const marker = createRegionMarker({
+      displayName: `Marker ${(region.markers ?? []).length + 1}`
+    });
+    onCommand({
+      kind: "CreateRegionMarker",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: { subjectKind: "region-marker", subjectId: marker.markerId },
+      payload: { marker }
+    });
+    onSelect([marker.markerId]);
+  }, [onCommand, onSelect, region]);
+
   const handleAddNPCPresence = useCallback(
     (definition: NPCDefinition) => {
       if (!region) return;
@@ -1415,6 +1445,7 @@ export function useLayoutWorkspaceView(
                   >
                     Player
                   </Menu.Item>
+                  <Menu.Item onClick={handleAddMarker}>Marker</Menu.Item>
                   <Menu.Item
                     onClick={() => {
                       setAddNPCOpen(true);
@@ -1897,6 +1928,60 @@ export function useLayoutWorkspaceView(
                 </>
               )}
             </Stack>
+          </Stack>
+        ) : selectedMarker ? (
+          <Stack gap="md">
+            <Stack gap={4}>
+              <FactRow label="Type" value="Marker" />
+              <FactRow label="Scope" value="🗺️ Region" />
+            </Stack>
+            <TextInput
+              label="Name"
+              size="xs"
+              description="What a door or a behavior task calls this spot."
+              value={selectedMarker.displayName}
+              onChange={(event) =>
+                onCommand({
+                  kind: "UpdateRegionMarker",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "region-marker",
+                    subjectId: selectedMarker.markerId
+                  },
+                  payload: {
+                    markerId: selectedMarker.markerId,
+                    patch: { displayName: event.currentTarget.value }
+                  }
+                })
+              }
+            />
+            <TransformInspector
+              label="Position"
+              value={selectedMarker.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedMarker.markerId,
+                  "position",
+                  axis,
+                  value
+                )
+              }
+            />
+            <TransformInspector
+              label="Facing"
+              value={selectedMarker.transform.rotation}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedMarker.markerId,
+                  "rotation",
+                  axis,
+                  value
+                )
+              }
+            />
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">

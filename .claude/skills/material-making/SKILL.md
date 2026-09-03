@@ -38,6 +38,8 @@ wearing a different disguise.
     FFT Poisson integration, AO derivation, lit preview.
   - `compose_wood.py` - the banded-material strip composer; imports from
     compose_wall.
+  - `compose_stochastic.py` - the patch-quilt composer for stochastic
+    materials.
   - `enhance_clarity.py` - the Replicate enhancement with seam splice.
 - Work in the session scratchpad, never in packages/apps. Only the final
   PNGs go to the material's `textures/` directory.
@@ -54,10 +56,13 @@ This was discovered the hard way, so take it as settled:
   texture, and they are NOT tileable.
 - Consequence for what gets harvested: basecolor pixels come from the
   basecolor panel; the normal from the normal panel; roughness from the
-  roughness panel. The height and AO panels are NOT harvested at all.
-  Height is computed by integrating the composed normal; AO is derived from
-  that height. That way normal, height, and AO describe one consistent
-  surface instead of three unrelated paintings.
+  roughness panel. For grid and banded materials the height and AO panels
+  are NOT harvested: height is computed by integrating the composed normal,
+  and AO is derived from that height, so that normal, height, and AO
+  describe one consistent surface instead of three unrelated paintings.
+  Stochastic materials are the one exception - they harvest the height
+  panel (see step 6 for the mechanism); AO is still derived from height in
+  every family.
 - Cross-map registration happens at the shared layout grid level - brick
   boundaries align because the composed grid is shared - never at pixel
   level. Faces will not match blotch-for-blotch across maps, and that is
@@ -126,6 +131,16 @@ Banded materials (wood, `compose_wood.py`):
   direction integrates into a herringbone height weave - this also
   happened.
 
+Stochastic materials (concrete-like: isotropic mottle, no grid, no bands;
+`compose_stochastic.py`):
+
+- The composer is a 2D patch quilt: a GRID x GRID lattice of cells, each
+  filled from a distinct source window chosen via a shuffled lattice of
+  anchors (prevents twinning), feathered ~24 px, modulo paste.
+- Flips are free per patch - no directional structure means no chevron or
+  herringbone risk. But the normal channel inversion math in step 5 still
+  applies to every flip, whatever the family.
+
 ### 5. Normal map math (exact, not optional)
 
 - Horizontal flip of a normal cell = mirror + invert the red channel.
@@ -144,11 +159,23 @@ Banded materials (wood, `compose_wood.py`):
   inversion, rough_wood did not - so run the integration and read the
   symptom fresh for every new material.
 
-### 6. Height and AO (computed, never harvested)
+### 6. Height and AO
 
-Height = FFT Poisson integration of the composed normal on the periodic
-domain. Convention (OpenGL, image rows increasing downward):
+For grid and banded materials, height = FFT Poisson integration of the
+composed normal on the periodic domain - never harvested. Convention
+(OpenGL, image rows increasing downward):
 `dh/dx = -nx/nz`, `dh/dy_img = +ny/nz`.
+
+Exception, verified by side-by-side on concrete: for the stochastic
+family, harvest the height panel and quilt it like the other maps; do NOT
+integrate the normal. A near-flat noisy normal integrates into
+mid-frequency churn - Poisson integration amplifies noise inversely with
+frequency - and no spectral shaping recovers the spec height's calm
+clouds, because the normal panel does not contain them. The
+integrate-from-normal rule exists to keep relief registered at feature
+edges; a stochastic material has no edges to misregister, so the rule's
+purpose survives the exception. Grid and banded materials keep
+integration.
 
 High-pass the result to kill the wall-scale drift the integration
 accumulates: sigma 60 (of 1024) for brick, sigma 30 for wood, then
@@ -158,12 +185,21 @@ percentile-normalize. Wood also gets its contrast compressed (x0.55 around
 AO = 1 - depth * positive part of (blurred height - height), blur sigma
 ~8-10, depth ~0.45-0.6.
 
-### 7. Basecolor enhancement (optional; chosen for both shipped materials)
+### 7. Basecolor enhancement (optional; used on every shipped material so far)
 
-Replicate clarity-upscaler (`philz1337x/clarity-upscaler`), creativity
-0.25, resemblance 1.0, scale_factor 2, fixed seed. This is content-locked
-enhancement of harvested pixels, not generation - verify drift (mean abs
-diff vs a Lanczos-2x of the input) stays small, around 2-4.
+Replicate clarity-upscaler (`philz1337x/clarity-upscaler`), resemblance
+1.0, scale_factor 2, fixed seed. This is content-locked enhancement of
+harvested pixels, not generation - verify drift (mean abs diff vs a
+Lanczos-2x of the input) stays small, around 2-4.
+
+Creativity is set by family. 0.25 is safe only when strong structure pins
+the model (brick, wood). On a soft stochastic surface 0.25 reinterpreted
+the spec's cellular mottle as troweled plaster - drift 4.1 plus a visible
+character change, rejected; creativity 0.1 preserved the mottle and
+crisped it - drift 3.1, accepted. Rule: 0.25 for structured materials,
+0.1 for stochastic ones. And always eyeball a matched-crop before/after
+regardless of the drift number, because drift around 4 can hide a full
+character change.
 
 Diffusion breaks wrap edges. So run it twice: once on the tile, once on a
 half-tile-rolled copy, then splice - the rolled run is un-rolled, and its
@@ -246,8 +282,10 @@ These are the moments that have actually bitten. If you remember nothing
 else at hour three:
 
 1. Five different paintings, not five views. Harvest basecolor, normal,
-   roughness from their own panels; compute height and AO from the composed
-   normal; register at the grid level only.
+   roughness from their own panels; integrate height from the composed
+   normal for grid and banded materials (stochastic harvests its height
+   panel instead); derive AO from height; register at the layout level
+   only.
 2. A panel-edge feature that looks complete is not complete. No structure
    line in the profile = no joint, whatever your eyes say.
 3. Flipped normal cells need their channel inverted; every cell's mean X/Y
@@ -256,6 +294,8 @@ else at hour three:
 4. Uniform flips per row for banded materials, and no vertical flips at
    all.
 5. Never diffusion on a normal map. Enhancement runs twice with a
-   half-roll splice or the wrap seams break.
+   half-roll splice or the wrap seams break. Creativity 0.25 only where
+   structure pins the model; 0.1 for stochastic, and eyeball a matched
+   crop either way.
 6. Look at every intermediate before proceeding, and name the mechanism
    before fixing anything.
