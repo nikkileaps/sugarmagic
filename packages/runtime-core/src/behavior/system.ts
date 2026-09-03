@@ -145,6 +145,19 @@ export interface NpcBehaviorSlice {
   npcs: Record<
     string,
     {
+      /**
+       * The region the NPC was standing in. The same NPC definition can
+       * be placed in more than one region, so without this a position
+       * saved in one would be applied in the other on restore.
+       *
+       * Optional: a save written before region changes existed has none,
+       * and restores unconditionally, which is what it did then.
+       *
+       * This prevents a WRONG restore. It does not give an NPC a memory
+       * per region -- the slice is rewritten from the live world, so
+       * leaving a region still forgets where its NPCs were standing.
+       */
+      regionId?: string | null;
       position: { x: number; y: number; z: number };
       /** Where the NPC was heading: an AREA or a MARKER id. Named for
        *  the question rather than one of the answers. Pre-marker saves
@@ -964,6 +977,7 @@ export function createRuntimeNpcBehaviorSystem(
         if (!position) continue;
         const state = movementStateByNpcId.get(npc.npcDefinitionId) ?? null;
         npcs[npc.npcDefinitionId] = {
+          regionId: region.identity.id,
           position: { x: position.x, y: position.y, z: position.z },
           target: state
             ? {
@@ -1003,6 +1017,11 @@ export function createRuntimeNpcBehaviorSystem(
           console.warn(
             `[behavior] restore: dropping NPC "${npcDefinitionId}" — no matching definition in this region.`
           );
+          continue;
+        }
+        // Saved somewhere else. Leaving the NPC at its authored spot is
+        // right; putting it where it stood in another region is not.
+        if (saved.regionId && saved.regionId !== region.identity.id) {
           continue;
         }
         const position = world.getComponent(entry.entity, Position);

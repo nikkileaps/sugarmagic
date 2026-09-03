@@ -570,6 +570,16 @@ export interface RuntimePluginInstance {
   ) => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   /**
+   * The player moved to another region mid-session; anything a plugin
+   * snapshotted about the old one is now wrong.
+   *
+   * Separate from `init` because they are different jobs: `init` runs once
+   * per page and does one-time setup, which is why it is guarded against
+   * running twice. This can run many times, and only re-binds what the
+   * world changing invalidates.
+   */
+  onRegionChanged?: (context: RuntimePluginContext) => Promise<void> | void;
+  /**
    * Get ready before the first frame renders.
    *
    * Runs once at boot, AFTER the save has been restored and starting quests
@@ -612,6 +622,12 @@ export interface RuntimePluginManager {
   /** See `RuntimePluginInstance.beforeFirstFrame`. Call once, after the
    *  save restore and before the first frame. */
   beforeFirstFrame: () => Promise<void>;
+  /** See `RuntimePluginInstance.onRegionChanged`. Call after the world has
+   *  been rebuilt for the new region, so plugins rebind to what is now
+   *  standing rather than what they snapshotted at boot. */
+  notifyRegionChanged: (
+    context: Omit<RuntimePluginContext, "boot">
+  ) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
@@ -670,6 +686,22 @@ export function createRuntimePluginManager(
         });
       }
       initialized = true;
+    },
+    /** Runs for every plugin; one failure does not stop the rest, on the
+     *  same reasoning as `beforeFirstFrame` below -- a plugin that throws
+     *  costs its own freshness and nothing else. */
+    async notifyRegionChanged(context) {
+      for (const plugin of plugins) {
+        try {
+          await plugin.onRegionChanged?.({ boot, ...context });
+        } catch (error) {
+          console.warn(
+            `[runtime-core] ${plugin.pluginId} could not rebind after a region ` +
+              "change; it may still be reading the region the player left.",
+            error
+          );
+        }
+      }
     },
     async beforeFirstFrame() {
       for (const plugin of plugins) {

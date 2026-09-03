@@ -1437,6 +1437,9 @@ export function createWebRuntimeHost(
     createHostPlayerParticipant({
       getWorld: () => world,
       getCurrentRegionId: () => activeRegionIdForSave,
+      // The visual root holds the live heading: the movement system writes
+      // it every frame the player walks, so it is where "facing" lives.
+      getPlayerYaw: () => playerVisualController?.root.rotation.y ?? null,
       applyRestoredSlice: (data) => {
         hostPlayerRestore = data;
       }
@@ -2741,11 +2744,15 @@ export function createWebRuntimeHost(
       // its last yaw. Without seeding it the player ignores its authored
       // spawn rotation and stands at yaw 0 until it first moves. Only yaw
       // matters for an upright character, matching the velocity heading.
-      const authoredSpawnRotation =
-        arriveAt?.rotation ??
-        activeRegionContents?.playerPresence?.transform.rotation;
-      if (authoredSpawnRotation) {
-        playerVisualController.root.rotation.y = authoredSpawnRotation[1];
+      // Which way the player faces on arrival, most specific first: a
+      // doorway they just walked through, then where the save left them,
+      // then the authored spawn direction.
+      const spawnYaw =
+        arriveAt?.rotation[1] ??
+        hostPlayerRestore?.playerYaw ??
+        activeRegionContents?.playerPresence?.transform.rotation[1];
+      if (typeof spawnYaw === "number") {
+        playerVisualController.root.rotation.y = spawnYaw;
       }
       void playerVisualController.apply({
         playerDefinition: state.playerDefinition,
@@ -2982,6 +2989,11 @@ export function createWebRuntimeHost(
     // The save records where the player is; after a swap that is here.
     // Without this the next autosave would still name the region they left.
     activeRegionIdForSave = input.regionId;
+
+    // Plugins snapshotted the region at boot and `init` is guarded against
+    // running twice, so without this sugarlang keeps warming conversations
+    // for NPCs in the region the player just left.
+    await built.gameplayAssembly.notifyPluginsOfRegion();
   }
 
   async function runStart(state: WebRuntimeStartState): Promise<void> {

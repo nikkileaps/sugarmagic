@@ -443,6 +443,12 @@ export interface RuntimeGameplayAssembly {
   readonly pluginManager: RuntimePluginManager | null;
   readonly gameplaySession: RuntimeGameplaySessionController;
   /**
+   * Tell every plugin the world has been rebuilt for another region. Call
+   * after a mid-session region change; `init` is guarded against running
+   * twice, so this is the only way a plugin hears about it.
+   */
+  notifyPluginsOfRegion: () => Promise<void>;
+  /**
    * Settles when every plugin's `init` has run.
    *
    * Boot does not wait on this -- a plugin that is slow to initialize must not
@@ -2912,8 +2918,14 @@ export function createRuntimeGameplayAssembly(
   const gameplaySession = createRuntimeGameplaySessionController(options);
 
   let pluginsInitialized: Promise<void> = Promise.resolve();
+  // Built once and kept, so the same context that initialized the plugins is
+  // the one handed back to them when the region changes. Two constructions
+  // would drift the moment either grew a field.
+  let pluginContext: Parameters<
+    NonNullable<typeof pluginManager>["init"]
+  >[0] | null = null;
   if (pluginManager) {
-    pluginsInitialized = pluginManager.init({
+    pluginContext = {
       blackboard: gameplaySession.blackboard,
       assetSources: options.assetSources,
       preNewGameStepAnswers: options.preNewGameStepAnswers ?? {},
@@ -2946,7 +2958,8 @@ export function createRuntimeGameplayAssembly(
       questDefinitions: options.questDefinitions,
       buildConversationRuntimeContext:
         gameplaySession.buildConversationRuntimeContext
-    });
+    };
+    pluginsInitialized = pluginManager.init(pluginContext);
     options.world.addSystem(new RuntimePluginSystem(pluginManager));
   }
 
@@ -2954,6 +2967,16 @@ export function createRuntimeGameplayAssembly(
     pluginManager,
     gameplaySession,
     pluginsInitialized,
+    /**
+     * Tell every plugin the world it is looking at has been rebuilt for
+     * another region. `init` is guarded against running twice, so a plugin
+     * that snapshotted the region at boot has no other way to hear about
+     * it.
+     */
+    async notifyPluginsOfRegion(): Promise<void> {
+      if (!pluginManager || !pluginContext) return;
+      await pluginManager.notifyRegionChanged(pluginContext);
+    },
     async dispose() {
       gameplaySession.dispose();
       await pluginManager?.dispose();
