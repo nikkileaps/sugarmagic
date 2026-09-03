@@ -83,9 +83,9 @@ function buildCurrentLocationEvidence(
   if (npcCurrentGoal?.goal) {
     locationSegments.push(`The NPC's current goal is ${npcCurrentGoal.goal}.`);
   }
-  if (npcMovement?.targetAreaDisplayName) {
+  if (npcMovement?.destinationDisplayName) {
     locationSegments.push(
-      `The NPC movement status is ${npcMovement.status} toward ${npcMovement.targetAreaDisplayName}.`
+      `The NPC movement status is ${npcMovement.status} toward ${npcMovement.destinationDisplayName}.`
     );
   }
   if (currentLocation.regionDisplayName) {

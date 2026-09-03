@@ -70,7 +70,7 @@ export interface BasePromptContext {
   /** NPC's movement status and target. */
   npcMovement: {
     status: string;
-    targetAreaDisplayName?: string | null;
+    destinationDisplayName?: string | null;
   } | null;
 
   /**

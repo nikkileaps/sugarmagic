@@ -181,7 +181,7 @@ describe("runtime NPC behavior system", () => {
       "collect_delivery"
     );
     expect(getEntityMovement(blackboard, "npc:rick-roll")).toMatchObject({
-      targetAreaId: "dock"
+      destinationId: "dock"
     });
     expect(system.getCurrentTask("npc:rick-roll")).toEqual({
       npcDefinitionId: "npc:rick-roll",
@@ -410,7 +410,7 @@ describe("runtime NPC behavior system", () => {
       "serve_customers"
     );
     expect(getEntityMovement(blackboard, "npc:rick-roll")).toMatchObject({
-      targetAreaId: "shop",
+      destinationId: "shop",
       status: "at_target"
     });
     expectPositionWithinArea(world.getComponent(entity, Position), region, "shop");
@@ -997,7 +997,7 @@ describe("069.9 — path-following state machine across frames", () => {
       activeQuests: [{ questDefinitionId: "quest:find-suitcase", stageId: "stage:search" }]
     });
     expect(calls()).toBeGreaterThanOrEqual(2);
-    expect(getEntityMovement(blackboard, "npc:rick-roll")?.targetAreaId).toBe(
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.destinationId).toBe(
       "shop"
     );
   });

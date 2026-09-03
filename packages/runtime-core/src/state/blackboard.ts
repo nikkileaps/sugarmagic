@@ -126,11 +126,12 @@ export type EntityMovementStatus = "idle" | "en_route" | "at_target" | "blocked"
 
 export interface EntityMovementFact {
   entityId: string;
-  targetAreaId: string | null;
-  targetAreaDisplayName: string | null;
+  /** The place the NPC is heading -- an area or a marker id. */
+  destinationId: string | null;
+  destinationDisplayName: string | null;
   status: EntityMovementStatus;
   distanceToTargetMeters: number | null;
-  failureReason: "stuck" | "missing-target-area" | null;
+  failureReason: "stuck" | "missing-destination" | null;
 }
 
 export interface EntityCurrentActivityFact {

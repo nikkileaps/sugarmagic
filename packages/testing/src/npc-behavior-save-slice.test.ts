@@ -171,6 +171,48 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
       expect(world.getComponent(entity, Position)!.x).toBe(5);
     });
 
+    it("reads a pre-marker save that spells the destination `areaId`", () => {
+      // The field holds an area id OR a marker id since markers landed, so
+      // it is named for the question now. Saves written before that say
+      // `areaId`; losing it would be harmless (the destination re-derives
+      // from the task next tick) but reading it costs one `??`.
+      const { world, entity } = buildWorldWithNpc("npc:alpha", {
+        x: 0,
+        y: 0,
+        z: 0
+      });
+      const system = createRuntimeNpcBehaviorSystem({
+        region: createDefaultRegion({ regionId: "region:test", displayName: "Test" }),
+        world,
+        blackboard: createRuntimeBlackboard(),
+        npcEntities: [
+          {
+            npcDefinitionId: "npc:alpha",
+            presenceId: "presence:alpha",
+            entity
+          }
+        ]
+      });
+
+      system.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          npcs: {
+            "npc:alpha": {
+              position: { x: 7, y: 0, z: 7 },
+              target: { areaId: "area:dock", taskId: "task:go" },
+              status: "en_route"
+            }
+          }
+        } as never
+      });
+
+      expect(system.serializeSaveSlice().npcs["npc:alpha"]!.target).toEqual({
+        destinationId: "area:dock",
+        taskId: "task:go"
+      });
+    });
+
     it("deserialize(null) is a no-op", () => {
       const { world, entity } = buildWorldWithNpc("npc:alpha", {
         x: 0,
@@ -217,7 +259,7 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
           npcs: {
             "npc:alpha": {
               position: { x: 3, y: 0, z: 4 },
-              target: { areaId: "area:dock", taskId: "task:go-to-dock" },
+              target: { destinationId: "area:dock", taskId: "task:go-to-dock" },
               status: "en_route"
             }
           }
@@ -225,7 +267,7 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
       });
       const slice = system.serializeSaveSlice();
       expect(slice.npcs["npc:alpha"]!.target).toEqual({
-        areaId: "area:dock",
+        destinationId: "area:dock",
         taskId: "task:go-to-dock"
       });
       expect(slice.npcs["npc:alpha"]!.status).toBe("en_route");

@@ -327,7 +327,10 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         npcCurrentActivity: npcCurrentActivity?.activity ?? null,
         npcCurrentGoal: npcCurrentGoal?.goal ?? null,
         npcMovement: npcMovement?.status
-          ? { status: npcMovement.status, targetAreaDisplayName: npcMovement.targetAreaDisplayName }
+          ? {
+              status: npcMovement.status,
+              destinationDisplayName: npcMovement.destinationDisplayName
+            }
           : null,
         loreContextSummary,
         recentHistory: input.state.history.slice(-4),

@@ -323,7 +323,7 @@ function buildWorldStateUserLines(
 
     fact(
       context.npcMovement && !suppress
-        ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
+        ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.destinationDisplayName ? ` toward ${context.npcMovement.destinationDisplayName}` : ""}.`
         : null
     )
   ];
