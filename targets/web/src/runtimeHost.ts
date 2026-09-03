@@ -51,6 +51,7 @@ import {
   type AudioMixerSettings,
   type UITheme,
   composeRegionContents,
+  type ComposedRegionContents,
   createDefaultEpisode,
   DEFAULT_EPISODE_END_ROUTING,
   DEFAULT_EPISODE_ID,
@@ -2262,6 +2263,317 @@ export function createWebRuntimeHost(
     return boots.run(() => runStart(state));
   }
 
+  /**
+   * Build the world for one region: resolve which region, compose it with
+   * the active Scene, apply its landscape, build its collision world and
+   * load its navmesh, then reconcile the renderables.
+   *
+   * [LAW:decomposition] Named and callable rather than inlined in the boot,
+   * because a mid-session region transition (epic #226 story 13) is the
+   * same work with a different `resolvedActiveRegionId` -- everything else
+   * a boot does around it is per-page and must not repeat.
+   *
+   * Deliberately NOT reordered out of the boot: the statements stay where
+   * they were and in the order they were. Only their home changed.
+   */
+  async function buildRegionWorld(input: {
+    state: WebRuntimeStartState;
+    migratedContent: ReturnType<typeof migrateToScenes>;
+    activeScene: Scene | null;
+    /** Which region to build. The one thing a swap changes. */
+    resolvedActiveRegionId: string | null;
+    /** Both are non-null by the time this runs; the caller has already
+     *  mounted them, so the signature says so rather than re-checking. */
+    renderView: RenderView;
+    scene: THREE.Scene;
+  }): Promise<{
+    activeRegion: RegionDocument | null;
+    activeRegionContents: ComposedRegionContents | null;
+    collisionWorld: ReturnType<typeof createEmptyCollisionWorld>;
+  }> {
+    const {
+      state,
+      migratedContent,
+      activeScene,
+      resolvedActiveRegionId,
+      renderView,
+      scene
+    } = input;
+      const activeRegion = getActiveRegion(
+        migratedContent.regions,
+        resolvedActiveRegionId ??
+          (activeScene && activeScene.regionId.length > 0
+            ? activeScene.regionId
+            : null) ??
+          state.activeRegionId ??
+          null
+      );
+      // Composed Base + Overlay view (Pattern 1) — every presence /
+      // spawn read below sources from this, never region fields.
+      const activeRegionContents = activeRegion
+        ? composeRegionContents(activeRegion, activeScene)
+        : null;
+      // Plan 059 §059.1 — music resolution. In-game: the Scene's
+      // audioOverride shadows the project default; null = silence
+      // (the intended default — BotW model, sounds cued by
+      // actions). Menu: its own slot, playing over the start menu
+      // and returning on quit-to-menu. (Closes Plan 058's
+      // audioOverride deferral.)
+      sceneMusicCueIdForSession =
+        activeScene?.audioOverride?.backgroundMusicId ??
+        state.musicBindings?.defaultBackgroundMusicId ??
+        null;
+      menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
+      // Plan 059 §059.3 — exit/entry sequence inputs.
+      creditsThemeCueIdForSession =
+        state.musicBindings?.creditsThemeMusicId ?? null;
+      bootCreditsDefinition = state.creditsDefinition ?? null;
+      bootGameTitle = state.gameTitle ?? null;
+      // Plan 092.6 — registered BEFORE anything opens storage. Every database
+      // name on the player's device leads with it, and the helper that builds
+      // those names throws without it rather than sharing an origin's storage
+      // between two games.
+      registerActiveGameId(state.gameId ?? null);
+      // Plan 058 §058.4 — per-Scene environment override: the
+      // projector reads state.activeEnvironmentId, so a Scene with
+      // an override shadows the authored/boot value; null falls
+      // through untouched.
+      renderEngineProjector.push(
+        activeScene?.environmentOverride
+          ? {
+              ...state,
+              activeEnvironmentId: activeScene.environmentOverride.environmentId
+            }
+          : state,
+        activeRegion
+      );
+      const landscapeApplyResult = renderView.landscapeController.applyLandscape(
+        activeRegion?.landscape ?? null,
+        state.contentLibrary,
+        state.assetSources
+      );
+      // Preview-vs-editor divergence breadcrumb: which region's landscape
+      // the game actually applied, and any warnings the controller
+      // returned (previously swallowed).
+      console.info("[web-runtime] landscape-apply", {
+        regionId: activeRegion?.identity.id ?? null,
+        hasLandscape: Boolean(activeRegion?.landscape),
+        surfaceSlots: (activeRegion?.landscape?.surfaceSlots ?? []).map(
+          (slot) => `${slot.displayName}:${slot.surface?.kind ?? "none"}`
+        ),
+        warnings: landscapeApplyResult.warnings
+      });
+      for (const warning of landscapeApplyResult.warnings) {
+        console.warn("[web-runtime] landscape-apply warning", warning);
+      }
+
+      // Plan 069.2 — the collision world, built once per start from the
+      // resolved scene objects (rebuild-on-start covers region/scene switches
+      // and preview live edits). Populated inside the activeRegion block
+      // below; consumed by the CollisionSystem registered after MovementSystem.
+      let collisionWorld = createEmptyCollisionWorld();
+      // Plan 069.9 — the baked navmesh pathfinder, loaded async from the
+      // artifact blob; NPCs follow it once ready (straight-line until then, and
+      // forever in unbaked regions). Outer-scoped so teardown frees it.
+      navMeshPathfinder?.destroy();
+      navMeshPathfinder = null;
+      const navMeshEpoch = ++navMeshLoadEpoch;
+      if (activeRegion) {
+        const region = activeRegion;
+        const objects = resolveSceneObjects(region, {
+          contentLibrary: state.contentLibrary,
+          playerDefinition: state.playerDefinition,
+          itemDefinitions: state.itemDefinitions,
+          npcDefinitions: state.npcDefinitions,
+          includePlayerPresence: false,
+          activeScene
+        });
+        // Plan 069.5 — blocker / containment volumes join the collision world
+        // alongside the prop colliders (conditional gates refreshed per frame
+        // by the gameplay session, which holds the same world by reference).
+        collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
+        // Plan 069.9 — resolve the navmesh artifact blob (published to the
+        // asset-source store at bake) and load a pathfinder off the main path.
+        const navMeshUrl = region.navMesh
+          ? state.assetSources[region.navMesh.assetPath]
+          : undefined;
+        if (navMeshUrl) {
+          void (async () => {
+            try {
+              const response = await fetch(navMeshUrl);
+              // A miss on a static host answers with an HTML error page, and
+              // importNavMesh accepts those bytes silently -- then the first
+              // path query crashes the WASM and kills the frame loop. Treat a
+              // non-OK response as "no navmesh" (straight-line fallback).
+              if (!response.ok) {
+                console.warn(
+                  `[web-runtime] navmesh artifact fetch failed (${response.status}) -- NPCs fall back to straight-line steering`,
+                  navMeshUrl
+                );
+                return;
+              }
+              const bytes = new Uint8Array(await response.arrayBuffer());
+              const pathfinder = await loadNavMeshPathfinder(bytes);
+              // A newer start() superseded this load — free it, don't assign
+              // (else we'd overwrite the current mesh + leak the new one).
+              if (navMeshEpoch !== navMeshLoadEpoch) {
+                pathfinder.destroy();
+                return;
+              }
+              navMeshPathfinder = pathfinder;
+            } catch (error) {
+              console.warn("[web-runtime] navmesh load failed", error);
+            }
+          })();
+        }
+        // Plan 057 — item presences run through the shared filter
+        // helper so this visual-spawn path and the ECS spawn path
+        // in gameplay-session apply the same filter set. New
+        // filters (Plan 058 Scene gating, etc.) compose into
+        // `worldPresenceTracker.shouldSkip` at the host and both
+        // paths see them automatically. Non-item scene objects
+        // (NPCs, static assets) don't have a filter surface today
+        // and pass through unchanged.
+        const activeItemPresenceIds = new Set<string>();
+        iterateActiveItemPresences(
+          activeRegionContents?.itemPresences ?? [],
+          {
+            shouldSkip: (presenceId) =>
+              worldPresenceTracker.shouldSkip(
+                activeRegionIdForSave,
+                activeSceneIdForSave,
+                presenceId
+              )
+          },
+          (presence) => {
+            activeItemPresenceIds.add(presence.presenceId);
+          }
+        );
+        // Plan 070.2 — one shared reconciler builds every scene renderable
+        // (was two hand-rolled paths here: instanced grouping by
+        // representationKey + the singleton clone/sanitize/scale/shadow/
+        // parent/shader sequence). Grouping ON for the game; the studio keeps
+        // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
+        // is excluded upstream (includePlayerPresence: false).
+        renderableReconciler = createRenderableReconciler({
+          parent: scene,
+          resolveUrl: (object) =>
+            object.modelSourcePath
+              ? renderView!.assetResolver.resolveAssetUrl(
+                  object.modelSourcePath
+                ) ?? null
+              : null,
+          loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+          createFallback: (object) => getSceneObjectFallback(object),
+          shaderRuntime: renderView!.shaderRuntime,
+          getFileSources: () => currentAssetSources,
+          enableShadows: (renderableRoot) =>
+            renderView!.enableShadowsOnObject(renderableRoot),
+          grouping: true,
+          isInstanceable: assetObjectIsInstanceable,
+          validate: validateRenderableAsset,
+          logger: {
+            warn: (message, payload) =>
+              console.warn(`[web-runtime] ${message}`, payload)
+          },
+          // The mixer goes away with the entry, so a one-shot listener on it must
+          // come off first. This is the hook's first consumer.
+          onEntryWillRemove: (entry) =>
+            releaseNpcOneShot(entry.host as HostEntryData),
+          onEntryLoaded: (entry, renderable) => {
+            // An NPC gets one AnimationMixer plus every clip bound to it, kept
+            // in the entry's host slot. The frame loop ticks the mixer via
+            // npcMixer() and swaps slots with setNpcAnimationSlot().
+            if (entry.object.kind !== "npc") {
+              return;
+            }
+            const presence = activeRegionContents?.npcPresences.find(
+              (p) => p.presenceId === entry.object.instanceId
+            );
+            const npcDefinition = presence
+              ? state.npcDefinitions.find(
+                  (d) => d.definitionId === presence.npcDefinitionId
+                )
+              : null;
+            const bindings = npcDefinition?.presentation.animationAssetBindings;
+            if (!bindings) {
+              return;
+            }
+            const slotSources = (
+              Object.entries(bindings) as Array<[NPCAnimationSlot, string | null]>
+            ).flatMap(([slot, bindingId]) => {
+              const animDef = bindingId
+                ? getCharacterAnimationDefinition(state.contentLibrary, bindingId)
+                : null;
+              const sourceUrl = animDef
+                ? state.assetSources[animDef.source.relativeAssetPath] ?? null
+                : null;
+              return sourceUrl ? [{ slot, sourceUrl }] : [];
+            });
+            if (slotSources.length === 0) {
+              return;
+            }
+            void Promise.all(
+              slotSources.map(({ slot, sourceUrl }) =>
+                gltfLoader
+                  .loadAsync(sourceUrl)
+                  .then((animGltf) => ({ slot, clip: animGltf.animations[0] ?? null }))
+                  .catch((error) => {
+                    // One unreadable clip must not cost the NPC the others: a
+                    // missing walk should leave it idling, not standing in its
+                    // bind pose.
+                    console.error("[web-runtime] npc-animation-load-failed", {
+                      instanceId: entry.object.instanceId,
+                      slot,
+                      sourceUrl,
+                      error
+                    });
+                    return { slot, clip: null };
+                  })
+              )
+            ).then((loaded) => {
+              const clips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
+              for (const { slot, clip } of loaded) {
+                if (clip) {
+                  clips.set(slot, clip);
+                }
+              }
+              if (clips.size === 0) {
+                return;
+              }
+              const host = entry.host as HostEntryData;
+              host.mixer = new THREE.AnimationMixer(renderable);
+              host.animationClips = clips;
+              // Start idle where it exists, otherwise whatever is bound, so an
+              // NPC with only a walk clip still animates instead of freezing.
+              setNpcAnimationSlot(
+                entry,
+                clips.has("idle") ? "idle" : [...clips.keys()][0]!
+              );
+            })
+            .catch((error) => {
+              // Mixer construction and slot selection run after the loads
+              // resolve, so their failures land here rather than in the
+              // per-clip catch above. A player mid-session keeps playing with
+              // an unanimated NPC.
+              console.error("[web-runtime] npc-animation-bind-failed", {
+                instanceId: entry.object.instanceId,
+                error
+              });
+            });
+          }
+        });
+        renderableReconciler.reconcile(
+          objects.filter(
+            (object) =>
+              object.kind !== "item" ||
+              activeItemPresenceIds.has(object.instanceId)
+          )
+        );
+      }
+    return { activeRegion, activeRegionContents, collisionWorld };
+  }
+
   async function runStart(state: WebRuntimeStartState): Promise<void> {
     // Plan 070.1 — wall-clock the whole boot (the PREVIEW_BOOT reboot cost).
     const bootStart = ownerWindow.performance.now();
@@ -2757,278 +3069,15 @@ export function createWebRuntimeHost(
     // (Studio Preview's edited region). A Scene now always names its
     // region, so the old "no starting region, fall through to the first
     // one" rung is gone.
-    const activeRegion = getActiveRegion(
-      migratedContent.regions,
-      resolvedActiveRegionId ??
-        (activeScene && activeScene.regionId.length > 0
-          ? activeScene.regionId
-          : null) ??
-        state.activeRegionId ??
-        null
-    );
-    // Composed Base + Overlay view (Pattern 1) — every presence /
-    // spawn read below sources from this, never region fields.
-    const activeRegionContents = activeRegion
-      ? composeRegionContents(activeRegion, activeScene)
-      : null;
-    // Plan 059 §059.1 — music resolution. In-game: the Scene's
-    // audioOverride shadows the project default; null = silence
-    // (the intended default — BotW model, sounds cued by
-    // actions). Menu: its own slot, playing over the start menu
-    // and returning on quit-to-menu. (Closes Plan 058's
-    // audioOverride deferral.)
-    sceneMusicCueIdForSession =
-      activeScene?.audioOverride?.backgroundMusicId ??
-      state.musicBindings?.defaultBackgroundMusicId ??
-      null;
-    menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
-    // Plan 059 §059.3 — exit/entry sequence inputs.
-    creditsThemeCueIdForSession =
-      state.musicBindings?.creditsThemeMusicId ?? null;
-    bootCreditsDefinition = state.creditsDefinition ?? null;
-    bootGameTitle = state.gameTitle ?? null;
-    // Plan 092.6 — registered BEFORE anything opens storage. Every database
-    // name on the player's device leads with it, and the helper that builds
-    // those names throws without it rather than sharing an origin's storage
-    // between two games.
-    registerActiveGameId(state.gameId ?? null);
-    // Plan 058 §058.4 — per-Scene environment override: the
-    // projector reads state.activeEnvironmentId, so a Scene with
-    // an override shadows the authored/boot value; null falls
-    // through untouched.
-    renderEngineProjector.push(
-      activeScene?.environmentOverride
-        ? {
-            ...state,
-            activeEnvironmentId: activeScene.environmentOverride.environmentId
-          }
-        : state,
-      activeRegion
-    );
-    const landscapeApplyResult = renderView.landscapeController.applyLandscape(
-      activeRegion?.landscape ?? null,
-      state.contentLibrary,
-      state.assetSources
-    );
-    // Preview-vs-editor divergence breadcrumb: which region's landscape
-    // the game actually applied, and any warnings the controller
-    // returned (previously swallowed).
-    console.info("[web-runtime] landscape-apply", {
-      regionId: activeRegion?.identity.id ?? null,
-      hasLandscape: Boolean(activeRegion?.landscape),
-      surfaceSlots: (activeRegion?.landscape?.surfaceSlots ?? []).map(
-        (slot) => `${slot.displayName}:${slot.surface?.kind ?? "none"}`
-      ),
-      warnings: landscapeApplyResult.warnings
-    });
-    for (const warning of landscapeApplyResult.warnings) {
-      console.warn("[web-runtime] landscape-apply warning", warning);
-    }
-
-    // Plan 069.2 — the collision world, built once per start from the
-    // resolved scene objects (rebuild-on-start covers region/scene switches
-    // and preview live edits). Populated inside the activeRegion block
-    // below; consumed by the CollisionSystem registered after MovementSystem.
-    let collisionWorld = createEmptyCollisionWorld();
-    // Plan 069.9 — the baked navmesh pathfinder, loaded async from the
-    // artifact blob; NPCs follow it once ready (straight-line until then, and
-    // forever in unbaked regions). Outer-scoped so teardown frees it.
-    navMeshPathfinder?.destroy();
-    navMeshPathfinder = null;
-    const navMeshEpoch = ++navMeshLoadEpoch;
-    if (activeRegion) {
-      const region = activeRegion;
-      const objects = resolveSceneObjects(region, {
-        contentLibrary: state.contentLibrary,
-        playerDefinition: state.playerDefinition,
-        itemDefinitions: state.itemDefinitions,
-        npcDefinitions: state.npcDefinitions,
-        includePlayerPresence: false,
-        activeScene
+    const { activeRegion, activeRegionContents, collisionWorld } =
+      await buildRegionWorld({
+        state,
+        migratedContent,
+        activeScene,
+        resolvedActiveRegionId,
+        renderView: renderView!,
+        scene: scene!
       });
-      // Plan 069.5 — blocker / containment volumes join the collision world
-      // alongside the prop colliders (conditional gates refreshed per frame
-      // by the gameplay session, which holds the same world by reference).
-      collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
-      // Plan 069.9 — resolve the navmesh artifact blob (published to the
-      // asset-source store at bake) and load a pathfinder off the main path.
-      const navMeshUrl = region.navMesh
-        ? state.assetSources[region.navMesh.assetPath]
-        : undefined;
-      if (navMeshUrl) {
-        void (async () => {
-          try {
-            const response = await fetch(navMeshUrl);
-            // A miss on a static host answers with an HTML error page, and
-            // importNavMesh accepts those bytes silently -- then the first
-            // path query crashes the WASM and kills the frame loop. Treat a
-            // non-OK response as "no navmesh" (straight-line fallback).
-            if (!response.ok) {
-              console.warn(
-                `[web-runtime] navmesh artifact fetch failed (${response.status}) -- NPCs fall back to straight-line steering`,
-                navMeshUrl
-              );
-              return;
-            }
-            const bytes = new Uint8Array(await response.arrayBuffer());
-            const pathfinder = await loadNavMeshPathfinder(bytes);
-            // A newer start() superseded this load — free it, don't assign
-            // (else we'd overwrite the current mesh + leak the new one).
-            if (navMeshEpoch !== navMeshLoadEpoch) {
-              pathfinder.destroy();
-              return;
-            }
-            navMeshPathfinder = pathfinder;
-          } catch (error) {
-            console.warn("[web-runtime] navmesh load failed", error);
-          }
-        })();
-      }
-      // Plan 057 — item presences run through the shared filter
-      // helper so this visual-spawn path and the ECS spawn path
-      // in gameplay-session apply the same filter set. New
-      // filters (Plan 058 Scene gating, etc.) compose into
-      // `worldPresenceTracker.shouldSkip` at the host and both
-      // paths see them automatically. Non-item scene objects
-      // (NPCs, static assets) don't have a filter surface today
-      // and pass through unchanged.
-      const activeItemPresenceIds = new Set<string>();
-      iterateActiveItemPresences(
-        activeRegionContents?.itemPresences ?? [],
-        {
-          shouldSkip: (presenceId) =>
-            worldPresenceTracker.shouldSkip(
-              activeRegionIdForSave,
-              activeSceneIdForSave,
-              presenceId
-            )
-        },
-        (presence) => {
-          activeItemPresenceIds.add(presence.presenceId);
-        }
-      );
-      // Plan 070.2 — one shared reconciler builds every scene renderable
-      // (was two hand-rolled paths here: instanced grouping by
-      // representationKey + the singleton clone/sanitize/scale/shadow/
-      // parent/shader sequence). Grouping ON for the game; the studio keeps
-      // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
-      // is excluded upstream (includePlayerPresence: false).
-      renderableReconciler = createRenderableReconciler({
-        parent: scene,
-        resolveUrl: (object) =>
-          object.modelSourcePath
-            ? renderView!.assetResolver.resolveAssetUrl(
-                object.modelSourcePath
-              ) ?? null
-            : null,
-        loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
-        createFallback: (object) => getSceneObjectFallback(object),
-        shaderRuntime: renderView!.shaderRuntime,
-        getFileSources: () => currentAssetSources,
-        enableShadows: (renderableRoot) =>
-          renderView!.enableShadowsOnObject(renderableRoot),
-        grouping: true,
-        isInstanceable: assetObjectIsInstanceable,
-        validate: validateRenderableAsset,
-        logger: {
-          warn: (message, payload) =>
-            console.warn(`[web-runtime] ${message}`, payload)
-        },
-        // The mixer goes away with the entry, so a one-shot listener on it must
-        // come off first. This is the hook's first consumer.
-        onEntryWillRemove: (entry) =>
-          releaseNpcOneShot(entry.host as HostEntryData),
-        onEntryLoaded: (entry, renderable) => {
-          // An NPC gets one AnimationMixer plus every clip bound to it, kept
-          // in the entry's host slot. The frame loop ticks the mixer via
-          // npcMixer() and swaps slots with setNpcAnimationSlot().
-          if (entry.object.kind !== "npc") {
-            return;
-          }
-          const presence = activeRegionContents?.npcPresences.find(
-            (p) => p.presenceId === entry.object.instanceId
-          );
-          const npcDefinition = presence
-            ? state.npcDefinitions.find(
-                (d) => d.definitionId === presence.npcDefinitionId
-              )
-            : null;
-          const bindings = npcDefinition?.presentation.animationAssetBindings;
-          if (!bindings) {
-            return;
-          }
-          const slotSources = (
-            Object.entries(bindings) as Array<[NPCAnimationSlot, string | null]>
-          ).flatMap(([slot, bindingId]) => {
-            const animDef = bindingId
-              ? getCharacterAnimationDefinition(state.contentLibrary, bindingId)
-              : null;
-            const sourceUrl = animDef
-              ? state.assetSources[animDef.source.relativeAssetPath] ?? null
-              : null;
-            return sourceUrl ? [{ slot, sourceUrl }] : [];
-          });
-          if (slotSources.length === 0) {
-            return;
-          }
-          void Promise.all(
-            slotSources.map(({ slot, sourceUrl }) =>
-              gltfLoader
-                .loadAsync(sourceUrl)
-                .then((animGltf) => ({ slot, clip: animGltf.animations[0] ?? null }))
-                .catch((error) => {
-                  // One unreadable clip must not cost the NPC the others: a
-                  // missing walk should leave it idling, not standing in its
-                  // bind pose.
-                  console.error("[web-runtime] npc-animation-load-failed", {
-                    instanceId: entry.object.instanceId,
-                    slot,
-                    sourceUrl,
-                    error
-                  });
-                  return { slot, clip: null };
-                })
-            )
-          ).then((loaded) => {
-            const clips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
-            for (const { slot, clip } of loaded) {
-              if (clip) {
-                clips.set(slot, clip);
-              }
-            }
-            if (clips.size === 0) {
-              return;
-            }
-            const host = entry.host as HostEntryData;
-            host.mixer = new THREE.AnimationMixer(renderable);
-            host.animationClips = clips;
-            // Start idle where it exists, otherwise whatever is bound, so an
-            // NPC with only a walk clip still animates instead of freezing.
-            setNpcAnimationSlot(
-              entry,
-              clips.has("idle") ? "idle" : [...clips.keys()][0]!
-            );
-          })
-          .catch((error) => {
-            // Mixer construction and slot selection run after the loads
-            // resolve, so their failures land here rather than in the
-            // per-clip catch above. A player mid-session keeps playing with
-            // an unanimated NPC.
-            console.error("[web-runtime] npc-animation-bind-failed", {
-              instanceId: entry.object.instanceId,
-              error
-            });
-          });
-        }
-      });
-      renderableReconciler.reconcile(
-        objects.filter(
-          (object) =>
-            object.kind !== "item" ||
-            activeItemPresenceIds.has(object.instanceId)
-        )
-      );
-    }
     uiContextStore = createUIContextStore();
     // Story 47.10.5 — the store always boots in the same "no
     // menu, not paused" baseline; whether the start menu opens at
