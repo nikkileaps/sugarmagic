@@ -11,13 +11,12 @@
  * their order. A Scene therefore carries no order number and no
  * unlock rule of its own.
  *
- * Pattern (Plan 058 §Design patterns): Base + Overlay (Layer
- * Composition). Regions are the shared geographic BASE; each
- * Scene carries per-region OVERLAYS (`regionOverlays[regionId]`)
- * holding the presences + Scene-scoped placed assets composed
- * onto the base while that Scene is active. Mechanically closest
- * to UE5 Data Layers: everything ships in the bundle, the active
- * Scene decides which overlay is composed.
+ * Pattern: layer composition, two layers. The region is the world
+ * at rest -- its dressing AND its residents. A Scene names one
+ * region and carries one OVERLAY: a diff that adds, suppresses,
+ * and restyles while that Scene is active. Mechanically closest to
+ * UE5 Data Layers: everything ships in the bundle, the active
+ * Scene decides what is composed on top.
  *
  * Lives in `scenes/` (plural) to avoid colliding with
  * runtime-core's `scene/` module (visual SceneObject concerns).
@@ -36,11 +35,16 @@ import {
   type PlacedAssetInstance,
   type PlacedAssetSurfaceSlotOverride,
   type RegionItemPresence,
+  type RegionNavMeshArtifact,
   type RegionNPCPresence,
   type RegionPlayerPresence,
   type RegionSceneFolder
 } from "../region-authoring";
 import type { ShaderBindingOverride } from "../shader-graph";
+import {
+  normalizeQuestDefinition,
+  type QuestDefinition
+} from "../quest-definition";
 import {
   cloneAssetCollider,
   isValidColliderShape,
@@ -222,6 +226,15 @@ export interface RegionSceneOverlay {
   folders: RegionSceneFolder[];
   /** Plan 068.2 — Scene restyles of base placements, by instanceId. */
   assetAppearanceOverrides: Record<string, SceneAssetAppearanceOverride>;
+  /**
+   * Epic #226 — region-owned content this Scene hides: placed-asset
+   * `instanceId`s and presence `presenceId`s in one list, since both are
+   * uuids and a Scene hides a thing without caring which kind it is. Names
+   * region content rather than copying it, so there is never a second copy
+   * to drift. Ids that match nothing are ignored: an author can delete a
+   * region asset a Scene once hid without breaking that Scene.
+   */
+  suppressedRegionIds: string[];
 }
 
 export interface Scene {
@@ -230,18 +243,45 @@ export interface Scene {
   description: string;
   /** Free-form author notes (design intent, TODOs). */
   notes: string;
-  /** Region the game loads when this Scene is entered on a fresh
-   *  boot (no save, no explicit request). Null = first region.
-   *  Resolution precedence at runtime: saved region > explicit
-   *  request (Studio Preview's edited region) > this > first.
-   *  Mid-session region transitions (doors) are a follow-up. */
-  startingRegionId: string | null;
+  /**
+   * The one region this Scene happens in (epic #226). Not nullable: a
+   * Scene that names no place cannot be entered, so the type refuses to
+   * express one and Studio requires a region when a Scene is created.
+   * This replaces the old pair of `startingRegionId` plus a map of
+   * overlays, which were two answers to the same question.
+   */
+  regionId: string;
+  /** What this Scene changes about its region: adds, suppressions, and
+   *  restyles. */
+  overlay: RegionSceneOverlay;
+  /**
+   * The quests that happen in this Scene (epic #226). HELD BY VALUE, the
+   * way an Episode holds its Scenes: a quest belongs to exactly one Scene
+   * by construction, so it cannot be orphaned or owned twice. Code that
+   * wants a quest without caring which Scene owns it uses the
+   * `getAllQuestDefinitions` / `findQuestDefinitionById` accessors in
+   * `episodes/`.
+   *
+   * Dialogue is NOT contained this way: a quest node references a dialogue
+   * by id, and an NPC-bound ambient dialogue belongs to no quest at all.
+   */
+  questDefinitions: QuestDefinition[];
   environmentOverride: SceneEnvironmentOverride | null;
   audioOverride: SceneAudioOverride | null;
+  /**
+   * This Scene's own baked navmesh, when its overlay changes what blocks
+   * movement -- suppressing a wall, adding a crate.
+   *
+   * Null means "I do not change collision, use the region's". Absence is
+   * inherit, and it is the common case: most Scenes dress a region without
+   * touching what an NPC can walk through.
+   *
+   * REPLACES the region's at runtime rather than adding to it. A navmesh is
+   * one connected mesh; two overlaid meshes have no coherent polygon
+   * adjacency, so there is nothing sensible to merge.
+   */
+  navMesh: RegionNavMeshArtifact | null;
   transitionConfig: TransitionConfig | null;
-  /** Keyed by regionId. A region absent from the record simply
-   *  has no overlay in this Scene — base-only. */
-  regionOverlays: Record<string, RegionSceneOverlay>;
 }
 
 export function createRegionSceneOverlay(
@@ -253,6 +293,7 @@ export function createRegionSceneOverlay(
     playerPresence: overrides.playerPresence ?? null,
     placedAssets: [...(overrides.placedAssets ?? [])],
     folders: [...(overrides.folders ?? [])],
+    suppressedRegionIds: [...(overrides.suppressedRegionIds ?? [])],
     assetAppearanceOverrides: Object.fromEntries(
       Object.entries(overrides.assetAppearanceOverrides ?? {}).map(
         ([instanceId, override]) => [
@@ -282,11 +323,15 @@ export function createDefaultScene(
     displayName: overrides.displayName ?? "Scene 1",
     description: overrides.description ?? "",
     notes: overrides.notes ?? "",
-    startingRegionId: overrides.startingRegionId ?? null,
+    regionId: overrides.regionId ?? "",
+    questDefinitions: [...(overrides.questDefinitions ?? [])],
+    overlay: overrides.overlay
+      ? createRegionSceneOverlay(overrides.overlay)
+      : createRegionSceneOverlay(),
     environmentOverride: overrides.environmentOverride ?? null,
     audioOverride: overrides.audioOverride ?? null,
-    transitionConfig: overrides.transitionConfig ?? null,
-    regionOverlays: overrides.regionOverlays ?? {}
+    navMesh: overrides.navMesh ?? null,
+    transitionConfig: overrides.transitionConfig ?? null
   };
 }
 
@@ -326,6 +371,24 @@ function normalizeAudioOverride(input: unknown): SceneAudioOverride | null {
  * one normalizer, not a copy in each module. `episodes/` imports
  * it from here.
  */
+/** A stored artifact reference, or null. Anything missing a path is not a
+ *  usable reference, so it reads as absent rather than as a broken one. */
+function normalizeNavMeshArtifact(
+  record: unknown
+): RegionNavMeshArtifact | null {
+  if (!record || typeof record !== "object") return null;
+  const candidate = record as Partial<RegionNavMeshArtifact>;
+  if (typeof candidate.assetPath !== "string" || !candidate.assetPath) {
+    return null;
+  }
+  return {
+    assetPath: candidate.assetPath,
+    inputHash: typeof candidate.inputHash === "string" ? candidate.inputHash : "",
+    agentRadius:
+      typeof candidate.agentRadius === "number" ? candidate.agentRadius : 0
+  };
+}
+
 export function normalizeTransitionConfig(
   input: unknown
 ): TransitionConfig | null {
@@ -425,6 +488,9 @@ function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
       createPlacedAssetInstance(asset)
     ),
     folders: [...(record.folders ?? [])],
+    suppressedRegionIds: (record.suppressedRegionIds ?? []).filter(
+      (id): id is string => typeof id === "string" && id.trim().length > 0
+    ),
     assetAppearanceOverrides: normalizeSceneAssetAppearanceOverrides(
       record.assetAppearanceOverrides
     )
@@ -437,6 +503,93 @@ function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
  * stay in the io layer, mirroring how region normalization is
  * split today.
  */
+/**
+ * What a collapse could not carry over, for the author to act on. A Scene
+ * used to dress several regions; it now names one, so any other region's
+ * overlay content has no home in the new shape. Reported rather than
+ * dropped quietly -- the author decides whether to re-home it onto the
+ * region itself or into another Scene.
+ */
+export interface SceneRegionCollapseNote {
+  sceneId: string;
+  /** The region whose overlay content is stranded. */
+  regionId: string;
+  npcPresences: number;
+  itemPresences: number;
+  placedAssets: number;
+  hasPlayerPresence: boolean;
+}
+
+const sceneCollapseNotes: SceneRegionCollapseNote[] = [];
+
+/**
+ * Everything the last load's Scene collapse could not carry over. Read by
+ * the load path so it can tell the author once, rather than each
+ * normalizer call logging on its own.
+ */
+export function takeSceneRegionCollapseNotes(): SceneRegionCollapseNote[] {
+  return sceneCollapseNotes.splice(0, sceneCollapseNotes.length);
+}
+
+/**
+ * Collapse a pre-#226 Scene's `regionOverlays` map plus `startingRegionId`
+ * into one region and one overlay.
+ *
+ * Which region survives, in order: the one the author named as the start,
+ * then the only one there is. A Scene with neither names no region here --
+ * `normalizeScenes` fills those in from the Scene before it, because that
+ * needs the Scene's neighbours and this function only has the one.
+ */
+function collapseLegacySceneRegion(record: Record<string, unknown>): {
+  regionId: string;
+  overlay: RegionSceneOverlay;
+} {
+  // Already collapsed: a file written after this story.
+  if (typeof record.regionId === "string" && record.regionId.trim().length > 0) {
+    return {
+      regionId: record.regionId.trim(),
+      overlay: normalizeRegionSceneOverlay(record.overlay)
+    };
+  }
+
+  const overlaysInput =
+    record.regionOverlays && typeof record.regionOverlays === "object"
+      ? (record.regionOverlays as Record<string, unknown>)
+      : {};
+  const overlays = new Map<string, RegionSceneOverlay>();
+  for (const [regionId, overlay] of Object.entries(overlaysInput)) {
+    if (regionId.trim().length === 0) continue;
+    overlays.set(regionId.trim(), normalizeRegionSceneOverlay(overlay));
+  }
+
+  const startingRegionId =
+    typeof record.startingRegionId === "string" &&
+    record.startingRegionId.trim().length > 0
+      ? record.startingRegionId.trim()
+      : null;
+  const keptRegionId =
+    startingRegionId ?? (overlays.size === 1 ? [...overlays.keys()][0]! : "");
+
+  const sceneId =
+    typeof record.sceneId === "string" ? record.sceneId.trim() : "";
+  for (const [regionId, overlay] of overlays) {
+    if (regionId === keptRegionId) continue;
+    sceneCollapseNotes.push({
+      sceneId,
+      regionId,
+      npcPresences: overlay.npcPresences.length,
+      itemPresences: overlay.itemPresences.length,
+      placedAssets: overlay.placedAssets.length,
+      hasPlayerPresence: overlay.playerPresence !== null
+    });
+  }
+
+  return {
+    regionId: keptRegionId,
+    overlay: overlays.get(keptRegionId) ?? createRegionSceneOverlay()
+  };
+}
+
 export function normalizeScene(input: unknown): Scene | null {
   if (!input || typeof input !== "object") return null;
   const record = input as Record<string, unknown>;
@@ -446,15 +599,7 @@ export function normalizeScene(input: unknown): Scene | null {
   ) {
     return null;
   }
-  const overlaysInput =
-    record.regionOverlays && typeof record.regionOverlays === "object"
-      ? (record.regionOverlays as Record<string, unknown>)
-      : {};
-  const regionOverlays: Record<string, RegionSceneOverlay> = {};
-  for (const [regionId, overlay] of Object.entries(overlaysInput)) {
-    if (regionId.trim().length === 0) continue;
-    regionOverlays[regionId] = normalizeRegionSceneOverlay(overlay);
-  }
+  const collapsed = collapseLegacySceneRegion(record);
   return {
     sceneId: record.sceneId.trim(),
     displayName:
@@ -465,17 +610,21 @@ export function normalizeScene(input: unknown): Scene | null {
     description:
       typeof record.description === "string" ? record.description : "",
     notes: typeof record.notes === "string" ? record.notes : "",
-    startingRegionId:
-      typeof record.startingRegionId === "string" &&
-      record.startingRegionId.trim().length > 0
-        ? record.startingRegionId
-        : null,
+    regionId: collapsed.regionId,
+    overlay: collapsed.overlay,
+    questDefinitions: Array.isArray(record.questDefinitions)
+      ? record.questDefinitions.map((definition) =>
+          normalizeQuestDefinition(definition)
+        )
+      : [],
     environmentOverride: normalizeEnvironmentOverride(
       record.environmentOverride
     ),
     audioOverride: normalizeAudioOverride(record.audioOverride),
-    transitionConfig: normalizeTransitionConfig(record.transitionConfig),
-    regionOverlays
+    // A file written before Scenes could own one has none, which reads as
+    // "inherit the region's" -- what it did then.
+    navMesh: normalizeNavMeshArtifact(record.navMesh),
+    transitionConfig: normalizeTransitionConfig(record.transitionConfig)
   };
 }
 
@@ -498,6 +647,20 @@ export function normalizeScenes(input: unknown): Scene[] {
     if (!scene || seen.has(scene.sceneId)) continue;
     seen.add(scene.sceneId);
     scenes.push(scene);
+  }
+  // A Scene that named no region continues where the story was: it takes
+  // the region of the Scene before it. Reaching for "the project's first
+  // region" instead would be a guess about an unrelated list's order,
+  // which is how a Scene ends up pointing at a region nobody is using.
+  // A leading Scene with no region stays empty and fails validation.
+  let previousRegionId = "";
+  for (const scene of scenes) {
+    if (scene.regionId.length === 0) {
+      scene.regionId = previousRegionId;
+    }
+    if (scene.regionId.length > 0) {
+      previousRegionId = scene.regionId;
+    }
   }
   return scenes;
 }

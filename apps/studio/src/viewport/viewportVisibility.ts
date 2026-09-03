@@ -18,6 +18,7 @@ export interface SharedViewportVisibilityOptions {
   activeDesignKind: DesignWorkspaceKind;
   buildCenterPanelVisible: boolean;
   designCenterPanelVisible: boolean;
+  activeStoryKind: string;
 }
 
 export function shouldShowSharedViewport(
@@ -40,6 +41,12 @@ export function shouldShowSharedViewport(
 
   if (options.activeProductMode === "build") {
     return !options.buildCenterPanelVisible;
+  }
+
+  // The scene composer stages a Scene in the world, so it needs the same
+  // viewport Build uses. Story's other workspaces are panels.
+  if (options.activeProductMode === "story") {
+    return options.activeStoryKind === "composer";
   }
 
   return false;

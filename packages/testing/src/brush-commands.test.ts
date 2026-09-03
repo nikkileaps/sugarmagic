@@ -45,12 +45,14 @@ function makeTestRegion(): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   } as unknown as RegionDocument;
 }
 
 function makeTestScene(): Scene {
-  return createDefaultScene({ sceneId: "scene:test" });
+  return createDefaultScene({ sceneId: "scene:test", regionId: "test-region" });
 }
 
 function brushPlacement(index: number) {
@@ -122,7 +124,7 @@ describe("scatter brush commands", () => {
 
     expect(result.region.placedAssets).toHaveLength(1);
     expect(
-      result.scene.regionOverlays[region.identity.id]?.placedAssets ?? []
+      result.scene.overlay?.placedAssets ?? []
     ).toHaveLength(2);
   });
 
@@ -203,7 +205,7 @@ describe("scatter brush commands", () => {
 
     expect(result.region.placedAssets).toHaveLength(0);
     expect(
-      result.scene.regionOverlays[region.identity.id]?.placedAssets ?? []
+      result.scene.overlay?.placedAssets ?? []
     ).toHaveLength(0);
   });
 });

@@ -116,14 +116,14 @@ export const SUGARLANG_TEACH_PLAN_CONFIG_KEY = "teachPlans";
  * migration code would be carried forever to save an action that is already
  * cheap.
  */
-export const TEACH_PLAN_DOCUMENT_VERSION = "090.11.1";
+export const TEACH_PLAN_DOCUMENT_VERSION = "226.1.0";
 
 /** What gets written into the project. JSON only -- no functions, no Maps. */
 export interface SugarlangTeachPlanDocument {
   version: string;
   lang: string;
   scenes: {
-    sceneId: string;
+    regionId: string;
     /**
      * The scene content hash the plan was derived from. A reader comparing this
      * against the scene's current hash learns the plan is stale; without it a
@@ -133,14 +133,14 @@ export interface SugarlangTeachPlanDocument {
     fromSceneContext: boolean;
     bands: { band: CEFRBand; slate: GradedTextSlate; posture: SupportPosture }[];
   }[];
-  /** dialogueDefinitionId -> sceneId. The index that makes per-dialogue reads work. */
-  dialogueScenes: { dialogueDefinitionId: string; sceneId: string }[];
+  /** dialogueDefinitionId -> regionId. The index that makes per-dialogue reads work. */
+  dialogueScenes: { dialogueDefinitionId: string; regionId: string }[];
 }
 
 export function serializeTeachPlans(args: {
   lang: string;
   scenes: {
-    sceneId: string;
+    regionId: string;
     contentHash: string | null;
     fromSceneContext: boolean;
     dialogueDefinitionIds: string[];
@@ -151,7 +151,7 @@ export function serializeTeachPlans(args: {
     version: TEACH_PLAN_DOCUMENT_VERSION,
     lang: args.lang,
     scenes: args.scenes.map((scene) => ({
-      sceneId: scene.sceneId,
+      regionId: scene.regionId,
       contentHash: scene.contentHash,
       fromSceneContext: scene.fromSceneContext,
       bands: scene.bands
@@ -159,7 +159,7 @@ export function serializeTeachPlans(args: {
     dialogueScenes: args.scenes.flatMap((scene) =>
       scene.dialogueDefinitionIds.map((dialogueDefinitionId) => ({
         dialogueDefinitionId,
-        sceneId: scene.sceneId
+        regionId: scene.regionId
       }))
     )
   };
@@ -185,7 +185,7 @@ export interface HydrateTeachPlansResult {
  * with no plan is a valid bake.
  *
  * STALE PLANS ARE DROPPED, NOT LOADED.
- *   Pass `currentHashesBySceneId` and every scene whose stored `contentHash`
+ *   Pass `currentHashesByRegionId` and every scene whose stored `contentHash`
  *   disagrees with its current one is skipped. A teach plan is derived from a
  *   scene's CONCEPTS, so editing that scene's authored content invalidates it --
  *   and unlike a baked variant, whose key includes the line's text, nothing
@@ -201,7 +201,7 @@ export interface HydrateTeachPlansResult {
  */
 export function hydrateTeachPlans(
   input: unknown,
-  currentHashesBySceneId?: Map<string, string> | null
+  currentHashesByRegionId?: Map<string, string> | null
 ): HydrateTeachPlansResult {
   const doc = input as SugarlangTeachPlanDocument | undefined;
   if (
@@ -214,25 +214,25 @@ export function hydrateTeachPlans(
     return { hydrated: 0, staleScenes: [] };
   }
 
-  const staleSceneIds = new Set<string>();
-  if (currentHashesBySceneId) {
+  const staleRegionIds = new Set<string>();
+  if (currentHashesByRegionId) {
     for (const scene of doc.scenes) {
-      const current = currentHashesBySceneId.get(scene.sceneId);
+      const current = currentHashesByRegionId.get(scene.regionId);
       // An unknown scene is NOT stale -- it may simply not be loaded right now.
       // Only a scene we can currently hash, whose hash disagrees, is stale.
       if (current && scene.contentHash && current !== scene.contentHash) {
-        staleSceneIds.add(scene.sceneId);
+        staleRegionIds.add(scene.regionId);
       }
     }
   }
 
-  const bySceneId = new Map(doc.scenes.map((scene) => [scene.sceneId, scene]));
+  const byRegionId = new Map(doc.scenes.map((scene) => [scene.regionId, scene]));
   teachPlans.clear();
 
   let hydrated = 0;
-  for (const { dialogueDefinitionId, sceneId } of doc.dialogueScenes) {
-    if (staleSceneIds.has(sceneId)) continue;
-    const scene = bySceneId.get(sceneId);
+  for (const { dialogueDefinitionId, regionId } of doc.dialogueScenes) {
+    if (staleRegionIds.has(regionId)) continue;
+    const scene = byRegionId.get(regionId);
     if (!scene) continue;
     for (const { band, slate, posture } of scene.bands ?? []) {
       teachPlans.set(planKey(dialogueDefinitionId, doc.lang, band), {
@@ -243,5 +243,5 @@ export function hydrateTeachPlans(
       hydrated += 1;
     }
   }
-  return { hydrated, staleScenes: [...staleSceneIds].sort() };
+  return { hydrated, staleScenes: [...staleRegionIds].sort() };
 }

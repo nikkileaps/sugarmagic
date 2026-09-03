@@ -257,8 +257,6 @@ function makeRuntimeContextMiddleware(options: {
       regionId: SCENE_ID,
       regionDisplayName: "Test Station",
       regionLorePageId: null,
-      sceneId: SCENE_ID,
-      sceneDisplayName: "Test Station",
       area: null,
       parentArea: null
     },
@@ -406,7 +404,6 @@ function buildHarness(
     activeScene,
     npcDefinitions: TEST_NPC_DEFINITIONS,
     dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-    questDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: []
   });

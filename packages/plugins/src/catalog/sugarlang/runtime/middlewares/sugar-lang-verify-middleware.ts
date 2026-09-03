@@ -45,7 +45,7 @@ import {
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
-  getSceneId,
+  getRegionId,
   isPlayerSpokenTurn,
   isQuestObjectiveInFocus,
   normalizeTurn,
@@ -169,7 +169,7 @@ export function createSugarLangVerifyMiddleware(
             sessionId,
             turnId: traceTurnId,
             timestamp: Date.now(),
-            sceneId: getSceneId(execution)
+            regionId: getRegionId(execution)
           }),
           logger
         );
@@ -183,13 +183,13 @@ export function createSugarLangVerifyMiddleware(
       const originalTurnText = normalizedTurn.text;
 
       const learner = await services.learnerStore.getCurrentProfile();
-      const sceneId = getSceneId(execution);
+      const regionId = getRegionId(execution);
 
       // Load scene when available. The ratio check runs even without it -- empty
       // proper-noun exclusion is accepted noise; telemetry notes the degraded path.
       let scene: Awaited<ReturnType<typeof services.sceneLexiconStore.ensure>> | null = null;
-      if (sceneId) {
-        scene = await services.sceneLexiconStore.ensure(sceneId);
+      if (regionId) {
+        scene = await services.sceneLexiconStore.ensure(regionId);
       }
 
       const questEssentialLemmaIds = execution.annotations[
@@ -252,7 +252,7 @@ export function createSugarLangVerifyMiddleware(
           sessionId,
           turnId: traceTurnId,
           timestamp: Date.now(),
-          sceneId: sceneId ?? null,
+          regionId: regionId ?? null,
           learnerSnapshot: buildLearnerSnapshot(learner),
           verdict,
           inputText: normalizedTurn.text,
@@ -267,7 +267,7 @@ export function createSugarLangVerifyMiddleware(
           sessionId,
           turnId: traceTurnId,
           timestamp: Date.now(),
-          sceneId: sceneId ?? null,
+          regionId: regionId ?? null,
           measuredRatio: verdict.languageRatioVerdict.measuredRatio,
           directedRatio: verdict.languageRatioVerdict.directedRatio,
           posture: verdict.languageRatioVerdict.posture,
@@ -286,7 +286,7 @@ export function createSugarLangVerifyMiddleware(
           learnerCefr: constraint.learnerCefr,
           conformance: verdict.languageRatioVerdict.conformance,
           denominator: verdict.profile.ratioCheckTokens,
-          degradedExclusion: !sceneId
+          degradedExclusion: !regionId
         }),
         logger
       );
@@ -310,7 +310,7 @@ export function createSugarLangVerifyMiddleware(
           sessionId,
           turnId: traceTurnId,
           timestamp: Date.now(),
-          sceneId: sceneId ?? null,
+          regionId: regionId ?? null,
           turnIndex,
           measuredRatio: verdict.languageRatioVerdict.measuredRatio,
           directedRatio: verdict.languageRatioVerdict.directedRatio,
@@ -336,7 +336,7 @@ export function createSugarLangVerifyMiddleware(
               sessionId,
               turnId: traceTurnId,
               timestamp: Date.now(),
-              sceneId,
+              regionId,
               lemmaRef: questEssential.lemmaRef,
               cefrBand:
                 scene.questEssentialLemmas.find((entry) => entry.lemmaId === lemmaId)?.cefrBand ??

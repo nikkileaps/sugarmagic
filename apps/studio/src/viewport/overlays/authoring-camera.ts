@@ -25,12 +25,26 @@ type CameraController = {
   detach(): void;
 };
 
-type CameraMode = "layout" | "landscape" | "spatial" | "behavior" | "inactive";
+type CameraMode =
+  | "layout"
+  | "landscape"
+  | "spatial"
+  | "behavior"
+  | "composer"
+  | "inactive";
 
-function resolveCameraMode(
+export function resolveCameraMode(
   activeProductMode: string,
-  activeBuildWorkspaceKind: string
+  activeBuildWorkspaceKind: string,
+  activeStoryWorkspaceKind: string
 ): CameraMode {
+  // The scene composer stages a Scene in the same world Build edits, so
+  // it navigates the same way (epic #226). Its OWN mode, not Build's:
+  // each mode holds its own controller, so panning around the region in
+  // Build does not move where the composer was left looking.
+  if (activeProductMode === "story") {
+    return activeStoryWorkspaceKind === "composer" ? "composer" : "inactive";
+  }
   if (activeProductMode !== "build") {
     return "inactive";
   }
@@ -51,7 +65,10 @@ export const mountAuthoringCameraOverlay: ViewportOverlayFactory = (context) => 
     layout: createLayoutCameraController(),
     landscape: createLandscapeCameraController(),
     spatial: createSpatialCameraController(),
-    behavior: createLayoutCameraController()
+    behavior: createLayoutCameraController(),
+    // Same controller kind as layout, deliberately a separate instance:
+    // same navigation, independent camera position.
+    composer: createLayoutCameraController()
   };
 
   let currentMode: CameraMode = "inactive";
@@ -87,12 +104,18 @@ export const mountAuthoringCameraOverlay: ViewportOverlayFactory = (context) => 
   const unsubscribeProjection = context.subscribeToProjection(
     ({ shell }) => ({
       activeProductMode: shell.activeProductMode,
-      activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind
+      activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
+      activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind
     }),
-    ({ activeProductMode, activeBuildWorkspaceKind }) => {
+    ({
+      activeProductMode,
+      activeBuildWorkspaceKind,
+      activeStoryWorkspaceKind
+    }) => {
       const nextMode = resolveCameraMode(
         activeProductMode,
-        activeBuildWorkspaceKind
+        activeBuildWorkspaceKind,
+        activeStoryWorkspaceKind
       );
       if (nextMode === currentMode) {
         updateCameraQuaternion();

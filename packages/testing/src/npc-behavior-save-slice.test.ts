@@ -171,6 +171,146 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
       expect(world.getComponent(entity, Position)!.x).toBe(5);
     });
 
+    it("reads a pre-marker save that spells the destination `areaId`", () => {
+      // The field holds an area id OR a marker id since markers landed, so
+      // it is named for the question now. Saves written before that say
+      // `areaId`; losing it would be harmless (the destination re-derives
+      // from the task next tick) but reading it costs one `??`.
+      const { world, entity } = buildWorldWithNpc("npc:alpha", {
+        x: 0,
+        y: 0,
+        z: 0
+      });
+      const system = createRuntimeNpcBehaviorSystem({
+        region: createDefaultRegion({ regionId: "region:test", displayName: "Test" }),
+        world,
+        blackboard: createRuntimeBlackboard(),
+        npcEntities: [
+          {
+            npcDefinitionId: "npc:alpha",
+            presenceId: "presence:alpha",
+            entity
+          }
+        ]
+      });
+
+      system.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          npcs: {
+            "npc:alpha": {
+              position: { x: 7, y: 0, z: 7 },
+              target: { areaId: "area:dock", taskId: "task:go" },
+              status: "en_route"
+            }
+          }
+        } as never
+      });
+
+      expect(system.serializeSaveSlice().npcs["npc:alpha"]!.target).toEqual({
+        destinationId: "area:dock",
+        taskId: "task:go"
+      });
+    });
+
+    it("ignores a position saved in a different region", () => {
+      // The same NPC definition can stand in two regions. Without the
+      // region tag, walking A -> B would drop B's NPC at the coordinates
+      // it held in A -- which is usually inside geometry.
+      const { world, entity } = buildWorldWithNpc("npc:alpha", {
+        x: 0,
+        y: 0,
+        z: 0
+      });
+      const system = createRuntimeNpcBehaviorSystem({
+        region: createDefaultRegion({ regionId: "region:test", displayName: "Test" }),
+        world,
+        blackboard: createRuntimeBlackboard(),
+        npcEntities: [
+          { npcDefinitionId: "npc:alpha", presenceId: "presence:alpha", entity }
+        ]
+      });
+
+      system.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          npcs: {
+            "npc:alpha": {
+              regionId: "region:somewhere-else",
+              position: { x: 99, y: 0, z: 99 },
+              target: null,
+              status: "idle"
+            }
+          }
+        }
+      });
+
+      expect(world.getComponent(entity, Position)!.x).toBe(0);
+    });
+
+    it("applies a position saved in this region", () => {
+      const { world, entity } = buildWorldWithNpc("npc:alpha", {
+        x: 0,
+        y: 0,
+        z: 0
+      });
+      const system = createRuntimeNpcBehaviorSystem({
+        region: createDefaultRegion({ regionId: "region:test", displayName: "Test" }),
+        world,
+        blackboard: createRuntimeBlackboard(),
+        npcEntities: [
+          { npcDefinitionId: "npc:alpha", presenceId: "presence:alpha", entity }
+        ]
+      });
+
+      system.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          npcs: {
+            "npc:alpha": {
+              regionId: "region:test",
+              position: { x: 7, y: 0, z: 7 },
+              target: null,
+              status: "idle"
+            }
+          }
+        }
+      });
+
+      expect(world.getComponent(entity, Position)!.x).toBe(7);
+    });
+
+    it("applies a pre-region-change save, which has no region tag", () => {
+      const { world, entity } = buildWorldWithNpc("npc:alpha", {
+        x: 0,
+        y: 0,
+        z: 0
+      });
+      const system = createRuntimeNpcBehaviorSystem({
+        region: createDefaultRegion({ regionId: "region:test", displayName: "Test" }),
+        world,
+        blackboard: createRuntimeBlackboard(),
+        npcEntities: [
+          { npcDefinitionId: "npc:alpha", presenceId: "presence:alpha", entity }
+        ]
+      });
+
+      system.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          npcs: {
+            "npc:alpha": {
+              position: { x: 4, y: 0, z: 4 },
+              target: null,
+              status: "idle"
+            }
+          }
+        }
+      });
+
+      expect(world.getComponent(entity, Position)!.x).toBe(4);
+    });
+
     it("deserialize(null) is a no-op", () => {
       const { world, entity } = buildWorldWithNpc("npc:alpha", {
         x: 0,
@@ -217,7 +357,7 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
           npcs: {
             "npc:alpha": {
               position: { x: 3, y: 0, z: 4 },
-              target: { areaId: "area:dock", taskId: "task:go-to-dock" },
+              target: { destinationId: "area:dock", taskId: "task:go-to-dock" },
               status: "en_route"
             }
           }
@@ -225,7 +365,7 @@ describe("RuntimeNpcBehaviorSystem save slice", () => {
       });
       const slice = system.serializeSaveSlice();
       expect(slice.npcs["npc:alpha"]!.target).toEqual({
-        areaId: "area:dock",
+        destinationId: "area:dock",
         taskId: "task:go-to-dock"
       });
       expect(slice.npcs["npc:alpha"]!.status).toBe("en_route");

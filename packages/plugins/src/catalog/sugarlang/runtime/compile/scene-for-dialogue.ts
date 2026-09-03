@@ -71,7 +71,7 @@ export function resolveSceneForDialogue(
     return null;
   }
 
-  // Sorted by sceneId so a dialogue reachable from two scenes resolves the same
+  // Sorted by regionId so a dialogue reachable from two scenes resolves the same
   // way on every build. An unstable choice here would silently rebake variants
   // against a different scene run to run, and the cache key would not notice.
   const matches = scenes
@@ -80,7 +80,7 @@ export function resolveSceneForDialogue(
         (dialogue) => dialogue.definitionId === dialogueDefinitionId
       )
     )
-    .sort((left, right) => left.sceneId.localeCompare(right.sceneId));
+    .sort((left, right) => left.regionId.localeCompare(right.regionId));
 
   if (matches.length === 0) {
     return null;

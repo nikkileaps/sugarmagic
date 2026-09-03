@@ -42,7 +42,7 @@ function baseContext(
     npcCurrentTask: { displayName: "Kneading dough", description: "morning batch" },
     npcCurrentActivity: "baking",
     npcCurrentGoal: "finish the spiced loaf",
-    npcMovement: { status: "stationary", targetAreaDisplayName: null },
+    npcMovement: { status: "stationary", destinationDisplayName: null },
     loreContextSummary: ["Maren runs the bakery."],
     recentHistory: [{ role: "user", text: "hi" }],
     languageLearningOverlay: "Language constraint: keep it simple.",

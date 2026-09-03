@@ -145,8 +145,29 @@ export interface NpcBehaviorSlice {
   npcs: Record<
     string,
     {
+      /**
+       * The region the NPC was standing in. The same NPC definition can
+       * be placed in more than one region, so without this a position
+       * saved in one would be applied in the other on restore.
+       *
+       * Optional: a save written before region changes existed has none,
+       * and restores unconditionally, which is what it did then.
+       *
+       * This prevents a WRONG restore. It does not give an NPC a memory
+       * per region -- the slice is rewritten from the live world, so
+       * leaving a region still forgets where its NPCs were standing.
+       */
+      regionId?: string | null;
       position: { x: number; y: number; z: number };
-      target: { areaId: string | null; taskId: string | null } | null;
+      /** Where the NPC was heading: an AREA or a MARKER id. Named for
+       *  the question rather than one of the answers. Pre-marker saves
+       *  spell it `areaId`; both are read on load. */
+      target: {
+        destinationId: string | null;
+        /** @deprecated Pre-marker spelling, read on load only. */
+        areaId?: string | null;
+        taskId: string | null;
+      } | null;
       status: "idle" | "en_route" | "at_target" | "blocked";
     }
   >;
@@ -156,7 +177,7 @@ export interface NpcBehaviorSlice {
 export type NpcBehaviorSaveSlice = SaveSlice<NpcBehaviorSlice>;
 
 interface MovementState {
-  targetAreaId: string | null;
+  destinationId: string | null;
   targetTaskId: string | null;
   targetX: number | null;
   targetZ: number | null;
@@ -172,8 +193,9 @@ interface MovementState {
 }
 
 interface MovementDirective {
-  targetAreaId: string | null;
-  targetAreaDisplayName: string | null;
+  /** The place the NPC is heading -- an area or a marker. */
+  destinationId: string | null;
+  destinationDisplayName: string | null;
   targetTaskId: string | null;
   targetTaskDisplayName: string | null;
   targetX: number | null;
@@ -210,6 +232,51 @@ function hashString(value: string): number {
 
 function sampleNormalizedOffset(hash: number): number {
   return ((hash % 1000) / 999) * 2 - 1;
+}
+
+/**
+ * Where a task actually sends the NPC, whichever shape it names.
+ *
+ * [LAW:dataflow-not-control-flow] An area and a marker both resolve to one
+ * destination value, so everything downstream runs the same operations on
+ * it. The difference is the point: an area scatters, a marker does not.
+ */
+function resolveTaskDestination(
+  region: RegionDocument,
+  task: RegionNPCBehaviorTask | null,
+  npcDefinitionId: string,
+  arrivalThresholdMeters: number
+): { id: string; displayName: string; x: number; z: number } | null {
+  const target = task?.target ?? null;
+  if (!target) return null;
+
+  if (target.kind === "marker") {
+    const marker = (region.markers ?? []).find(
+      (candidate) => candidate.markerId === target.markerId
+    );
+    if (!marker) return null;
+    return {
+      id: marker.markerId,
+      displayName: marker.displayName,
+      x: marker.transform.position[0],
+      z: marker.transform.position[2]
+    };
+  }
+
+  const area = findRegionAreaById(region, target.areaId);
+  if (!area) return null;
+  const point = resolveTaskTargetPoint(
+    area,
+    npcDefinitionId,
+    task?.taskId ?? null,
+    arrivalThresholdMeters
+  );
+  return {
+    id: area.areaId,
+    displayName: area.displayName,
+    x: point.x,
+    z: point.z
+  };
 }
 
 function resolveTaskTargetPoint(
@@ -355,7 +422,7 @@ function createInitialMovementState(
   nowMs: number
 ): MovementState {
   return {
-    targetAreaId: null,
+    destinationId: null,
     targetTaskId: null,
     targetX: null,
     targetZ: null,
@@ -377,7 +444,7 @@ function resolveDirectiveChange(input: {
 }): { nextState: MovementState; changed: boolean } {
   const { state, position, directive, nowMs } = input;
   const changed =
-    state.targetAreaId !== directive.targetAreaId ||
+    state.destinationId !== directive.destinationId ||
     state.targetTaskId !== directive.targetTaskId;
 
   if (!changed) {
@@ -388,7 +455,7 @@ function resolveDirectiveChange(input: {
     changed: true,
     nextState: {
       ...state,
-      targetAreaId: directive.targetAreaId,
+      destinationId: directive.destinationId,
       targetTaskId: directive.targetTaskId,
       targetX: directive.targetX,
       targetZ: directive.targetZ,
@@ -643,22 +710,19 @@ export function createRuntimeNpcBehaviorSystem(
       getTimeOfDayBand(blackboard),
       questProgress
     );
-    const targetArea = task ? findRegionAreaById(region, task.targetAreaId) : null;
-    const directiveTargetPoint = targetArea
-      ? resolveTaskTargetPoint(
-          targetArea,
-          npc.npcDefinitionId,
-          task?.taskId ?? null,
-          arrivalThresholdMeters
-        )
-      : null;
+    const destination = resolveTaskDestination(
+      region,
+      task,
+      npc.npcDefinitionId,
+      arrivalThresholdMeters
+    );
     const directive: MovementDirective = {
-      targetAreaId: targetArea?.areaId ?? null,
-      targetAreaDisplayName: targetArea?.displayName ?? null,
+      destinationId: destination?.id ?? null,
+      destinationDisplayName: destination?.displayName ?? null,
       targetTaskId: task?.taskId ?? null,
       targetTaskDisplayName: task?.displayName ?? null,
-      targetX: directiveTargetPoint?.x ?? null,
-      targetZ: directiveTargetPoint?.z ?? null
+      targetX: destination?.x ?? null,
+      targetZ: destination?.z ?? null
     };
     let state =
       movementStateByNpcId.get(npc.npcDefinitionId) ??
@@ -682,24 +746,26 @@ export function createRuntimeNpcBehaviorSystem(
     if (directiveResult.changed) {
       emitDebug("npc-movement-directive-changed", {
         npcDefinitionId: npc.npcDefinitionId,
-        targetAreaId: directive.targetAreaId,
-        targetAreaDisplayName: directive.targetAreaDisplayName,
+        destinationId: directive.destinationId,
+        destinationDisplayName: directive.destinationDisplayName,
         taskId: directive.targetTaskId,
         taskDisplayName: directive.targetTaskDisplayName
       });
     }
 
     let distanceToTargetMeters: number | null = null;
-    let failureReason: "stuck" | "missing-target-area" | null = null;
+    let failureReason: "stuck" | "missing-destination" | null = null;
 
-    if (!task || !targetArea) {
-      state.status =
-        task?.targetAreaId && !targetArea ? "blocked" : "idle";
-      state.blockedAtMs = task?.targetAreaId && !targetArea ? now() : null;
-      failureReason = task?.targetAreaId && !targetArea ? "missing-target-area" : null;
+    if (!task || !destination) {
+      // A task naming a place that no longer exists is blocked, not idle:
+      // the author asked for something the region cannot answer.
+      const namedAMissingPlace = Boolean(task?.target) && !destination;
+      state.status = namedAMissingPlace ? "blocked" : "idle";
+      state.blockedAtMs = namedAMissingPlace ? now() : null;
+      failureReason = namedAMissingPlace ? "missing-destination" : null;
     } else {
-      const targetX = state.targetX ?? targetArea.bounds.center[0];
-      const targetZ = state.targetZ ?? targetArea.bounds.center[2];
+      const targetX = state.targetX ?? destination.x;
+      const targetZ = state.targetZ ?? destination.z;
       const targetPoint = { x: targetX, z: targetZ };
 
       const movedSinceLastProgress =
@@ -716,8 +782,8 @@ export function createRuntimeNpcBehaviorSystem(
         state.status = "idle";
         emitDebug("npc-movement-unblocked", {
           npcDefinitionId: npc.npcDefinitionId,
-          targetAreaId: directive.targetAreaId,
-          targetAreaDisplayName: directive.targetAreaDisplayName,
+          destinationId: directive.destinationId,
+          destinationDisplayName: directive.destinationDisplayName,
           reason: "external-progress"
         });
       }
@@ -734,8 +800,8 @@ export function createRuntimeNpcBehaviorSystem(
         state.lastProgressAtMs = now();
         emitDebug("npc-movement-retrying", {
           npcDefinitionId: npc.npcDefinitionId,
-          targetAreaId: directive.targetAreaId,
-          targetAreaDisplayName: directive.targetAreaDisplayName,
+          destinationId: directive.destinationId,
+          destinationDisplayName: directive.destinationDisplayName,
           taskId: task.taskId,
           taskDisplayName: task.displayName
         });
@@ -818,8 +884,8 @@ export function createRuntimeNpcBehaviorSystem(
           navPathByNpcId.delete(npc.npcDefinitionId);
           emitDebug("npc-movement-blocked", {
             npcDefinitionId: npc.npcDefinitionId,
-            targetAreaId: directive.targetAreaId,
-            targetAreaDisplayName: directive.targetAreaDisplayName
+            destinationId: directive.destinationId,
+            destinationDisplayName: directive.destinationDisplayName
           });
         }
       } else {
@@ -837,8 +903,8 @@ export function createRuntimeNpcBehaviorSystem(
 
     setEntityMovement(blackboard, {
       entityId: npc.npcDefinitionId,
-      targetAreaId: directive.targetAreaId,
-      targetAreaDisplayName: directive.targetAreaDisplayName,
+      destinationId: directive.destinationId,
+      destinationDisplayName: directive.destinationDisplayName,
       status: state.status,
       distanceToTargetMeters,
       failureReason
@@ -911,10 +977,11 @@ export function createRuntimeNpcBehaviorSystem(
         if (!position) continue;
         const state = movementStateByNpcId.get(npc.npcDefinitionId) ?? null;
         npcs[npc.npcDefinitionId] = {
+          regionId: region.identity.id,
           position: { x: position.x, y: position.y, z: position.z },
           target: state
             ? {
-                areaId: state.targetAreaId,
+                destinationId: state.destinationId,
                 taskId: state.targetTaskId
               }
             : null,
@@ -952,6 +1019,11 @@ export function createRuntimeNpcBehaviorSystem(
           );
           continue;
         }
+        // Saved somewhere else. Leaving the NPC at its authored spot is
+        // right; putting it where it stood in another region is not.
+        if (saved.regionId && saved.regionId !== region.identity.id) {
+          continue;
+        }
         const position = world.getComponent(entry.entity, Position);
         if (position) {
           position.x = saved.position.x;
@@ -964,7 +1036,8 @@ export function createRuntimeNpcBehaviorSystem(
         // wall-clock timestamps).
         const nowMs = now();
         movementStateByNpcId.set(npcDefinitionId, {
-          targetAreaId: saved.target?.areaId ?? null,
+          destinationId:
+            saved.target?.destinationId ?? saved.target?.areaId ?? null,
           targetTaskId: saved.target?.taskId ?? null,
           // targetX/Z re-sampled on next sync tick when the
           // MovementDirective resolves.

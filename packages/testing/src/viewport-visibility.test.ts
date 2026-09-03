@@ -19,7 +19,8 @@ describe("Studio shared viewport visibility", () => {
         activeBuildKind: "surfaces",
         activeDesignKind: "player",
         buildCenterPanelVisible: true,
-        designCenterPanelVisible: false
+        designCenterPanelVisible: false,
+        activeStoryKind: "structure"
       })
     ).toBe(false);
   });
@@ -32,7 +33,8 @@ describe("Studio shared viewport visibility", () => {
         activeBuildKind: "layout",
         activeDesignKind: "player",
         buildCenterPanelVisible: false,
-        designCenterPanelVisible: false
+        designCenterPanelVisible: false,
+        activeStoryKind: "structure"
       })
     ).toBe(true);
   });
@@ -45,7 +47,8 @@ describe("Studio shared viewport visibility", () => {
         activeBuildKind: "layout",
         activeDesignKind: "dialogues",
         buildCenterPanelVisible: false,
-        designCenterPanelVisible: true
+        designCenterPanelVisible: true,
+        activeStoryKind: "structure"
       })
     ).toBe(false);
   });

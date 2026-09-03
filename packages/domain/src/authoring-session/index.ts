@@ -38,7 +38,8 @@ import {
   normalizeScenes,
   type ComposedRegionContents,
   type RegionSceneOverlay,
-  type Scene
+  type Scene,
+  takeSceneRegionCollapseNotes
 } from "../scenes";
 import {
   createDefaultEpisode,
@@ -49,7 +50,10 @@ import {
   mapScenes,
   normalizeEpisodes,
   type Episode,
-  type EpisodeEndRouting
+  type EpisodeEndRouting,
+  getAllQuestDefinitionsInEpisodes,
+  findQuestDefinitionById,
+  findSceneByQuestDefinitionId
 } from "../episodes";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -449,10 +453,12 @@ export function getAllDialogueDefinitions(
   return session.gameProject.dialogueDefinitions;
 }
 
+/** Every quest in the session's project, flattened out of the Scenes that
+ *  hold them. Delegates rather than reading a second store. */
 export function getAllQuestDefinitions(
   session: AuthoringSession
 ): QuestDefinition[] {
-  return session.gameProject.questDefinitions;
+  return getAllQuestDefinitionsInEpisodes(session.gameProject.episodes);
 }
 
 export function getAllMenuDefinitions(
@@ -499,11 +505,40 @@ export function createAuthoringSession(
     contentLibrary,
     normalizedProject.identity.id
   );
+  // A Scene used to be able to dress several regions and now names one, so
+  // any other region's overlay content has nowhere to go. Say what was
+  // stranded rather than dropping it quietly -- the author decides whether
+  // to re-home it onto the region or into another Scene.
+  for (const note of takeSceneRegionCollapseNotes()) {
+    console.warn(
+      `[scenes] Scene "${note.sceneId}" also dressed region "${note.regionId}", which it no longer names. ` +
+        `Stranded: ${note.npcPresences} NPC, ${note.itemPresences} item, ${note.placedAssets} placed asset` +
+        `${note.hasPlayerPresence ? ", and a player start" : ""}. ` +
+        `Re-place them on the region or in a Scene that names it.`
+    );
+  }
+
+  // The migration's Scene output is otherwise ignored here, but its region
+  // assignment is not: a Scene that names nowhere cannot be entered, and
+  // the migration is what knows the project's regions.
+  const migratedRegionIds = new Map(
+    migrated.scenes.map((scene) => [scene.sceneId, scene.regionId])
+  );
   const projectWithScenes: GameProject = {
     ...normalizedProject,
     episodes: normalizedProject.episodes.map((episode) => ({
       ...episode,
-      scenes: normalizeScenesForLoad(episode.scenes, normalizedContentLibrary)
+      scenes: normalizeScenesForLoad(
+        episode.scenes.map((scene) =>
+          scene.regionId.length > 0
+            ? scene
+            : {
+                ...scene,
+                regionId: migratedRegionIds.get(scene.sceneId) ?? ""
+              }
+        ),
+        normalizedContentLibrary
+      )
     }))
   };
   const regionMap = new Map<string, RegionDocument>();
@@ -776,32 +811,18 @@ function applyDeleteShaderGraphCommand(
       ...session.gameProject,
       episodes: mapScenes(session.gameProject.episodes, (scene) => ({
         ...scene,
-        regionOverlays: Object.fromEntries(
-          Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
-            regionId,
-            {
-              ...overlay,
-              placedAssets: overlay.placedAssets.map((asset) =>
-                stripShaderReferences(
-                  asset,
-                  command.payload.shaderDefinitionId
-                )
-              ),
-              npcPresences: overlay.npcPresences.map((presence) =>
-                stripShaderReferences(
-                  presence,
-                  command.payload.shaderDefinitionId
-                )
-              ),
-              itemPresences: overlay.itemPresences.map((presence) =>
-                stripShaderReferences(
-                  presence,
-                  command.payload.shaderDefinitionId
-                )
-              )
-            }
-          ])
-        )
+        overlay: {
+          ...scene.overlay,
+          placedAssets: scene.overlay.placedAssets.map((asset) =>
+            stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          ),
+          npcPresences: scene.overlay.npcPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          ),
+          itemPresences: scene.overlay.itemPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          )
+        }
       }))
     },
     contentLibrary: {
@@ -851,11 +872,19 @@ function applyDeleteShaderGraphCommand(
         regionId,
         {
           ...region,
-          // Plan 058 §058.1 — base-scope assets scrub here; the
-          // overlay-side scrub happens across gameProject.scenes
-          // below (a shader delete is global, not Scene-scoped).
+          // Region-owned content scrubs here; the overlay-side scrub
+          // happens across every Scene above (a shader delete is global,
+          // not Scene-scoped). Residents are region-owned too, so they
+          // scrub with the assets or they keep dangling references to a
+          // shader that no longer exists.
           placedAssets: region.placedAssets.map((asset) =>
             stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          ),
+          npcPresences: region.npcPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
+          ),
+          itemPresences: region.itemPresences.map((presence) =>
+            stripShaderReferences(presence, command.payload.shaderDefinitionId)
           )
         }
       ])
@@ -1709,6 +1738,18 @@ function applyCreateQuestDefinitionCommand(
   session: AuthoringSession,
   command: CreateQuestDefinitionCommand
 ): AuthoringSession {
+  // A quest with nowhere to happen is not a quest. Reading the ambient
+  // Scene here used to mean a null or stale `activeSceneId` matched no
+  // Scene and the new quest was silently discarded -- created, then gone.
+  const target = findSceneById(
+    session.gameProject.episodes,
+    command.payload.sceneId
+  );
+  if (!target) {
+    throw new Error(
+      `[authoring-session] CreateQuestDefinition names Scene "${command.payload.sceneId}", which does not exist. Pick a Scene that does.`
+    );
+  }
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
   ]);
@@ -1717,10 +1758,17 @@ function applyCreateQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: [
-        ...session.gameProject.questDefinitions,
-        command.payload.definition
-      ]
+      episodes: mapScenes(session.gameProject.episodes, (scene) =>
+        scene.sceneId === target.sceneId
+          ? {
+              ...scene,
+              questDefinitions: [
+                ...scene.questDefinitions,
+                command.payload.definition
+              ]
+            }
+          : scene
+      )
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -1871,21 +1919,24 @@ function applyUpdateQuestDefinitionCommand(
   session: AuthoringSession,
   command: UpdateQuestDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.questDefinitions.map(
-    (definition) =>
-      definition.definitionId === command.payload.definition.definitionId
-        ? command.payload.definition
-        : definition
-  );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
   ]);
 
+  // By id across every Scene: the command names a quest, not a Scene, and
+  // exactly one Scene holds it.
   return {
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: nextDefinitions
+      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.map((definition) =>
+          definition.definitionId === command.payload.definition.definitionId
+            ? command.payload.definition
+            : definition
+        )
+      }))
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2021,9 +2072,13 @@ function applyDeleteQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      questDefinitions: session.gameProject.questDefinitions.filter(
-        (definition) => definition.definitionId !== command.payload.definitionId
-      )
+      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.filter(
+          (definition) =>
+            definition.definitionId !== command.payload.definitionId
+        )
+      }))
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2512,6 +2567,150 @@ export function applyCommand(
     return applyCreateQuestDefinitionCommand(session, command);
   }
 
+  if (command.kind === "PromotePresenceToRegion") {
+    const { sceneId, presenceId } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    const region = scene ? session.regions.get(scene.regionId) : null;
+    if (!scene || !region) return session;
+
+    const npc = scene.overlay.npcPresences.find(
+      (presence) => presence.presenceId === presenceId
+    );
+    const item = scene.overlay.itemPresences.find(
+      (presence) => presence.presenceId === presenceId
+    );
+    const player =
+      scene.overlay.playerPresence?.presenceId === presenceId
+        ? scene.overlay.playerPresence
+        : null;
+    if (!npc && !item && !player) return session;
+
+    const transaction = createTransactionForCommand(command, [presenceId]);
+    const nextRegions = new Map(session.regions);
+    nextRegions.set(region.identity.id, {
+      ...region,
+      npcPresences: npc ? [...region.npcPresences, npc] : region.npcPresences,
+      itemPresences: item
+        ? [...region.itemPresences, item]
+        : region.itemPresences,
+      // The region keeps the start it already has: a Scene's spawn wins
+      // while that Scene runs, so promoting one must not silently
+      // replace where the player begins everywhere else.
+      playerPresence: player
+        ? (region.playerPresence ?? player)
+        : region.playerPresence
+    });
+
+    return {
+      ...withEpisodes(
+        {  ...session, regions: nextRegions },
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId
+            ? {
+                ...entry,
+                overlay: {
+                  ...entry.overlay,
+                  npcPresences: entry.overlay.npcPresences.filter(
+                    (presence) => presence.presenceId !== presenceId
+                  ),
+                  itemPresences: entry.overlay.itemPresences.filter(
+                    (presence) => presence.presenceId !== presenceId
+                  ),
+                  playerPresence:
+                    entry.overlay.playerPresence?.presenceId === presenceId
+                      ? null
+                      : entry.overlay.playerPresence
+                }
+              }
+            : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
+  if (command.kind === "SetSceneSuppression") {
+    const { sceneId, regionOwnedId, suppressed } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    if (!scene) return session;
+    const already = scene.overlay.suppressedRegionIds.includes(regionOwnedId);
+    if (already === suppressed) return session;
+    const transaction = createTransactionForCommand(command, [regionOwnedId]);
+    return {
+      ...withEpisodes(
+        session,
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId
+            ? {
+                ...entry,
+                overlay: {
+                  ...entry.overlay,
+                  suppressedRegionIds: suppressed
+                    ? [...entry.overlay.suppressedRegionIds, regionOwnedId]
+                    : entry.overlay.suppressedRegionIds.filter(
+                        (id) => id !== regionOwnedId
+                      )
+                }
+              }
+            : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
+  if (command.kind === "SetSceneNavMesh") {
+    const { sceneId, navMesh } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    if (!scene) return session;
+    // A bake that produced the same artifact is not an edit, so it does not
+    // push an undo step or dirty the project.
+    if (
+      scene.navMesh?.assetPath === navMesh?.assetPath &&
+      scene.navMesh?.inputHash === navMesh?.inputHash
+    ) {
+      return session;
+    }
+    const transaction = createTransactionForCommand(command, [sceneId]);
+    return {
+      ...withEpisodes(
+        session,
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId ? { ...entry, navMesh } : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
+  if (command.kind === "MoveQuestToScene") {
+    const moved = moveQuestToSceneInSession(
+      session,
+      command.payload.questDefinitionId,
+      command.payload.toSceneId
+    );
+    if (moved === session) return session;
+    const transaction = createTransactionForCommand(command, [
+      command.payload.questDefinitionId
+    ]);
+    return {
+      ...moved,
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
   if (command.kind === "UpdateNPCDefinition") {
     return applyUpdateNPCDefinitionCommand(session, command);
   }
@@ -2816,6 +3015,41 @@ export function moveSceneToEpisodeInSession(
   );
 }
 
+/**
+ * Move a quest to another Scene (epic #226).
+ *
+ * A Scene HOLDS its quests, so moving one is a remove-and-add across two
+ * Scenes rather than a field edit -- the same shape as moving a Scene
+ * between Episodes above. Single ownership stays true by construction:
+ * the quest is filtered out of every Scene before it is added to the
+ * destination, so a repeat call cannot leave two copies.
+ */
+export function moveQuestToSceneInSession(
+  session: AuthoringSession,
+  questDefinitionId: string,
+  toSceneId: string
+): AuthoringSession {
+  const episodes = session.gameProject.episodes;
+  const quest = findQuestDefinitionById(episodes, questDefinitionId);
+  const from = findSceneByQuestDefinitionId(episodes, questDefinitionId);
+  const to = findSceneById(episodes, toSceneId);
+  if (!quest || !to || from?.sceneId === toSceneId) return session;
+
+  return withEpisodes(
+    session,
+    mapScenes(episodes, (scene) => {
+      const without = scene.questDefinitions.filter(
+        (entry) => entry.definitionId !== questDefinitionId
+      );
+      return {
+        ...scene,
+        questDefinitions:
+          scene.sceneId === toSceneId ? [...without, quest] : without
+      };
+    })
+  );
+}
+
 /** Where the player goes when an Episode ends — see
  *  `GameProject.episodeEndRouting`. */
 export function updateEpisodeEndRoutingInSession(
@@ -2869,7 +3103,7 @@ export function updateEpisodeInSession(
  */
 export function addSceneToSession(
   session: AuthoringSession,
-  options: { displayName: string; episodeId?: string }
+  options: { displayName: string; episodeId?: string; regionId?: string }
 ): AuthoringSession {
   const episode = options.episodeId
     ? session.gameProject.episodes.find(
@@ -2877,8 +3111,13 @@ export function addSceneToSession(
       )
     : getActiveEpisode(session);
   if (!episode) return session;
+  // A Scene has to happen somewhere. Absent an explicit choice, it happens
+  // where the author already is -- the region they have open. Leaving it
+  // blank would create a Scene that cannot be entered and that content
+  // validation immediately refuses to save.
   const scene = createDefaultScene({
-    displayName: options.displayName.trim() || "Untitled Scene"
+    displayName: options.displayName.trim() || "Untitled Scene",
+    regionId: options.regionId ?? session.activeRegionId ?? ""
   });
   return {
     ...withEpisodeScenes(session, episode.episodeId, [
@@ -2902,7 +3141,7 @@ export function updateSceneInSession(
       | "displayName"
       | "description"
       | "notes"
-      | "startingRegionId"
+      | "regionId"
       | "environmentOverride"
       | "audioOverride"
       | "transitionConfig"
@@ -2986,7 +3225,8 @@ export function convertAssetScopeInSession(
   const activeScene = getActiveScene(session);
   if (!region || !activeScene) return session;
 
-  const overlay = activeScene.regionOverlays[options.regionId];
+  const overlay =
+    activeScene.regionId === options.regionId ? activeScene.overlay : null;
   const inBase = region.placedAssets.find(
     (asset) => asset.instanceId === options.instanceId
   );
@@ -3020,20 +3260,16 @@ export function convertAssetScopeInSession(
 
   const newEpisodes = mapScenes(session.gameProject.episodes, (scene) => {
     if (scene.sceneId !== activeScene.sceneId) return scene;
-    const current =
-      scene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+    const current = scene.overlay;
     return {
       ...scene,
-      regionOverlays: {
-        ...scene.regionOverlays,
-        [options.regionId]: {
-          ...current,
-          placedAssets: inBase
-            ? [...current.placedAssets, moved]
-            : current.placedAssets.filter(
-                (asset) => asset.instanceId !== options.instanceId
-              )
-        }
+      overlay: {
+        ...current,
+        placedAssets: inBase
+          ? [...current.placedAssets, moved]
+          : current.placedAssets.filter(
+              (asset) => asset.instanceId !== options.instanceId
+            )
       }
     };
   });
@@ -3068,11 +3304,19 @@ export function copyOverlayEntryToScene(
     session.gameProject.episodes,
     options.toSceneId
   );
-  const fromOverlay = fromScene?.regionOverlays[options.regionId];
+  // Overlay content only, deliberately. A region-owned resident or prop is
+  // already present in every Scene by composition, so copying one into a
+  // Scene overlay would place a second copy beside the one that composes.
+  // Nothing to copy is the correct answer for region content.
+  // Both Scenes must be dressing the region the copy is happening in.
+  const fromOverlay =
+    fromScene && fromScene.regionId === options.regionId
+      ? fromScene.overlay
+      : null;
   if (!fromScene || !toScene || !fromOverlay) return session;
+  if (toScene.regionId !== options.regionId) return session;
 
-  const target =
-    toScene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+  const target = toScene.overlay;
   let nextTarget: RegionSceneOverlay | null = null;
 
   if (options.kind === "npc") {
@@ -3140,13 +3384,7 @@ export function copyOverlayEntryToScene(
     session,
     mapScenes(session.gameProject.episodes, (scene) =>
       scene.sceneId === options.toSceneId
-        ? {
-            ...scene,
-            regionOverlays: {
-              ...scene.regionOverlays,
-              [options.regionId]: nextTarget!
-            }
-          }
+        ? { ...scene, overlay: nextTarget! }
         : scene
     )
   );
@@ -4239,10 +4477,8 @@ export function assetDefinitionHasSceneReferences(
   );
   if (inBase) return true;
   return getAllScenes(session.gameProject.episodes).some((scene) =>
-    Object.values(scene.regionOverlays).some((overlay) =>
-      overlay.placedAssets.some(
-        (asset) => asset.assetDefinitionId === definitionId
-      )
+    scene.overlay.placedAssets.some(
+      (asset) => asset.assetDefinitionId === definitionId
     )
   );
 }

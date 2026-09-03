@@ -57,7 +57,6 @@ describe("collectSceneText", () => {
       createTestSceneAuthoringContext({
         npcDefinitions: [],
         dialogueDefinitions: [],
-        questDefinitions: [],
         itemDefinitions: [],
         documentDefinitions: [],
         region: {
@@ -160,7 +159,6 @@ describe("projectSceneContextSources (Plan 090.1)", () => {
       createTestSceneAuthoringContext({
         npcDefinitions: [],
         dialogueDefinitions: [],
-        questDefinitions: [],
         itemDefinitions: [],
         documentDefinitions: [],
         activeScene: null,

@@ -78,9 +78,9 @@ export function createTeacherContext(
   // the old questEssentialLemmas entry), `cheese` -> queso, `hello` -> hola,
   // `platform` -> anden.
   const situation: Situation = {
-    sceneId: "scene-station",
+    regionId: "scene-station",
     sceneContext: runtimeFact({
-      sceneId: "scene-station",
+      regionId: "scene-station",
       contentHash: "scene-hash",
       promptVersion: "prompt-v1",
       supportLanguage: "en",

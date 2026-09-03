@@ -13,7 +13,8 @@ import {
   validateProjectContent,
   type GameProject,
   type SemanticCommand,
-  type WorldFlagDefinition
+  type WorldFlagDefinition,
+  createDefaultRegion
 } from "@sugarmagic/domain";
 
 /**
@@ -38,28 +39,47 @@ function projectReferencing(worldFlagId: string): GameProject {
       }
     ]
   });
+  const base = createDefaultGameProject("Test", "test");
+  const quest = {
+    ...createDefaultQuestDefinition({
+      definitionId: "quest:test",
+      displayName: "Test Quest"
+    }),
+    startStageId: stage.stageId,
+    stageDefinitions: [stage]
+  };
   return {
-    ...createDefaultGameProject("Test", "test"),
+    ...base,
     worldFlagDefinitions: [
       createWorldFlagDefinition({ definitionId: worldFlagId, name: "gate-open" })
     ],
-    questDefinitions: [
-      {
-        ...createDefaultQuestDefinition({
-          definitionId: "quest:test",
-          displayName: "Test Quest"
-        }),
-        startStageId: stage.stageId,
-        stageDefinitions: [stage]
-      }
-    ]
+    // Quests are held by the Scene they happen in (epic #226).
+    episodes: base.episodes.map((episode) => ({
+      ...episode,
+      scenes: episode.scenes.map((scene, index) => ({
+        ...scene,
+        regionId: FLAG_TEST_REGION_ID,
+        questDefinitions: index === 0 ? [quest] : scene.questDefinitions
+      }))
+    }))
   };
+}
+
+const FLAG_TEST_REGION_ID = "region:flags";
+
+/** These tests are about flags, but a project still has to be coherent:
+ *  its Scenes name a region, so the region has to exist. */
+function flagTestRegion() {
+  return createDefaultRegion({
+    regionId: FLAG_TEST_REGION_ID,
+    displayName: "Flag Test Region"
+  });
 }
 
 function sessionFor(gameProject: GameProject) {
   return createAuthoringSession(
     gameProject,
-    [],
+    [flagTestRegion()],
     createEmptyContentLibrarySnapshot(gameProject.identity.id)
   );
 }
@@ -110,7 +130,7 @@ describe("world flag commands", () => {
     expect(
       references.every((reference) => reference.worldFlagId === FLAG_ID)
     ).toBe(true);
-    expect(validateProjectContent(session.gameProject, []).valid).toBe(true);
+    expect(validateProjectContent(session.gameProject, [flagTestRegion()]).valid).toBe(true);
   });
 
   it("deletes a flag and leaves the references dangling, which the save catches", () => {
@@ -123,7 +143,7 @@ describe("world flag commands", () => {
 
     // Deliberate: deleting does not silently rewrite an author's content. The
     // surface warns first, and the save gate then names every orphan.
-    const result = validateProjectContent(session.gameProject, []);
+    const result = validateProjectContent(session.gameProject, [flagTestRegion()]);
     expect(result.valid).toBe(false);
     expect(
       result.issues.filter((issue) => issue.severity === "error")
@@ -181,14 +201,24 @@ describe("unique flag names", () => {
   });
 
   it("accepts distinct names", () => {
+    const base = createDefaultGameProject("Test", "test");
     const project: GameProject = {
-      ...createDefaultGameProject("Test", "test"),
+      ...base,
+      episodes: base.episodes.map((episode) => ({
+        ...episode,
+        scenes: episode.scenes.map((scene) => ({
+          ...scene,
+          regionId: FLAG_TEST_REGION_ID
+        }))
+      })),
       worldFlagDefinitions: [
         createWorldFlagDefinition({ name: "gate-open" }),
         createWorldFlagDefinition({ name: "gate-shut" })
       ]
     };
 
-    expect(validateProjectContent(project, []).valid).toBe(true);
+    expect(
+      validateProjectContent(project, [flagTestRegion()]).valid
+    ).toBe(true);
   });
 });

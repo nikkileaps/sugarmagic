@@ -42,13 +42,21 @@ export type CoreDesignWorkspaceKind =
   | "spells"
   | "items"
   | "documents"
-  | "dialogues"
-  | "quests"
   | "world-flags"
   | "mechanics"
   | "game-ui";
 
 export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
+// Epic #226 -- Story productmode workspaces. `structure` is the
+// Episodes-and-Scenes hierarchy; quests and dialogue moved here from
+// Design, which keeps the definitions that exist independent of a story.
+export type CoreStoryWorkspaceKind =
+  | "structure"
+  | "episode-graph"
+  | "composer"
+  | "quests"
+  | "dialogues";
+export type StoryWorkspaceKind = CoreStoryWorkspaceKind | (string & {});
 export type RenderWorkspaceKind = "shaders" | (string & {});
 // Story 46.1 — Publish productmode workspaces. Studio core contributes
 // `package` (the baseline pure-client publish path). SugarDeploy and
@@ -64,11 +72,17 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "spells",
   "items",
   "documents",
-  "dialogues",
-  "quests",
   "world-flags",
   "mechanics",
   "game-ui"
+];
+
+export const CORE_STORY_WORKSPACE_KINDS: CoreStoryWorkspaceKind[] = [
+  "structure",
+  "episode-graph",
+  "composer",
+  "quests",
+  "dialogues"
 ];
 
 export const CORE_PUBLISH_WORKSPACE_KINDS: CorePublishWorkspaceKind[] = [
@@ -123,6 +137,7 @@ export interface ShellState {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeDesignWorkspaceKind: DesignWorkspaceKind;
+  activeStoryWorkspaceKind: StoryWorkspaceKind;
   activeRenderWorkspaceKind: RenderWorkspaceKind;
   activePublishWorkspaceKind: PublishWorkspaceKind;
   activeRegionId: string | null;
@@ -146,6 +161,7 @@ export interface ShellActions {
   setActiveProductMode: (productModeId: ProductModeId) => void;
   setActiveBuildWorkspaceKind: (kind: BuildWorkspaceKind) => void;
   setActiveDesignWorkspaceKind: (kind: DesignWorkspaceKind) => void;
+  setActiveStoryWorkspaceKind: (kind: StoryWorkspaceKind) => void;
   setActiveRenderWorkspaceKind: (kind: RenderWorkspaceKind) => void;
   setActivePublishWorkspaceKind: (kind: PublishWorkspaceKind) => void;
   setActiveRegionId: (regionId: string | null) => void;
@@ -172,6 +188,10 @@ export function deriveBuildWorkspaceId(
 
 export function deriveDesignWorkspaceId(kind: DesignWorkspaceKind): string {
   return `design:${kind}`;
+}
+
+export function deriveStoryWorkspaceId(kind: StoryWorkspaceKind): string {
+  return `story:${kind}`;
 }
 
 export function deriveRenderWorkspaceId(kind: RenderWorkspaceKind): string {
@@ -201,6 +221,7 @@ function deriveWorkspaceIdForMode(
     | "activeProductMode"
     | "activeBuildWorkspaceKind"
     | "activeDesignWorkspaceKind"
+    | "activeStoryWorkspaceKind"
     | "activeRenderWorkspaceKind"
     | "activePublishWorkspaceKind"
     | "activeRegionId"
@@ -217,6 +238,10 @@ function deriveWorkspaceIdForMode(
       state.activeBuildWorkspaceKind,
       getBuildContextId(state, state.activeBuildWorkspaceKind)
     );
+  }
+
+  if (productModeId === "story") {
+    return deriveStoryWorkspaceId(state.activeStoryWorkspaceKind);
   }
 
   if (productModeId === "render") {
@@ -254,6 +279,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
     activeProductMode: initialProductMode,
     activeBuildWorkspaceKind: "layout" as BuildWorkspaceKind,
     activeDesignWorkspaceKind: "player" as DesignWorkspaceKind,
+    activeStoryWorkspaceKind: "structure" as StoryWorkspaceKind,
     activeRenderWorkspaceKind: "shaders" as RenderWorkspaceKind,
     activePublishWorkspaceKind: "package" as PublishWorkspaceKind,
     activeRegionId: null,
@@ -342,6 +368,31 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
             : state.selection,
         toolSession:
           state.activeProductMode === "design"
+            ? { workspaceId, toolId: null, isActive: false }
+            : state.toolSession
+      }));
+    },
+    setActiveStoryWorkspaceKind: (kind) => {
+      const workspaceId = deriveStoryWorkspaceId(kind);
+      set((state) => ({
+        activeStoryWorkspaceKind: kind,
+        activeWorkspaceId:
+          state.activeProductMode === "story"
+            ? workspaceId
+            : state.activeWorkspaceId,
+        navigation: {
+          ...state.navigation,
+          activeWorkspaceId:
+            state.activeProductMode === "story"
+              ? workspaceId
+              : state.navigation.activeWorkspaceId
+        },
+        selection:
+          state.activeProductMode === "story"
+            ? { workspaceId, entityIds: [] }
+            : state.selection,
+        toolSession:
+          state.activeProductMode === "story"
             ? { workspaceId, toolId: null, isActive: false }
             : state.toolSession
       }));

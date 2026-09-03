@@ -45,7 +45,7 @@ const CARD_ID = "sugarlang.scene-context";
 export interface CreateSceneContextHudCardArgs {
   pluginId: string;
   /** Reads the seeded model for a scene, or undefined when none was shipped. */
-  getSceneContext: (sceneId: string) => SceneContextModel | undefined;
+  getSceneContext: (regionId: string) => SceneContextModel | undefined;
 }
 
 function appendMetric(
@@ -125,7 +125,7 @@ function renderConceptList(
 function renderInto(
   container: HTMLElement,
   context: DebugHudCardContext,
-  getSceneContext: (sceneId: string) => SceneContextModel | undefined
+  getSceneContext: (regionId: string) => SceneContextModel | undefined
 ): void {
   const documentRef = container.ownerDocument ?? document;
   container.replaceChildren();
@@ -133,16 +133,16 @@ function renderInto(
   const card = documentRef.createElement("div");
   card.className = "sm-debug-hud__world-card";
 
-  const sceneId = context.gameplaySession.currentRegionId;
-  if (!sceneId) {
+  const regionId = context.gameplaySession.currentRegionId;
+  if (!regionId) {
     appendMetric(card, "Scene", "(none loaded)");
     container.appendChild(card);
     return;
   }
 
-  appendMetric(card, "Scene", sceneId);
+  appendMetric(card, "Scene", regionId);
 
-  const model = getSceneContext(sceneId);
+  const model = getSceneContext(regionId);
   if (!model) {
     appendMetric(card, "Context", "(not built)");
     const hint = documentRef.createElement("div");
@@ -198,7 +198,7 @@ export function createSceneContextHudCard(
   // `updateCard` gets only a context, so the container is captured here at
   // render time -- the same closure trick the session card uses for its rows.
   let mount: HTMLElement | null = null;
-  let lastRenderedSceneId: string | null = null;
+  let lastRenderedRegionId: string | null = null;
 
   return {
     pluginId: args.pluginId,
@@ -211,17 +211,17 @@ export function createSceneContextHudCard(
       cardId: CARD_ID,
       renderCard(container: HTMLElement, context: DebugHudCardContext) {
         mount = container;
-        lastRenderedSceneId = context.gameplaySession.currentRegionId;
+        lastRenderedRegionId = context.gameplaySession.currentRegionId;
         renderInto(container, context, args.getSceneContext);
       },
       updateCard(context: DebugHudCardContext) {
         // Only the loaded scene can change; the model itself is immutable for
         // the session. Re-rendering on every tick would be wasted work.
-        const sceneId = context.gameplaySession.currentRegionId;
-        if (!mount || sceneId === lastRenderedSceneId) {
+        const regionId = context.gameplaySession.currentRegionId;
+        if (!mount || regionId === lastRenderedRegionId) {
           return;
         }
-        lastRenderedSceneId = sceneId;
+        lastRenderedRegionId = regionId;
         renderInto(mount, context, args.getSceneContext);
       },
       disposeCard() {

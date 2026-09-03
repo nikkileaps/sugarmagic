@@ -117,6 +117,14 @@ export type QuestActionDefinition =
   // volume's exit list stops what its enter list began without naming an
   // instance.
   | { type: "stopCue"; cueDefinitionId: string | null }
+  // Moves the player into another region, landing on one of that region's
+  // markers. A null `markerId` means the region's own player start, which
+  // is the only sensible default when a region has no marker yet.
+  //
+  // Distinct from `advanceToNextScene`, which completes the current Scene
+  // and moves the STORY on. This is a doorway: the story does not change,
+  // the player just walks somewhere else.
+  | { type: "goToRegion"; regionId: string | null; markerId: string | null }
   // Overrides an NPC's interaction mode from here on, or clears the override
   // with a null `mode` so the NPC falls back to its authored definition.
   // Targets the DEFINITION, so it reaches every presence of that NPC --
@@ -189,6 +197,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
   stopCue: "Stop Cue",
+  goToRegion: "Go to Region",
   setNpcInteractionMode: "Set NPC Interaction Mode",
   playAnimation: "Play Animation"
 };
@@ -230,6 +239,8 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "playCue":
     case "stopCue":
       return { type, cueDefinitionId: null };
+    case "goToRegion":
+      return { type, regionId: null, markerId: null };
     case "setNpcInteractionMode":
       // Null mode = clear the override. The author picks the NPC and
       // the mode; both start unset.
@@ -326,6 +337,17 @@ export interface QuestDefinition {
   definitionId: string;
   displayName: string;
   description: string;
+  /**
+   * When this quest becomes active (epic #226). Absent means at boot,
+   * which is what every quest did before this existed -- so a project
+   * written without it behaves exactly as it always has.
+   *
+   * The same grammar quest NODES use, deliberately: `questCompleted`
+   * chains one quest to another, which is how an errand spanning two
+   * Scenes is authored, and `QuestManager` already evaluates every case
+   * against quest state.
+   */
+  startCondition?: QuestConditionDefinition;
   startStageId: string;
   stageDefinitions: QuestStageDefinition[];
   rewardDefinitions: QuestRewardDefinition[];
@@ -550,6 +572,12 @@ export function normalizeQuestAction(action: unknown): QuestActionDefinition | n
         type,
         cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
       };
+    case "goToRegion":
+      return {
+        type,
+        regionId: readString(source.regionId) ?? legacyTargetId,
+        markerId: readString(source.markerId) ?? null
+      };
     case "setNpcInteractionMode": {
       const mode = readString(source.mode);
       return {
@@ -730,6 +758,7 @@ export function normalizeQuestDefinition(
       definition.startStageId && validStageIds.has(definition.startStageId)
         ? definition.startStageId
         : normalizedStages[0]!.stageId,
+    startCondition: normalizeQuestCondition(definition.startCondition),
     stageDefinitions: normalizedStages,
     rewardDefinitions: (definition.rewardDefinitions ?? [])
       .map((reward) => normalizeQuestRewardDefinition(reward))

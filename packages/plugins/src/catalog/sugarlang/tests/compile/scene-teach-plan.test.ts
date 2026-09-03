@@ -39,7 +39,7 @@ function directive(): PedagogicalDirective {
 
 function sceneContext(): SceneContextModel {
   return {
-    sceneId: "scene-dock",
+    regionId: "scene-dock",
     contentHash: "hash-1",
     concepts: [{ word: "cheese", pos: "noun", provenance: "npc:finnick:bio" }]
   } as unknown as SceneContextModel;
@@ -57,7 +57,7 @@ describe("build-time teach plan", () => {
     const invoke = vi.fn(async () => directive());
 
     return planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       bands: ["A1", "A2", "B1"],
       targetLanguage: "es",
@@ -84,7 +84,7 @@ describe("build-time teach plan", () => {
     });
 
     await planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       bands: ["B2"],
       targetLanguage: "es",
@@ -109,7 +109,7 @@ describe("build-time teach plan", () => {
     });
 
     await planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       bands: ["A1"],
       targetLanguage: "es",
@@ -129,7 +129,7 @@ describe("build-time teach plan", () => {
     const invoke = vi.fn(async () => directive());
 
     const plan = await planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: null,
       bands: ["A1"],
       targetLanguage: "es",
@@ -154,7 +154,7 @@ describe("build-time teach plan", () => {
     });
 
     const plan = await planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       bands: ["A1", "A2", "B1"],
       targetLanguage: "es",
@@ -171,7 +171,7 @@ describe("build-time teach plan", () => {
     const invoke = vi.fn(async () => directive());
 
     const plan = await planSceneTeaching({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       bands: ["A1"],
       targetLanguage: "es",

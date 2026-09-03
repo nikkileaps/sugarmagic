@@ -22,7 +22,7 @@ import type { ConversationRuntimeContext } from "@sugarmagic/runtime-core";
 
 function sceneContext(): SceneContextModel {
   return {
-    sceneId: "scene-dock",
+    regionId: "scene-dock",
     contentHash: "hash",
     promptVersion: "090.1.0",
     supportLanguage: "en",
@@ -51,13 +51,13 @@ function runtimeContext(
 }
 
 describe("composeSituation -- total under absence", () => {
-  it("composes from a sceneId alone", () => {
+  it("composes from a regionId alone", () => {
     // The blackboard guarantees nothing. A situation with everything missing is
     // still a situation, and must not throw or return null -- otherwise the
     // Teacher becomes unreachable whenever the world is mid-transition.
-    const situation = composeSituation({ sceneId: "scene-dock" });
+    const situation = composeSituation({ regionId: "scene-dock" });
 
-    expect(situation.sceneId).toBe("scene-dock");
+    expect(situation.regionId).toBe("scene-dock");
     expect(situation.sceneContext.available).toBe(false);
     expect(situation.runtime.questObjectives.available).toBe(false);
     expect(situation.runtime.knownFacts.available).toBe(false);
@@ -68,7 +68,7 @@ describe("composeSituation -- total under absence", () => {
   it("an unbuilt scene does not prevent a situation", () => {
     // The runtime half alone is worth handing to the Teacher.
     const situation = composeSituation({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       runtimeContext: runtimeContext({ timeOfDay: "morning" })
     });
 
@@ -78,7 +78,7 @@ describe("composeSituation -- total under absence", () => {
 
   it("one absent field does not invalidate the others", () => {
     const situation = composeSituation({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext(),
       runtimeContext: runtimeContext({ knownFacts: ["The dock is closed."] })
     });
@@ -99,7 +99,7 @@ describe("composeSituation -- empty is not missing", () => {
     // the compose path makes these identical and the Teacher then teaches
     // confidently from a fact we never had.
     const situation = composeSituation({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       runtimeContext: runtimeContext({ knownFacts: [] })
     });
 
@@ -108,11 +108,11 @@ describe("composeSituation -- empty is not missing", () => {
 
   it("distinguishes empty from missing on every list-valued fact", () => {
     const empty = composeSituation({
-      sceneId: "s",
+      regionId: "s",
       runtimeContext: runtimeContext({ knownFacts: [], recentWorldEvents: [] })
     });
     const missing = composeSituation({
-      sceneId: "s",
+      regionId: "s",
       runtimeContext: runtimeContext()
     });
 
@@ -124,11 +124,11 @@ describe("composeSituation -- empty is not missing", () => {
 
   it("treats null and undefined alike -- the blackboard uses them interchangeably", () => {
     const nulled = composeSituation({
-      sceneId: "s",
+      regionId: "s",
       runtimeContext: runtimeContext({ knownFacts: null })
     });
     const undef = composeSituation({
-      sceneId: "s",
+      regionId: "s",
       runtimeContext: runtimeContext({ knownFacts: undefined })
     });
 
@@ -139,7 +139,7 @@ describe("composeSituation -- empty is not missing", () => {
   it("an empty string time-of-day is available, not treated as missing", () => {
     // Falsy-but-present is the classic way this collapse sneaks back in.
     const situation = composeSituation({
-      sceneId: "s",
+      regionId: "s",
       runtimeContext: runtimeContext({ timeOfDay: "" as never })
     });
 
@@ -150,7 +150,7 @@ describe("composeSituation -- empty is not missing", () => {
 describe("composeSituation -- reading a fact", () => {
   it("isAvailable narrows to the value", () => {
     const situation = composeSituation({
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       sceneContext: sceneContext()
     });
 

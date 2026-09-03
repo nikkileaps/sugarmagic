@@ -10,7 +10,7 @@
  *   costs an LLM call each time it moves, so the test for inclusion is "would a
  *   Teacher decide differently", not "is it part of the situation".
  *
- *     sceneId            a different scene is a different situation
+ *     regionId            a different scene is a different situation
  *     scene contentHash  the scene was rebuilt; its concepts may have changed
  *     quest + stage      the player is somewhere else in the story
  *     objective nodeIds  the current quest node -- what they are doing NOW
@@ -66,7 +66,7 @@ export function situationKey(situation: Situation): string {
   const time = part(situation.runtime.timeOfDay, (band) => band);
 
   return [
-    `scene:${situation.sceneId}`,
+    `region:${situation.regionId}`,
     `hash:${scene}`,
     `quest:${quest}`,
     `nodes:${objectives}`,

@@ -83,16 +83,12 @@ function buildCurrentLocationEvidence(
   if (npcCurrentGoal?.goal) {
     locationSegments.push(`The NPC's current goal is ${npcCurrentGoal.goal}.`);
   }
-  if (npcMovement?.targetAreaDisplayName) {
+  if (npcMovement?.destinationDisplayName) {
     locationSegments.push(
-      `The NPC movement status is ${npcMovement.status} toward ${npcMovement.targetAreaDisplayName}.`
+      `The NPC movement status is ${npcMovement.status} toward ${npcMovement.destinationDisplayName}.`
     );
   }
-  if (currentLocation.sceneDisplayName) {
-    locationSegments.push(
-      `The current scene is ${currentLocation.sceneDisplayName} in ${currentLocation.regionDisplayName}.`
-    );
-  } else if (currentLocation.regionDisplayName) {
+  if (currentLocation.regionDisplayName) {
     locationSegments.push(`The current region is ${currentLocation.regionDisplayName}.`);
   }
 
@@ -104,7 +100,6 @@ function buildCurrentLocationEvidence(
     attributes: {
       source: "runtime-blackboard",
       region_id: currentLocation.regionId,
-      scene_id: currentLocation.sceneId,
       area_id: currentLocation.area?.areaId ?? null,
       parent_area_id: currentLocation.parentArea?.areaId ?? null,
       movement_status: npcMovement?.status ?? null,
@@ -139,9 +134,6 @@ function resolveEffectiveSearchQuery(
     }
     if (currentLocation?.regionDisplayName) {
       segments.push(`Current location: ${currentLocation.regionDisplayName}`);
-    }
-    if (currentLocation?.sceneDisplayName) {
-      segments.push(`Current scene: ${currentLocation.sceneDisplayName}`);
     }
     if (execution.runtimeContext?.npcPlayerRelation?.proximityBand) {
       segments.push(

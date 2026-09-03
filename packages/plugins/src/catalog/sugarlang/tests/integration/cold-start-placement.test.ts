@@ -101,7 +101,7 @@ function makePlacementMockProvider(): ConversationProvider {
 // npc-inspector so the context middleware activates the placement flow.
 function makeAssessmentRuntimeContextMiddleware(npcDefinitionId: string): ConversationMiddleware {
   const runtimeContext: ConversationRuntimeContext = {
-    here: { regionId: "region-test", regionDisplayName: "Test", regionLorePageId: null, sceneId: "scene-test", sceneDisplayName: "Test", area: null, parentArea: null },
+    here: { regionId: "scene-test", regionDisplayName: "Test", regionLorePageId: null, area: null, parentArea: null },
     playerLocation: null, playerPosition: null, playerArea: null,
     npcLocation: null, npcPosition: null, npcArea: null,
     npcPlayerRelation: null, npcBehavior: null, trackedQuest: null,
@@ -175,7 +175,6 @@ describe("cold-start placement golden", () => {
       activeScene: null,
       npcDefinitions: [],
       dialogueDefinitions: [],
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });

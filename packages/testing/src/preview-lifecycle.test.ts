@@ -71,6 +71,7 @@ describe("preview lifecycle state", () => {
       activeProductMode: "build" as const,
       activeBuildWorkspaceKind: "layout" as const,
       activeDesignWorkspaceKind: "player" as const,
+      activeStoryWorkspaceKind: "structure" as const,
       activeRenderWorkspaceKind: "shaders" as const,
       activePublishWorkspaceKind: "package" as const,
       activeRegionId: "region-1",

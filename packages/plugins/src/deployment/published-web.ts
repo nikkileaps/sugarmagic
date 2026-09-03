@@ -31,7 +31,9 @@ import type {
 } from "@sugarmagic/domain";
 import {
   collectFileBackedAssetPaths,
-  normalizeCreditsDefinition
+  getAllScenes,
+  normalizeCreditsDefinition,
+  getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
 
@@ -123,6 +125,9 @@ function resolveAssetSources(
       itemDefinitions: gameProject.itemDefinitions,
       documentDefinitions: gameProject.documentDefinitions,
       regions: snapshot.regions,
+      // A Scene that changes what blocks movement bakes its own navmesh.
+      // Without this the bundle ships the pointer and not the file.
+      scenes: getAllScenes(gameProject.episodes),
       // Plan 092.2 — a plugin's derived artifacts ship with the game.
       // Disabled plugins are skipped inside the collector, so turning
       // one off deploys a game without its files rather than a game
@@ -193,7 +198,9 @@ function buildBootJsonPayload(
     documentDefinitions: gameProject.documentDefinitions,
     npcDefinitions: gameProject.npcDefinitions,
     dialogueDefinitions: gameProject.dialogueDefinitions,
-    questDefinitions: gameProject.questDefinitions,
+    // Derived at the wire seam, not stored: quests live in the Scenes
+    // that hold them, so the bundle carries each one exactly once.
+    questDefinitions: getAllQuestDefinitionsInEpisodes(gameProject.episodes),
     menuDefinitions: gameProject.menuDefinitions,
     hudDefinition: gameProject.hudDefinition,
     uiTheme: gameProject.uiTheme,

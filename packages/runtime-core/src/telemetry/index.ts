@@ -35,7 +35,10 @@
 
 import { getActiveAccessToken } from "../identity";
 
-export const TELEMETRY_SCHEMA_VERSION = 1 as const;
+/** v2: sugarlang event payloads carry `regionId` where v1 wrote the same
+ *  region value as `sceneId`. Log queries filtering on that field pin by
+ *  schemaVersion to keep old and new records separable. */
+export const TELEMETRY_SCHEMA_VERSION = 2 as const;
 
 /**
  * The gateway path every producer POSTs to. The deployment requirement that

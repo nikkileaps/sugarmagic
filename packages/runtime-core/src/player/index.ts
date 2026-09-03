@@ -156,9 +156,9 @@ export interface SpawnRuntimePlayerEntityOptions {
 
 export function spawnRuntimePlayerEntity(
   world: World,
-  // Plan 058 §058.1 — the authored spawn point is overlay data
-  // (`Scene.regionOverlays[regionId].playerPresence`), so callers
-  // hand the composed presence directly instead of a region.
+  // The authored spawn point comes from composing the region with the
+  // active Scene -- either layer may supply it -- so callers hand the
+  // composed presence directly instead of a region.
   playerPresence: RegionPlayerPresence | null,
   playerDefinition: PlayerDefinition,
   mechanics: MechanicsDefinition,

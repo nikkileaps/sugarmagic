@@ -22,7 +22,8 @@ import {
   type PlacedAssetInstance,
   type Scene,
   type SceneAssetAppearanceOverride,
-  type SemanticCommand
+  type SemanticCommand,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import { ScopeChip } from "@sugarmagic/ui";
 import { TransformInspector } from "@sugarmagic/ui";
@@ -92,7 +93,7 @@ export function AssetCollisionSection({
   const sceneRecord: SceneAssetAppearanceOverride | null = useMemo(() => {
     if (isSceneContained) return null;
     return (
-      activeScene?.regionOverlays[regionId]?.assetAppearanceOverrides[
+      sceneOverlayForRegion(activeScene, regionId)?.assetAppearanceOverrides[
         instance.instanceId
       ] ?? null
     );

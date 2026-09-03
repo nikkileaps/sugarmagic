@@ -42,7 +42,7 @@ function regionWithTask(
             taskId: "task:hold",
             displayName: "Hold At Well",
             description: null,
-            targetAreaId: "area:well",
+            target: { kind: "area", areaId: "area:well" },
             currentActivity: "waiting",
             currentGoal: "wait_for_delivery",
             activation: {
@@ -58,7 +58,9 @@ function regionWithTask(
     landscape: createDefaultRegionLandscapeState({}),
     audio: { emitters: [] },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

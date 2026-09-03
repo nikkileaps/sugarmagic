@@ -154,9 +154,21 @@ export function selectViewportProjection(
   assetSources: AssetSourceState
 ): ViewportProjection {
   const session = project.session;
+  const activeScene = session ? getActiveScene(session) : null;
   return {
-    region: session ? getActiveRegion(session) : null,
-    activeScene: session ? getActiveScene(session) : null,
+    // Which region the viewport shows depends on what the author is
+    // doing. In Build it is the region they picked. In the scene
+    // composer it is DERIVED from the Scene being staged -- a Scene
+    // names its region, so storing that answer separately would be one
+    // fact in two places, and Build's region dropdown would drag the
+    // composer somewhere the Scene does not happen (epic #226).
+    region: session
+      ? shell.activeProductMode === "story" &&
+        shell.activeStoryWorkspaceKind === "composer"
+        ? (session.regions.get(activeScene?.regionId ?? "") ?? null)
+        : getActiveRegion(session)
+      : null,
+    activeScene,
     contentLibrary: session?.contentLibrary ?? null,
     playerDefinition: session ? getPlayerDefinition(session) : null,
     itemDefinitions: session ? getAllItemDefinitions(session) : [],

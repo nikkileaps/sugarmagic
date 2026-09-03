@@ -33,7 +33,7 @@ const WORKSPACE = "sugarlang-studio:project-1";
 
 function model(overrides: Partial<SceneContextModel> = {}): SceneContextModel {
   return {
-    sceneId: "region-1",
+    regionId: "region-1",
     contentHash: "hash-abc",
     promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
     supportLanguage: "en",
@@ -126,7 +126,7 @@ describe("092.2 — a bake survives clearing the browser", () => {
         supportLanguage: "en",
         promptVersion: "v1"
       },
-      sceneId: "region-1",
+      regionId: "region-1",
       model: model()
     });
 
@@ -148,7 +148,7 @@ describe("092.2 — a bake survives clearing the browser", () => {
     const put = (contentHash: string, promptVersion: string) =>
       cache.set({
         key: { contentHash, supportLanguage: "en", promptVersion },
-        sceneId: "region-1",
+        regionId: "region-1",
         model: model({ contentHash, promptVersion })
       });
 
@@ -174,7 +174,7 @@ describe("092.2 — a bake survives clearing the browser", () => {
     const cache = new IndexedDBSceneContextCache({ workspaceId: WORKSPACE });
     await cache.set({
       key: { contentHash: "h1", supportLanguage: "en", promptVersion: "old" },
-      sceneId: "region-1",
+      regionId: "region-1",
       model: model({ contentHash: "h1", promptVersion: "old" })
     });
 
@@ -194,8 +194,8 @@ describe("092.2 — a bake survives clearing the browser", () => {
         supportLanguage: "en",
         promptVersion: SCENE_CONTEXT_PROMPT_VERSION
       },
-      sceneId: "region-UNKNOWN",
-      model: model({ sceneId: "region-UNKNOWN", contentHash: "h9" })
+      regionId: "region-UNKNOWN",
+      model: model({ regionId: "region-UNKNOWN", contentHash: "h9" })
     });
 
     const artifact = await collectSceneContextArtifact(
@@ -233,7 +233,7 @@ describe("092.2 — a bake survives clearing the browser", () => {
       reader(
         artifactBlob([
           model(),
-          { ...model(), sceneId: "" },
+          { ...model(), regionId: "" },
           { ...model(), contentHash: "" }
         ] as SceneContextModel[])
       )
@@ -360,5 +360,74 @@ describe("092.2 — variants survive clearing the browser", () => {
       )
     );
     expect(restored).toBe(1);
+  });
+});
+
+describe("legacy scene-context records survive the regionId rename", () => {
+  // Records written before the rename carry the id under "sceneId". If the
+  // cache dropped them, the artifact sweep would silently empty the shipped
+  // scene-context set and every unchanged scene would re-bill the gateway.
+  const LEGACY_WORKSPACE = "sugarlang-studio:legacy-project";
+  const key = {
+    contentHash: "hash-legacy",
+    supportLanguage: "en",
+    promptVersion: SCENE_CONTEXT_PROMPT_VERSION
+  };
+
+  async function seedLegacyRecord(): Promise<void> {
+    const storageKey = `${key.supportLanguage}:${key.promptVersion}:${key.contentHash}`;
+    const legacyModel = {
+      sceneId: "region-legacy",
+      contentHash: key.contentHash,
+      promptVersion: key.promptVersion,
+      supportLanguage: "en",
+      prose: "A dusty archive.",
+      concepts: [],
+      extractedAtMs: 1,
+      reviewFlag: false
+    };
+    const record = {
+      storageKey,
+      workspaceId: LEGACY_WORKSPACE,
+      sceneId: "region-legacy",
+      conceptCount: 0,
+      ...key,
+      entry: { key, sceneId: "region-legacy", model: legacyModel }
+    };
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(
+        `sugarlang-scene-context-cache:${LEGACY_WORKSPACE}`,
+        1
+      );
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore("scene-context", {
+          keyPath: "storageKey"
+        });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("scene-context", "readwrite");
+      tx.objectStore("scene-context").put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
+  it("get() maps a legacy record's sceneId to regionId, entry and model", async () => {
+    await seedLegacyRecord();
+    const cache = new IndexedDBSceneContextCache({ workspaceId: LEGACY_WORKSPACE });
+    const entry = await cache.get(key);
+    expect(entry?.regionId).toBe("region-legacy");
+    expect(entry?.model.regionId).toBe("region-legacy");
+  });
+
+  it("listEntries() maps legacy metas, so the artifact sweep still sees them", async () => {
+    await seedLegacyRecord();
+    const cache = new IndexedDBSceneContextCache({ workspaceId: LEGACY_WORKSPACE });
+    const metas = await cache.listEntries();
+    expect(metas.some((meta) => meta.regionId === "region-legacy")).toBe(true);
   });
 });

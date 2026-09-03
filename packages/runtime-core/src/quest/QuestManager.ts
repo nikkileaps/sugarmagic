@@ -267,14 +267,59 @@ export class QuestManager {
 
   update(): void {
     let changed = false;
-    for (const state of this.activeQuests.values()) {
-      changed = this.refreshQuest(state) || changed;
+    // Settles rather than making one pass: finishing a quest can satisfy
+    // another's start condition, and starting one can satisfy a third's.
+    // Nothing ever un-starts or un-finishes a quest, so one pass per
+    // quest plus one is always enough to reach the end of a chain.
+    const passLimit = this.definitions.size + 1;
+    for (let pass = 0; pass < passLimit; pass += 1) {
+      let passChanged = false;
+      for (const state of this.activeQuests.values()) {
+        passChanged = this.refreshQuest(state) || passChanged;
+      }
+      passChanged = this.startQualifyingQuests() || passChanged;
+      if (!passChanged) {
+        break;
+      }
+      changed = true;
     }
     if (changed) {
       this.onStateChange?.();
     }
   }
 
+  /**
+   * Start every quest that is neither running nor finished and whose
+   * start condition holds. No start condition means it qualifies right
+   * away, which is what every quest did before conditions existed.
+   *
+   * Deliberately NOT called from `registerDefinitions`: a restored save
+   * loads its finished and active quests after registration, so a check
+   * there would judge conditions against empty state and start quests the
+   * player is already past.
+   */
+  private startQualifyingQuests(): boolean {
+    let started = false;
+    for (const [definitionId, definition] of this.definitions) {
+      if (this.activeQuests.has(definitionId)) continue;
+      if (this.completedQuestIds.has(definitionId)) continue;
+      if (
+        definition.startCondition &&
+        !this.evaluateCondition(definition.startCondition)
+      ) {
+        continue;
+      }
+      started = this.startQuest(definitionId) || started;
+    }
+    return started;
+  }
+
+  /**
+   * Start this quest now. A start condition is not consulted: it says
+   * when the quest starts ON ITS OWN, and a caller reaching this method
+   * has already decided. `startQualifyingQuests` is the one place that
+   * reads the condition.
+   */
   startQuest(questDefinitionId: string): boolean {
     if (this.activeQuests.has(questDefinitionId)) {
       return false;

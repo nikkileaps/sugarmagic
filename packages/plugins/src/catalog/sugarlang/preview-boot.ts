@@ -18,7 +18,8 @@
 import {
   getActiveScene,
   getAllRegions,
-  type AuthoringSession
+  type AuthoringSession,
+  getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "../../runtime";
 import { resolveSugarLangTargetLanguage } from "./config";
@@ -95,7 +96,9 @@ export async function buildSugarlangPreviewBootPayloadForSession(
       targetLanguage,
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
-      questDefinitions: session.gameProject.questDefinitions,
+      questDefinitions: getAllQuestDefinitionsInEpisodes(
+        session.gameProject.episodes
+      ),
       itemDefinitions: session.gameProject.itemDefinitions,
       documentDefinitions: session.gameProject.documentDefinitions
     })),
@@ -109,7 +112,7 @@ export async function buildSugarlangPreviewBootPayloadForSession(
       morphology,
       "runtime-preview"
     );
-    if (!(await cache.has(lexicon.sceneId, lexicon.contentHash, lexicon.profile))) {
+    if (!(await cache.has(lexicon.regionId, lexicon.contentHash, lexicon.profile))) {
       await cache.set(lexicon);
     }
   }

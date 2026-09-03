@@ -3,9 +3,9 @@
  *
  * Purpose: Tracks per-item encounter debt for the outer-loop teacher.
  *   Introducing an item (lemma or function) creates a DEBT of TARGET_DEBT_ENCOUNTERS
- *   diverse re-encounters. Diversity is keyed by (npcDefinitionId, sceneId, dayIndex);
+ *   diverse re-encounters. Diversity is keyed by (npcDefinitionId, regionId, dayIndex);
  *   when dayIndex is null (authored content never advances the day), diversity degrades
- *   gracefully to npcDefinitionId x sceneId only.
+ *   gracefully to npcDefinitionId x regionId only.
  *
  * Exports:
  *   - TARGET_DEBT_ENCOUNTERS
@@ -54,7 +54,7 @@ const DEBT_STORE_NAME = "debt-records";
 /** One recorded encounter in the diversity ledger. */
 export interface EncounterEntry {
   npcDefinitionId: string | null;
-  sceneId: string | null;
+  regionId: string | null;
   /** null = authored content has not advanced the day; degrades diversity to npc x scene. */
   dayIndex: number | null;
 }
@@ -76,7 +76,7 @@ export interface DebtRecord {
 export function countDiverseEncounters(encounters: EncounterEntry[]): number {
   const seen = new Set<string>();
   for (const e of encounters) {
-    seen.add(`${e.npcDefinitionId ?? ""}\0${e.sceneId ?? ""}\0${e.dayIndex ?? ""}`);
+    seen.add(`${e.npcDefinitionId ?? ""}\0${e.regionId ?? ""}\0${e.dayIndex ?? ""}`);
   }
   return seen.size;
 }

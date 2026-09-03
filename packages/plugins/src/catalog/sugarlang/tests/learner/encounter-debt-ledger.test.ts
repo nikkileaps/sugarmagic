@@ -25,10 +25,10 @@ import type { EncounterEntry } from "../../runtime/learner/encounter-debt-ledger
 
 function entry(
   npcDefinitionId: string | null,
-  sceneId: string | null,
+  regionId: string | null,
   dayIndex: number | null
 ): EncounterEntry {
-  return { npcDefinitionId, sceneId, dayIndex };
+  return { npcDefinitionId, regionId, dayIndex };
 }
 
 describe("countDiverseEncounters", () => {

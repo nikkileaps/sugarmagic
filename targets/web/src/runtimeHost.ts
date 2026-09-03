@@ -51,6 +51,8 @@ import {
   type AudioMixerSettings,
   type UITheme,
   composeRegionContents,
+  navMeshForRegion,
+  type ComposedRegionContents,
   createDefaultEpisode,
   DEFAULT_EPISODE_END_ROUTING,
   DEFAULT_EPISODE_ID,
@@ -62,6 +64,7 @@ import {
   normalizeEpisodes,
   resolveRegionVolumes,
   resolveActiveEpisode,
+  isEpisodeComplete,
   resolveActiveScene,
   resolveUnlockedEpisodeIds,
   type CreditsDefinition,
@@ -1180,8 +1183,6 @@ export function createWebRuntimeHost(
     const isEpisodeBoundary =
       !target || targetEpisode?.episodeId !== currentEpisode?.episodeId;
 
-    hostMarkSceneCompleted(activeSceneIdForSave);
-    if (isEpisodeBoundary) hostMarkEpisodeCompleted(activeEpisodeIdForSave);
     if (target && targetEpisode) {
       // Manual unlock so the advance survives gate re-evaluation
       // on every future boot.
@@ -1234,26 +1235,6 @@ export function createWebRuntimeHost(
       if (first) return first;
     }
     return null;
-  }
-
-  /**
-   * Plan 059 §059.3 — the single Scene-completion hook. When the
-   * sandbox replay mode lands (Plan 059 central tension), the
-   * per-Scene end-state snapshot capture inserts HERE — one
-   * place, not scattered across advance paths.
-   */
-  function hostMarkSceneCompleted(sceneId: string | null): void {
-    if (!sceneId) return;
-    if (!completedSceneIds.includes(sceneId)) {
-      completedSceneIds.push(sceneId);
-    }
-  }
-
-  function hostMarkEpisodeCompleted(episodeId: string | null): void {
-    if (!episodeId) return;
-    if (!completedEpisodeIds.includes(episodeId)) {
-      completedEpisodeIds.push(episodeId);
-    }
   }
 
   /**
@@ -1436,6 +1417,9 @@ export function createWebRuntimeHost(
     createHostPlayerParticipant({
       getWorld: () => world,
       getCurrentRegionId: () => activeRegionIdForSave,
+      // The visual root holds the live heading: the movement system writes
+      // it every frame the player walks, so it is where "facing" lives.
+      getPlayerYaw: () => playerVisualController?.root.rotation.y ?? null,
       applyRestoredSlice: (data) => {
         hostPlayerRestore = data;
       }
@@ -1449,8 +1433,6 @@ export function createWebRuntimeHost(
   let activeSceneIdForSave: string | null = null;
   let activeEpisodeIdForSave: string | null = null;
   let manuallyUnlockedEpisodeIds: string[] = [];
-  let completedSceneIds: string[] = [];
-  let completedEpisodeIds: string[] = [];
   let campaignRestore: CampaignProgressionSlice | null = null;
   /** The campaign from the last start() — the advance action
    *  resolves "the next Scene, then the next Episode" against it. */
@@ -1480,8 +1462,6 @@ export function createWebRuntimeHost(
       getCurrentEpisodeId: () => activeEpisodeIdForSave,
       getCurrentSceneId: () => activeSceneIdForSave,
       getManuallyUnlockedEpisodeIds: () => manuallyUnlockedEpisodeIds,
-      getCompletedSceneIds: () => completedSceneIds,
-      getCompletedEpisodeIds: () => completedEpisodeIds,
       applyRestoredSlice: (data) => {
         campaignRestore = data;
       }
@@ -1556,6 +1536,24 @@ export function createWebRuntimeHost(
   let runtimeActionRegistry: RuntimeActionRegistry | null = null;
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
+  /**
+   * Whether the frame loop should keep going. Separate from `animationId`
+   * because a frame already queued when teardown runs would otherwise
+   * re-arm itself from its own `finally` and outlive the runtime.
+   */
+  let frameLoopRunning = false;
+  /**
+   * A region change waiting for a frame boundary.
+   *
+   * [LAW:no-ambient-temporal-coupling] A swap frees the world and builds
+   * another. It is fired from a volume crossing, which runs inside
+   * `world.update()`, so doing it there would discard the world THIS frame
+   * is midway through reading. The request is parked here and taken at the
+   * top of the next frame, before anything touches the world -- the safe
+   * moment is stated rather than hoped for.
+   */
+  let pendingRegionChange: { regionId: string; markerId: string | null } | null =
+    null;
   let lastTime = 0;
   // Plan 069.10 / 070.1 perf probe (dev-only, gated by `window.__smperf`):
   // isolates the CPU update path from render, and (070.1) splits render into
@@ -1816,12 +1814,104 @@ export function createWebRuntimeHost(
     }
   }
 
+  /**
+   * Tear down everything the two region builders made, and nothing else.
+   *
+   * [LAW:one-source-of-truth] This list mirrors what `buildRegionWorld` and
+   * `buildRegionGameplay` assign. If a builder starts creating something,
+   * it gets freed here; anything NOT created there is page-scoped and must
+   * survive -- the billboard renderers, the UI layer, the action registries
+   * and the identity/sync wiring all outlive a region change.
+   *
+   * `world` is replaced rather than emptied because `World` has no
+   * `removeSystem`: discarding it is how a region's systems stop ticking.
+   */
+  /**
+   * Point the mouse and the player's facing at the current camera.
+   *
+   * Must run for EVERY region, not once at boot: the input manager and the
+   * movement system are built per region, so after a swap the new ones have
+   * no handlers at all -- right-drag and scroll do nothing, and the player
+   * walks relative to a fixed compass direction instead of the camera.
+   */
+  function bindCameraControls(movementSystem: MovementSystem) {
+    if (!inputManager) return;
+    inputManager.onRightDrag = (dx, dy) => {
+      // Touching the camera by hand takes it back. Reachable during a move's
+      // RETURN, when the input lock has already been released -- and a move
+      // that kept animating through the player's own input would feel broken.
+      cameraMoveDirector.cancel();
+      if (cameraState) {
+        cameraState = applyCameraDrag(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          dx,
+          dy
+        );
+      }
+    };
+    inputManager.onScroll = (delta) => {
+      cameraMoveDirector.cancel();
+      if (cameraState) {
+        cameraState = applyCameraZoom(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          delta
+        );
+      }
+    };
+    movementSystem.setCameraYawProvider(
+      () => cameraState?.yaw ?? Math.PI * 1.25
+    );
+  }
+
+  function disposeRegionRuntime() {
+    inputManager?.detach();
+    inputManager = null;
+    // `cameraState` is NOT freed here. It is page-scoped: the angle and zoom
+    // the player set are theirs, and walking through a doorway should not
+    // reset them. It is freed in `disposeRuntime` with the rest of the page.
+    // The bindings onto it ARE region-scoped, because the input manager and
+    // movement system they attach to are rebuilt per region -- see
+    // `bindCameraControls`.
+    // The director is a const in this closure and outlives a reboot, so a move
+    // still in flight at teardown would drive the NEXT session's camera from a
+    // baseline belonging to the last one.
+    cameraMoveDirector.cancel();
+    world = null;
+
+    playerVisualController?.dispose();
+    playerVisualController = null;
+    // Built by `buildRegionWorld`, so freed here. Left to the page teardown
+    // it was, the meshes it owns stayed in the three.js scene after a swap
+    // and the region the player left was still drawn under the new one.
+    renderableReconciler?.dispose();
+    renderableReconciler = null;
+    gameplayAssembly?.dispose();
+    gameplayAssembly = null;
+    gameplaySession = null;
+    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
+    // epoch so an in-flight load can't resurrect (and leak) after dispose.
+    navMeshLoadEpoch += 1;
+    navMeshPathfinder?.destroy();
+    navMeshPathfinder = null;
+    spellCastFeedbackHost?.dispose();
+    spellCastFeedbackHost = null;
+    pluginBannerHost?.dispose();
+    pluginBannerHost = null;
+  }
+
   function disposeRuntime() {
+    frameLoopRunning = false;
     if (animationId !== null) {
       ownerWindow.cancelAnimationFrame(animationId);
       animationId = null;
     }
 
+    // The plugin manager spans the whole page, so it is freed HERE and not
+    // by the region teardown. Not awaited: this runs from `beforeunload`,
+    // where there is no later to wait for.
+    void activePluginManager?.dispose();
     activePluginManager = null;
     identityUnsubscribe?.();
     identityUnsubscribe = null;
@@ -1831,37 +1921,16 @@ export function createWebRuntimeHost(
     userStore.set(null);
     latestAutosaveStore.set(null);
 
-    inputManager?.detach();
-    inputManager = null;
+    disposeRegionRuntime();
     cameraState = null;
-    // The director is a const in this closure and outlives a reboot, so a move
-    // still in flight at teardown would drive the NEXT session's camera from a
-    // baseline belonging to the last one.
-    cameraMoveDirector.cancel();
-    world = null;
-
-    playerVisualController?.dispose();
-    playerVisualController = null;
     debugHud?.dispose();
     debugHud = null;
-    void gameplayAssembly?.dispose();
-    gameplayAssembly = null;
-    gameplaySession = null;
-    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
-    // epoch so an in-flight load can't resurrect (and leak) after dispose.
-    navMeshLoadEpoch += 1;
-    navMeshPathfinder?.destroy();
-    navMeshPathfinder = null;
     billboardRenderer?.dispose();
     billboardRenderer = null;
     textBillboardRenderer?.dispose();
     textBillboardRenderer = null;
     billboardAssetRegistry?.dispose();
     billboardAssetRegistry = null;
-    spellCastFeedbackHost?.dispose();
-    spellCastFeedbackHost = null;
-    pluginBannerHost?.dispose();
-    pluginBannerHost = null;
     uiLayerRoot?.unmount();
     uiLayerRoot = null;
     if (uiLayerElement?.parentElement === root) {
@@ -1889,8 +1958,7 @@ export function createWebRuntimeHost(
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
 
-    renderableReconciler?.dispose();
-    renderableReconciler = null;
+    // `renderableReconciler` is freed by `disposeRegionRuntime`, called above.
 
     if (scene) {
       disposeRenderableObject(scene);
@@ -1971,6 +2039,27 @@ export function createWebRuntimeHost(
   }
 
   function renderFrame(now: number) {
+    try {
+      renderFrameBody(now);
+    } finally {
+      // ALWAYS re-arm while the loop is meant to run. Every early return
+      // below -- a half-built world mid-swap, a throw -- used to end the
+      // loop silently, which is a frozen picture with nothing in the
+      // console to explain it.
+      if (frameLoopRunning) {
+        animationId = ownerWindow.requestAnimationFrame(renderFrame);
+      }
+    }
+  }
+
+  function renderFrameBody(now: number) {
+    // Taken here, between frames, for the reason on `pendingRegionChange`.
+    if (pendingRegionChange) {
+      const change = pendingRegionChange;
+      pendingRegionChange = null;
+      void swapRegion(change);
+      return;
+    }
     if (
       !world ||
       !cameraState ||
@@ -2234,8 +2323,6 @@ export function createWebRuntimeHost(
     debugHud?.update(delta);
 
     inputManager.endFrame();
-
-    animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
   /**
@@ -2260,6 +2347,727 @@ export function createWebRuntimeHost(
 
   function start(state: WebRuntimeStartState): Promise<void> {
     return boots.run(() => runStart(state));
+  }
+
+  /**
+   * Build the world for one region: resolve which region, compose it with
+   * the active Scene, apply its landscape, build its collision world and
+   * load its navmesh, then reconcile the renderables.
+   *
+   * [LAW:decomposition] Named and callable rather than inlined in the boot,
+   * because a mid-session region transition (epic #226 story 13) is the
+   * same work with a different `resolvedActiveRegionId` -- everything else
+   * a boot does around it is per-page and must not repeat.
+   *
+   * Deliberately NOT reordered out of the boot: the statements stay where
+   * they were and in the order they were. Only their home changed.
+   */
+  /**
+   * What a mid-session region change needs that only the boot knows.
+   * Captured once the world is standing; null before that, which is why
+   * `swapRegion` refuses rather than guessing.
+   */
+  let regionSwapContext: {
+    state: WebRuntimeStartState;
+    migratedContent: ReturnType<typeof migrateToScenes>;
+    activeScene: Scene | null;
+    pluginManager: ReturnType<typeof createResolvedRuntimePluginManager>;
+  } | null = null;
+
+  async function buildRegionWorld(input: {
+    state: WebRuntimeStartState;
+    migratedContent: ReturnType<typeof migrateToScenes>;
+    activeScene: Scene | null;
+    /** Which region to build. The one thing a swap changes. */
+    resolvedActiveRegionId: string | null;
+    /** Both are non-null by the time this runs; the caller has already
+     *  mounted them, so the signature says so rather than re-checking. */
+    renderView: RenderView;
+    scene: THREE.Scene;
+  }): Promise<{
+    activeRegion: RegionDocument | null;
+    activeRegionContents: ComposedRegionContents | null;
+    collisionWorld: ReturnType<typeof createEmptyCollisionWorld>;
+  }> {
+    const {
+      state,
+      migratedContent,
+      activeScene,
+      resolvedActiveRegionId,
+      renderView,
+      scene
+    } = input;
+      const activeRegion = getActiveRegion(
+        migratedContent.regions,
+        resolvedActiveRegionId ??
+          (activeScene && activeScene.regionId.length > 0
+            ? activeScene.regionId
+            : null) ??
+          state.activeRegionId ??
+          null
+      );
+      // Composed Base + Overlay view (Pattern 1) — every presence /
+      // spawn read below sources from this, never region fields.
+      const activeRegionContents = activeRegion
+        ? composeRegionContents(activeRegion, activeScene)
+        : null;
+      // Plan 059 §059.1 — music resolution. In-game: the Scene's
+      // audioOverride shadows the project default; null = silence
+      // (the intended default — BotW model, sounds cued by
+      // actions). Menu: its own slot, playing over the start menu
+      // and returning on quit-to-menu. (Closes Plan 058's
+      // audioOverride deferral.)
+      sceneMusicCueIdForSession =
+        activeScene?.audioOverride?.backgroundMusicId ??
+        state.musicBindings?.defaultBackgroundMusicId ??
+        null;
+      menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
+      // Plan 059 §059.3 — exit/entry sequence inputs.
+      creditsThemeCueIdForSession =
+        state.musicBindings?.creditsThemeMusicId ?? null;
+      bootCreditsDefinition = state.creditsDefinition ?? null;
+      bootGameTitle = state.gameTitle ?? null;
+      // Plan 092.6 — registered BEFORE anything opens storage. Every database
+      // name on the player's device leads with it, and the helper that builds
+      // those names throws without it rather than sharing an origin's storage
+      // between two games.
+      registerActiveGameId(state.gameId ?? null);
+      // Plan 058 §058.4 — per-Scene environment override: the
+      // projector reads state.activeEnvironmentId, so a Scene with
+      // an override shadows the authored/boot value; null falls
+      // through untouched.
+      renderEngineProjector.push(
+        activeScene?.environmentOverride
+          ? {
+              ...state,
+              activeEnvironmentId: activeScene.environmentOverride.environmentId
+            }
+          : state,
+        activeRegion
+      );
+      const landscapeApplyResult = renderView.landscapeController.applyLandscape(
+        activeRegion?.landscape ?? null,
+        state.contentLibrary,
+        state.assetSources
+      );
+      // Preview-vs-editor divergence breadcrumb: which region's landscape
+      // the game actually applied, and any warnings the controller
+      // returned (previously swallowed).
+      console.info("[web-runtime] landscape-apply", {
+        regionId: activeRegion?.identity.id ?? null,
+        hasLandscape: Boolean(activeRegion?.landscape),
+        surfaceSlots: (activeRegion?.landscape?.surfaceSlots ?? []).map(
+          (slot) => `${slot.displayName}:${slot.surface?.kind ?? "none"}`
+        ),
+        warnings: landscapeApplyResult.warnings
+      });
+      for (const warning of landscapeApplyResult.warnings) {
+        console.warn("[web-runtime] landscape-apply warning", warning);
+      }
+
+      // Plan 069.2 — the collision world, built once per start from the
+      // resolved scene objects (rebuild-on-start covers region/scene switches
+      // and preview live edits). Populated inside the activeRegion block
+      // below; consumed by the CollisionSystem registered after MovementSystem.
+      let collisionWorld = createEmptyCollisionWorld();
+      // Plan 069.9 — the baked navmesh pathfinder, loaded async from the
+      // artifact blob; NPCs follow it once ready (straight-line until then, and
+      // forever in unbaked regions). Outer-scoped so teardown frees it.
+      navMeshPathfinder?.destroy();
+      navMeshPathfinder = null;
+      const navMeshEpoch = ++navMeshLoadEpoch;
+      if (activeRegion) {
+        const region = activeRegion;
+        const objects = resolveSceneObjects(region, {
+          contentLibrary: state.contentLibrary,
+          playerDefinition: state.playerDefinition,
+          itemDefinitions: state.itemDefinitions,
+          npcDefinitions: state.npcDefinitions,
+          includePlayerPresence: false,
+          activeScene
+        });
+        // Plan 069.5 — blocker / containment volumes join the collision world
+        // alongside the prop colliders (conditional gates refreshed per frame
+        // by the gameplay session, which holds the same world by reference).
+        collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
+        // Plan 069.9 — resolve the navmesh artifact blob (published to the
+        // asset-source store at bake) and load a pathfinder off the main path.
+        // The Scene's mesh REPLACES the region's rather than adding to it:
+        // a navmesh is one connected mesh, and two overlaid meshes have no
+        // coherent polygon adjacency. A Scene with none did not change what
+        // blocks movement, so it inherits.
+        const navMeshArtifact = navMeshForRegion(activeScene, region);
+        const navMeshUrl = navMeshArtifact
+          ? state.assetSources[navMeshArtifact.assetPath]
+          : undefined;
+        if (navMeshUrl) {
+          void (async () => {
+            try {
+              const response = await fetch(navMeshUrl);
+              // A miss on a static host answers with an HTML error page, and
+              // importNavMesh accepts those bytes silently -- then the first
+              // path query crashes the WASM and kills the frame loop. Treat a
+              // non-OK response as "no navmesh" (straight-line fallback).
+              if (!response.ok) {
+                console.warn(
+                  `[web-runtime] navmesh artifact fetch failed (${response.status}) -- NPCs fall back to straight-line steering`,
+                  navMeshUrl
+                );
+                return;
+              }
+              const bytes = new Uint8Array(await response.arrayBuffer());
+              const pathfinder = await loadNavMeshPathfinder(bytes);
+              // A newer start() superseded this load — free it, don't assign
+              // (else we'd overwrite the current mesh + leak the new one).
+              if (navMeshEpoch !== navMeshLoadEpoch) {
+                pathfinder.destroy();
+                return;
+              }
+              navMeshPathfinder = pathfinder;
+            } catch (error) {
+              console.warn("[web-runtime] navmesh load failed", error);
+            }
+          })();
+        }
+        // Plan 057 — item presences run through the shared filter
+        // helper so this visual-spawn path and the ECS spawn path
+        // in gameplay-session apply the same filter set. New
+        // filters (Plan 058 Scene gating, etc.) compose into
+        // `worldPresenceTracker.shouldSkip` at the host and both
+        // paths see them automatically. Non-item scene objects
+        // (NPCs, static assets) don't have a filter surface today
+        // and pass through unchanged.
+        const activeItemPresenceIds = new Set<string>();
+        iterateActiveItemPresences(
+          activeRegionContents?.itemPresences ?? [],
+          {
+            shouldSkip: (presenceId) =>
+              worldPresenceTracker.shouldSkip(
+                activeRegionIdForSave,
+                activeSceneIdForSave,
+                presenceId
+              )
+          },
+          (presence) => {
+            activeItemPresenceIds.add(presence.presenceId);
+          }
+        );
+        // Plan 070.2 — one shared reconciler builds every scene renderable
+        // (was two hand-rolled paths here: instanced grouping by
+        // representationKey + the singleton clone/sanitize/scale/shadow/
+        // parent/shader sequence). Grouping ON for the game; the studio keeps
+        // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
+        // is excluded upstream (includePlayerPresence: false).
+        renderableReconciler = createRenderableReconciler({
+          parent: scene,
+          resolveUrl: (object) =>
+            object.modelSourcePath
+              ? renderView!.assetResolver.resolveAssetUrl(
+                  object.modelSourcePath
+                ) ?? null
+              : null,
+          loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+          createFallback: (object) => getSceneObjectFallback(object),
+          shaderRuntime: renderView!.shaderRuntime,
+          getFileSources: () => currentAssetSources,
+          enableShadows: (renderableRoot) =>
+            renderView!.enableShadowsOnObject(renderableRoot),
+          grouping: true,
+          isInstanceable: assetObjectIsInstanceable,
+          validate: validateRenderableAsset,
+          logger: {
+            warn: (message, payload) =>
+              console.warn(`[web-runtime] ${message}`, payload)
+          },
+          // The mixer goes away with the entry, so a one-shot listener on it must
+          // come off first. This is the hook's first consumer.
+          onEntryWillRemove: (entry) =>
+            releaseNpcOneShot(entry.host as HostEntryData),
+          onEntryLoaded: (entry, renderable) => {
+            // An NPC gets one AnimationMixer plus every clip bound to it, kept
+            // in the entry's host slot. The frame loop ticks the mixer via
+            // npcMixer() and swaps slots with setNpcAnimationSlot().
+            if (entry.object.kind !== "npc") {
+              return;
+            }
+            const presence = activeRegionContents?.npcPresences.find(
+              (p) => p.presenceId === entry.object.instanceId
+            );
+            const npcDefinition = presence
+              ? state.npcDefinitions.find(
+                  (d) => d.definitionId === presence.npcDefinitionId
+                )
+              : null;
+            const bindings = npcDefinition?.presentation.animationAssetBindings;
+            if (!bindings) {
+              return;
+            }
+            const slotSources = (
+              Object.entries(bindings) as Array<[NPCAnimationSlot, string | null]>
+            ).flatMap(([slot, bindingId]) => {
+              const animDef = bindingId
+                ? getCharacterAnimationDefinition(state.contentLibrary, bindingId)
+                : null;
+              const sourceUrl = animDef
+                ? state.assetSources[animDef.source.relativeAssetPath] ?? null
+                : null;
+              return sourceUrl ? [{ slot, sourceUrl }] : [];
+            });
+            if (slotSources.length === 0) {
+              return;
+            }
+            void Promise.all(
+              slotSources.map(({ slot, sourceUrl }) =>
+                gltfLoader
+                  .loadAsync(sourceUrl)
+                  .then((animGltf) => ({ slot, clip: animGltf.animations[0] ?? null }))
+                  .catch((error) => {
+                    // One unreadable clip must not cost the NPC the others: a
+                    // missing walk should leave it idling, not standing in its
+                    // bind pose.
+                    console.error("[web-runtime] npc-animation-load-failed", {
+                      instanceId: entry.object.instanceId,
+                      slot,
+                      sourceUrl,
+                      error
+                    });
+                    return { slot, clip: null };
+                  })
+              )
+            ).then((loaded) => {
+              const clips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
+              for (const { slot, clip } of loaded) {
+                if (clip) {
+                  clips.set(slot, clip);
+                }
+              }
+              if (clips.size === 0) {
+                return;
+              }
+              const host = entry.host as HostEntryData;
+              host.mixer = new THREE.AnimationMixer(renderable);
+              host.animationClips = clips;
+              // Start idle where it exists, otherwise whatever is bound, so an
+              // NPC with only a walk clip still animates instead of freezing.
+              setNpcAnimationSlot(
+                entry,
+                clips.has("idle") ? "idle" : [...clips.keys()][0]!
+              );
+            })
+            .catch((error) => {
+              // Mixer construction and slot selection run after the loads
+              // resolve, so their failures land here rather than in the
+              // per-clip catch above. A player mid-session keeps playing with
+              // an unanimated NPC.
+              console.error("[web-runtime] npc-animation-bind-failed", {
+                instanceId: entry.object.instanceId,
+                error
+              });
+            });
+          }
+        });
+        renderableReconciler.reconcile(
+          objects.filter(
+            (object) =>
+              object.kind !== "item" ||
+              activeItemPresenceIds.has(object.instanceId)
+          )
+        );
+      }
+    return { activeRegion, activeRegionContents, collisionWorld };
+  }
+
+  /**
+   * Stand the region up as a playable world: the ECS world and its
+   * systems, the player, and the gameplay assembly that binds them.
+   *
+   * [LAW:decomposition] The second half of building a region, split from
+   * `buildRegionWorld` at the seam the boot already had -- everything here
+   * needs the collision world and composed contents that one produces.
+   *
+   * Stops before save-participant registration on purpose. Registering
+   * participants and restoring their slices is boot work: a mid-session
+   * region change must not re-run a save restore, which would throw away
+   * everything the player has done since.
+   *
+   * Statements are in the order the boot had them. Only their home changed.
+   */
+  async function buildRegionGameplay(input: {
+    state: WebRuntimeStartState;
+    activeScene: Scene | null;
+    activeRegion: RegionDocument | null;
+    activeRegionContents: ComposedRegionContents | null;
+    collisionWorld: ReturnType<typeof createEmptyCollisionWorld>;
+    renderView: RenderView;
+    scene: THREE.Scene;
+    /** Both are non-null by the time this runs; the caller has them. */
+    pluginManager: ReturnType<typeof createResolvedRuntimePluginManager>;
+    uiContextStore: UIContextStore;
+    /**
+     * Where the player lands, when something other than the region's own
+     * player start decides. Null on a boot -- the restored save or the
+     * authored spawn answers. A region transition sets it to the marker
+     * the doorway named.
+     */
+    arriveAt?: { position: [number, number, number]; rotation: [number, number, number] } | null;
+  }): Promise<{
+    movementSystem: MovementSystem;
+    /** Returned rather than read back off the outer variables, so the
+     *  caller has values the type says exist. Assigning them through
+     *  restores the narrowing the boot had when these were inline. */
+    gameplayAssembly: NonNullable<
+      ReturnType<typeof createRuntimeGameplayAssembly>
+    >;
+    gameplaySession: NonNullable<
+      ReturnType<typeof createRuntimeGameplayAssembly>
+    >["gameplaySession"];
+    world: World;
+    inputManager: NonNullable<ReturnType<typeof createRuntimeInputManager>>;
+  }> {
+    const {
+      state,
+      activeScene,
+      activeRegion,
+      activeRegionContents,
+      collisionWorld,
+      renderView,
+      scene,
+      pluginManager,
+      uiContextStore,
+      arriveAt = null
+    } = input;
+      // The ECS world belongs to the region, not to the boot: everything
+      // above this point is per-page setup that never touches it. Created at
+      // its first use so the two do not interleave.
+      world = new World();
+      world.addSystem(
+        new UIContextSystem({
+          contextStore: uiContextStore,
+          stateStore: uiStateStore,
+          gameStateStore,
+          getRegion: () =>
+            activeRegion
+              ? { id: activeRegion.identity.id, name: activeRegion.displayName }
+              : null
+        })
+      );
+      console.info("[web-runtime] plugin-bootstrap", {
+        installedPluginIds: state.installedPluginIds,
+        pluginConfigurations: state.pluginConfigurations.map((configuration) => ({
+          pluginId: configuration.pluginId,
+          enabled: configuration.enabled,
+          // Story 47.10 verify — log the per-game config so we can
+          // see whether an enabled plugin actually carries the values
+          // that drive its contribution decisions (e.g. SugarProfile's
+          // enableLogin + supabaseUrl + supabaseAnonKey).
+          config: configuration.config
+        })),
+        runtimePluginIds: pluginManager
+          .getPlugins()
+          .map((plugin) => plugin.pluginId),
+        identityProviderContributions: pluginManager
+          .getContributions("identity.provider")
+          .map((contribution) => ({
+            pluginId: contribution.pluginId,
+            contributionId: contribution.contributionId,
+            providerId: contribution.payload.providerId,
+            priority: contribution.priority
+          })),
+        saveStoreContributions: pluginManager
+          .getContributions("save.store")
+          .map((contribution) => ({
+            pluginId: contribution.pluginId,
+            contributionId: contribution.contributionId,
+            storeId: contribution.payload.storeId,
+            priority: contribution.priority
+          })),
+        conversationProviderContributionIds: pluginManager
+          .getContributions("conversation.provider")
+          .map((contribution) => contribution.payload.providerId)
+      });
+      // Plan 055 §055.3 — playerPosition now comes from the
+      // host.player participant's restored slice (which itself
+      // came from either the real save or the authored default
+      // via upgradeLegacyPayload). Null falls through to the
+      // region's playerPresence default (spawnRuntimePlayerEntity
+      // handles that when positionOverride is null).
+      const playerSpawn = spawnRuntimePlayerEntity(
+        world,
+        // Plan 058 §058.1 — authored spawn point comes from the
+        // composed Scene overlay, not the region document.
+        activeRegionContents?.playerPresence ?? null,
+        state.playerDefinition,
+        state.mechanics,
+        {
+          // Arriving through a doorway beats both, because the player just
+          // walked through it; the save and the authored spawn are only
+          // right when nothing else placed them.
+          positionOverride: arriveAt
+            ? { x: arriveAt.position[0], y: arriveAt.position[1], z: arriveAt.position[2] }
+            : hostPlayerRestore?.playerPosition ?? null
+        }
+      );
+      playerEyeHeight = playerSpawn.eyeHeight;
+
+      playerVisualController = createPlayerVisualController(scene);
+      // Face the model in the authored spawn direction. Facing is purely
+      // visual here -- the per-frame velocity heading writes
+      // root.rotation.y, and only while moving, so a standing player keeps
+      // its last yaw. Without seeding it the player ignores its authored
+      // spawn rotation and stands at yaw 0 until it first moves. Only yaw
+      // matters for an upright character, matching the velocity heading.
+      // Which way the player faces on arrival, most specific first: a
+      // doorway they just walked through, then where the save left them,
+      // then the authored spawn direction.
+      const spawnYaw =
+        arriveAt?.rotation[1] ??
+        hostPlayerRestore?.playerYaw ??
+        activeRegionContents?.playerPresence?.transform.rotation[1];
+      if (typeof spawnYaw === "number") {
+        playerVisualController.root.rotation.y = spawnYaw;
+      }
+      void playerVisualController.apply({
+        playerDefinition: state.playerDefinition,
+        contentLibrary: state.contentLibrary,
+        assetSources: state.assetSources,
+        activeAnimationSlot: state.playerDefinition.presentation
+          .animationAssetBindings.idle
+          ? "idle"
+          : null,
+        isPlaying: true
+      });
+
+      const movementSystem = new MovementSystem();
+      world.addSystem(movementSystem);
+
+      // Plan 069.2 — resolve the player's move against the collision world
+      // AFTER MovementSystem integrates it. Player radius from the shared
+      // agent-dimensions helper (the player has no live SceneObject here).
+      const collisionSystem = new CollisionSystem();
+      collisionSystem.setCollisionWorld(collisionWorld);
+      collisionSystem.setPlayerRadius(
+        computePlayerAgentDimensions(state.playerDefinition).radius
+      );
+      // Lazy getter: gameplaySession is null here but populated before the first
+      // world.update() fires. Each frame the player resolves against last-frame
+      // NPC positions (symmetric with how NPCs resolve against the player).
+      collisionSystem.setAgentsGetter(() => gameplaySession?.getNpcAgents() ?? []);
+      world.addSystem(collisionSystem);
+
+      inputManager = createRuntimeInputManager();
+      inputManager.attach(root);
+      spellCastFeedbackHost = createSpellCastFeedbackHost(root);
+      pluginBannerHost = createRuntimePluginBannerHost(root);
+      pluginBannerHost.apply(pluginManager.getContributions("runtime.banner"));
+      movementSystem.setInputProvider(
+        () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
+      );
+      gameplayAssembly = createRuntimeGameplayAssembly({
+        root,
+        world,
+        inputManager,
+        // Handed to plugin init so whoever asked a question on the way in can
+        // read its own answer. The host never looks up a key.
+        preNewGameStepAnswers: bootPreNewGameStepAnswers,
+        // The session asks for a framing by NAME; the host resolves it against
+        // the live camera. Requesting captures wherever the camera is now as the
+        // framing to give back, so a player who had zoomed gets their own zoom
+        // returned rather than the rig default.
+        cameraMoves: {
+          request: (moveName) => {
+            if (!cameraState) return;
+            cameraMoveDirector.request(moveName, {
+              pitch: cameraState.pitch,
+              distance: cameraState.distance
+            });
+          },
+          release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
+        },
+        // Plan 092.3 — a plugin resolves its shipped artifacts through this.
+        assetSources: currentAssetSources,
+        activeRegion,
+        activeScene,
+        // Plan 069.3 — NPC movement resolves against the same static world.
+        collisionWorld,
+        // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
+        getPathfinder: () => navMeshPathfinder,
+        onSceneAction: hostHandleSceneAction,
+        onRegionChange: (change) => {
+          // Parked, not started: this runs inside `world.update()`, and the
+          // swap frees the world this frame is still reading. The frame
+          // loop takes it at the next boundary.
+          pendingRegionChange = change;
+        },
+        onPlayNpcAnimation: playNpcAnimation,
+        // NO TRACK YET. The assembly is now built while the loading screen is
+        // still up, and a track handed over here starts playing under it. The
+        // real initial track starts where the loading gate closes, below.
+        backgroundMusicCueId: null,
+        playerDefinition: state.playerDefinition,
+        worldFlagDefinitions: state.worldFlagDefinitions,
+        spellDefinitions: state.spellDefinitions,
+        itemDefinitions: state.itemDefinitions,
+        documentDefinitions: state.documentDefinitions,
+        npcDefinitions: state.npcDefinitions,
+        npcInteractionModeStore,
+        telemetry: telemetryCollector,
+        dialogueDefinitions: state.dialogueDefinitions,
+        questDefinitions: state.questDefinitions,
+        contentLibrary: state.contentLibrary,
+        mechanics: state.mechanics,
+        soundEventBindings: state.soundEventBindings,
+        audioMixer: state.audioMixer,
+        pluginManager,
+        // Story 50.3 — same registry the host owns above; gameplay-
+        // session passes it to every UI module that wants a
+        // keyboard shortcut.
+        actionRegistry: runtimeActionRegistry ?? undefined,
+        // Story 50.5 — DialoguePanel needs the state store to flip
+        // `visibleMenuKey = "dialogue"` on show() so the mode
+        // resolver routes dialogue keys to the dialogue panel and
+        // suppresses in-game shortcuts.
+        uiStateStore: uiStateStore ?? undefined,
+        // Closure over `currentAssetSources` so the inventory UI re-resolves
+        // thumbnail URLs against the current map (which can change when the
+        // user regenerates a thumbnail mid-session).
+        getAssetUrl: (path) => currentAssetSources?.[path],
+        // Painted frames: caster (spell menu) and plain (inventory list).
+        frameArt: gameplayFrameArt,
+        onSpellCastSuccess: (feedback) => {
+          spellCastFeedbackHost?.show(feedback.message);
+        },
+        onAudioCommands: (commands) => {
+          webAudioAdapter?.handleCommands(commands);
+        },
+        onItemPresenceCollected: (presenceId) => {
+          // Plan 055 §055.6 — record for the world.presence tracker
+          // so the item stays collected across save+load. Reads the
+          // captured region id, not the live one, so a mid-session
+          // transition (future story) picks the region the item was
+          // actually in.
+          worldPresenceTracker.markCollected(
+            activeRegionIdForSave,
+            // Plan 058 §058.5 — collections key per (region, Scene)
+            // so revisiting the region in another Scene has its own
+            // collected set.
+            activeSceneIdForSave,
+            presenceId
+          );
+          // Plan 070.2 — the reconciler owns removal + disposal + drops it
+          // from its desired set (a later reconcile won't re-add it).
+          renderableReconciler?.remove(presenceId);
+        },
+        shouldSkipItemPresence: (presenceId) =>
+          worldPresenceTracker.shouldSkip(
+            activeRegionIdForSave,
+            activeSceneIdForSave,
+            presenceId
+          )
+      });
+      gameplaySession = gameplayAssembly.gameplaySession;
+    return {
+      movementSystem,
+      gameplayAssembly,
+      gameplaySession,
+      world,
+      inputManager
+    };
+  }
+
+  /**
+   * Walk the player into another region without reloading the page.
+   *
+   * The two builders already know how to stand a region up; this frees the
+   * one that is standing and runs them again with a different id. What it
+   * deliberately does NOT do is re-run the boot: no save restore, no
+   * participant registration, no readiness gate, no start menu. Those are
+   * per-page and re-running them would throw away the session.
+   *
+   * [LAW:no-silent-failure] Refuses loudly rather than half-swapping. A
+   * doorway that cannot fire leaves the player where they were, which is
+   * recoverable; a half-built world is not.
+   */
+  async function swapRegion(input: {
+    regionId: string;
+    markerId: string | null;
+  }): Promise<void> {
+    const context = regionSwapContext;
+    if (!context || !renderView || !scene || !uiContextStore) {
+      console.warn(
+        "[web-runtime] region change ignored — the world is not standing yet.",
+        input
+      );
+      return;
+    }
+
+    const destination = context.migratedContent.regions.find(
+      (candidate) => candidate.identity.id === input.regionId
+    );
+    if (!destination) {
+      console.warn(
+        `[web-runtime] region change ignored — no region "${input.regionId}".`
+      );
+      return;
+    }
+
+    // A named marker that is gone is authored breakage, not a reason to
+    // strand the player: land them on the region's own start instead and
+    // say so. `validateProjectContent` reports it at save time.
+    const marker = input.markerId
+      ? (destination.markers ?? []).find(
+          (candidate) => candidate.markerId === input.markerId
+        ) ?? null
+      : null;
+    if (input.markerId && !marker) {
+      console.warn(
+        `[web-runtime] region "${input.regionId}" has no marker ` +
+          `"${input.markerId}"; arriving at its player start instead.`
+      );
+    }
+
+    disposeRegionRuntime();
+
+    const { activeRegion, activeRegionContents, collisionWorld } =
+      await buildRegionWorld({
+        state: context.state,
+        migratedContent: context.migratedContent,
+        activeScene: context.activeScene,
+        resolvedActiveRegionId: input.regionId,
+        renderView,
+        scene
+      });
+
+    const built = await buildRegionGameplay({
+      state: context.state,
+      activeScene: context.activeScene,
+      activeRegion,
+      activeRegionContents,
+      collisionWorld,
+      renderView,
+      scene,
+      pluginManager: context.pluginManager,
+      uiContextStore,
+      arriveAt: marker
+        ? {
+            position: marker.transform.position,
+            rotation: marker.transform.rotation
+          }
+        : null
+    });
+
+    gameplayAssembly = built.gameplayAssembly;
+    gameplaySession = built.gameplaySession;
+    world = built.world;
+    inputManager = built.inputManager;
+    bindCameraControls(built.movementSystem);
+    // The save records where the player is; after a swap that is here.
+    // Without this the next autosave would still name the region they left.
+    activeRegionIdForSave = input.regionId;
+
+    // Plugins snapshotted the region at boot and `init` is guarded against
+    // running twice, so without this sugarlang keeps warming conversations
+    // for NPCs in the region the player just left.
+    await built.gameplayAssembly.notifyPluginsOfRegion();
   }
 
   async function runStart(state: WebRuntimeStartState): Promise<void> {
@@ -2698,10 +3506,14 @@ export function createWebRuntimeHost(
     manuallyUnlockedEpisodeIds = [
       ...(campaignRestore?.unlockedEpisodeIds ?? [])
     ];
-    completedSceneIds = [...(campaignRestore?.completedSceneIds ?? [])];
-    completedEpisodeIds = [...(campaignRestore?.completedEpisodeIds ?? [])];
     const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
       ?.data as { completedQuestIds?: string[] } | undefined;
+    // Quest completion is the one recorded fact on the story timeline;
+    // Scene and Episode completion are derived from it. The same reader
+    // answers the unlock gates below, so the two cannot disagree.
+    const completedQuestIds = new Set(questSliceData?.completedQuestIds ?? []);
+    const isQuestCompleted = (questDefinitionId: string) =>
+      completedQuestIds.has(questDefinitionId);
     const unlockedEpisodeIds = resolveUnlockedEpisodeIds({
       episodes: bootEpisodes,
       manuallyUnlockedEpisodeIds,
@@ -2715,6 +3527,7 @@ export function createWebRuntimeHost(
     const activeEpisode = resolveActiveEpisode({
       episodes: bootEpisodes,
       unlockedEpisodeIds,
+      isQuestCompleted,
       requestedEpisodeId:
         campaignRestore?.currentEpisodeId ??
         findEpisodeBySceneId(bootEpisodes, requestedSceneId)?.episodeId ??
@@ -2722,7 +3535,8 @@ export function createWebRuntimeHost(
     });
     const activeScene = resolveActiveScene({
       episode: activeEpisode,
-      requestedSceneId
+      requestedSceneId,
+      isQuestCompleted
     });
     activeEpisodeIdForSave = activeEpisode?.episodeId ?? null;
     activeSceneIdForSave = activeScene?.sceneId ?? null;
@@ -2743,7 +3557,7 @@ export function createWebRuntimeHost(
         // into a shut gate there was nowhere to move it to -- and reading
         // that as "current" would offer Continue back into a Scene they
         // already played.
-        status: completedEpisodeIds.includes(episode.episodeId)
+        status: isEpisodeComplete(episode, isQuestCompleted)
           ? ("completed" as const)
           : episode.episodeId === activeEpisodeIdForSave
             ? ("current" as const)
@@ -2752,277 +3566,20 @@ export function createWebRuntimeHost(
               : ("locked" as const)
       }))
     };
-    const activeRegion = getActiveRegion(
-      migratedContent.regions,
-      resolvedActiveRegionId ??
-        activeScene?.startingRegionId ??
-        state.activeRegionId ??
-        null
-    );
-    // Composed Base + Overlay view (Pattern 1) — every presence /
-    // spawn read below sources from this, never region fields.
-    const activeRegionContents = activeRegion
-      ? composeRegionContents(activeRegion, activeScene)
-      : null;
-    // Plan 059 §059.1 — music resolution. In-game: the Scene's
-    // audioOverride shadows the project default; null = silence
-    // (the intended default — BotW model, sounds cued by
-    // actions). Menu: its own slot, playing over the start menu
-    // and returning on quit-to-menu. (Closes Plan 058's
-    // audioOverride deferral.)
-    sceneMusicCueIdForSession =
-      activeScene?.audioOverride?.backgroundMusicId ??
-      state.musicBindings?.defaultBackgroundMusicId ??
-      null;
-    menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
-    // Plan 059 §059.3 — exit/entry sequence inputs.
-    creditsThemeCueIdForSession =
-      state.musicBindings?.creditsThemeMusicId ?? null;
-    bootCreditsDefinition = state.creditsDefinition ?? null;
-    bootGameTitle = state.gameTitle ?? null;
-    // Plan 092.6 — registered BEFORE anything opens storage. Every database
-    // name on the player's device leads with it, and the helper that builds
-    // those names throws without it rather than sharing an origin's storage
-    // between two games.
-    registerActiveGameId(state.gameId ?? null);
-    // Plan 058 §058.4 — per-Scene environment override: the
-    // projector reads state.activeEnvironmentId, so a Scene with
-    // an override shadows the authored/boot value; null falls
-    // through untouched.
-    renderEngineProjector.push(
-      activeScene?.environmentOverride
-        ? {
-            ...state,
-            activeEnvironmentId: activeScene.environmentOverride.environmentId
-          }
-        : state,
-      activeRegion
-    );
-    const landscapeApplyResult = renderView.landscapeController.applyLandscape(
-      activeRegion?.landscape ?? null,
-      state.contentLibrary,
-      state.assetSources
-    );
-    // Preview-vs-editor divergence breadcrumb: which region's landscape
-    // the game actually applied, and any warnings the controller
-    // returned (previously swallowed).
-    console.info("[web-runtime] landscape-apply", {
-      regionId: activeRegion?.identity.id ?? null,
-      hasLandscape: Boolean(activeRegion?.landscape),
-      surfaceSlots: (activeRegion?.landscape?.surfaceSlots ?? []).map(
-        (slot) => `${slot.displayName}:${slot.surface?.kind ?? "none"}`
-      ),
-      warnings: landscapeApplyResult.warnings
-    });
-    for (const warning of landscapeApplyResult.warnings) {
-      console.warn("[web-runtime] landscape-apply warning", warning);
-    }
-
-    // Plan 069.2 — the collision world, built once per start from the
-    // resolved scene objects (rebuild-on-start covers region/scene switches
-    // and preview live edits). Populated inside the activeRegion block
-    // below; consumed by the CollisionSystem registered after MovementSystem.
-    let collisionWorld = createEmptyCollisionWorld();
-    // Plan 069.9 — the baked navmesh pathfinder, loaded async from the
-    // artifact blob; NPCs follow it once ready (straight-line until then, and
-    // forever in unbaked regions). Outer-scoped so teardown frees it.
-    navMeshPathfinder?.destroy();
-    navMeshPathfinder = null;
-    const navMeshEpoch = ++navMeshLoadEpoch;
-    if (activeRegion) {
-      const region = activeRegion;
-      const objects = resolveSceneObjects(region, {
-        contentLibrary: state.contentLibrary,
-        playerDefinition: state.playerDefinition,
-        itemDefinitions: state.itemDefinitions,
-        npcDefinitions: state.npcDefinitions,
-        includePlayerPresence: false,
-        activeScene
+    // Where the player is, in order: where the save left them, then the
+    // region the active Scene happens in, then an explicit request
+    // (Studio Preview's edited region). A Scene now always names its
+    // region, so the old "no starting region, fall through to the first
+    // one" rung is gone.
+    const { activeRegion, activeRegionContents, collisionWorld } =
+      await buildRegionWorld({
+        state,
+        migratedContent,
+        activeScene,
+        resolvedActiveRegionId,
+        renderView: renderView!,
+        scene: scene!
       });
-      // Plan 069.5 — blocker / containment volumes join the collision world
-      // alongside the prop colliders (conditional gates refreshed per frame
-      // by the gameplay session, which holds the same world by reference).
-      collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
-      // Plan 069.9 — resolve the navmesh artifact blob (published to the
-      // asset-source store at bake) and load a pathfinder off the main path.
-      const navMeshUrl = region.navMesh
-        ? state.assetSources[region.navMesh.assetPath]
-        : undefined;
-      if (navMeshUrl) {
-        void (async () => {
-          try {
-            const response = await fetch(navMeshUrl);
-            // A miss on a static host answers with an HTML error page, and
-            // importNavMesh accepts those bytes silently -- then the first
-            // path query crashes the WASM and kills the frame loop. Treat a
-            // non-OK response as "no navmesh" (straight-line fallback).
-            if (!response.ok) {
-              console.warn(
-                `[web-runtime] navmesh artifact fetch failed (${response.status}) -- NPCs fall back to straight-line steering`,
-                navMeshUrl
-              );
-              return;
-            }
-            const bytes = new Uint8Array(await response.arrayBuffer());
-            const pathfinder = await loadNavMeshPathfinder(bytes);
-            // A newer start() superseded this load — free it, don't assign
-            // (else we'd overwrite the current mesh + leak the new one).
-            if (navMeshEpoch !== navMeshLoadEpoch) {
-              pathfinder.destroy();
-              return;
-            }
-            navMeshPathfinder = pathfinder;
-          } catch (error) {
-            console.warn("[web-runtime] navmesh load failed", error);
-          }
-        })();
-      }
-      // Plan 057 — item presences run through the shared filter
-      // helper so this visual-spawn path and the ECS spawn path
-      // in gameplay-session apply the same filter set. New
-      // filters (Plan 058 Scene gating, etc.) compose into
-      // `worldPresenceTracker.shouldSkip` at the host and both
-      // paths see them automatically. Non-item scene objects
-      // (NPCs, static assets) don't have a filter surface today
-      // and pass through unchanged.
-      const activeItemPresenceIds = new Set<string>();
-      iterateActiveItemPresences(
-        activeRegionContents?.itemPresences ?? [],
-        {
-          shouldSkip: (presenceId) =>
-            worldPresenceTracker.shouldSkip(
-              activeRegionIdForSave,
-              activeSceneIdForSave,
-              presenceId
-            )
-        },
-        (presence) => {
-          activeItemPresenceIds.add(presence.presenceId);
-        }
-      );
-      // Plan 070.2 — one shared reconciler builds every scene renderable
-      // (was two hand-rolled paths here: instanced grouping by
-      // representationKey + the singleton clone/sanitize/scale/shadow/
-      // parent/shader sequence). Grouping ON for the game; the studio keeps
-      // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
-      // is excluded upstream (includePlayerPresence: false).
-      renderableReconciler = createRenderableReconciler({
-        parent: scene,
-        resolveUrl: (object) =>
-          object.modelSourcePath
-            ? renderView!.assetResolver.resolveAssetUrl(
-                object.modelSourcePath
-              ) ?? null
-            : null,
-        loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
-        createFallback: (object) => getSceneObjectFallback(object),
-        shaderRuntime: renderView!.shaderRuntime,
-        getFileSources: () => currentAssetSources,
-        enableShadows: (renderableRoot) =>
-          renderView!.enableShadowsOnObject(renderableRoot),
-        grouping: true,
-        isInstanceable: assetObjectIsInstanceable,
-        validate: validateRenderableAsset,
-        logger: {
-          warn: (message, payload) =>
-            console.warn(`[web-runtime] ${message}`, payload)
-        },
-        // The mixer goes away with the entry, so a one-shot listener on it must
-        // come off first. This is the hook's first consumer.
-        onEntryWillRemove: (entry) =>
-          releaseNpcOneShot(entry.host as HostEntryData),
-        onEntryLoaded: (entry, renderable) => {
-          // An NPC gets one AnimationMixer plus every clip bound to it, kept
-          // in the entry's host slot. The frame loop ticks the mixer via
-          // npcMixer() and swaps slots with setNpcAnimationSlot().
-          if (entry.object.kind !== "npc") {
-            return;
-          }
-          const presence = activeRegionContents?.npcPresences.find(
-            (p) => p.presenceId === entry.object.instanceId
-          );
-          const npcDefinition = presence
-            ? state.npcDefinitions.find(
-                (d) => d.definitionId === presence.npcDefinitionId
-              )
-            : null;
-          const bindings = npcDefinition?.presentation.animationAssetBindings;
-          if (!bindings) {
-            return;
-          }
-          const slotSources = (
-            Object.entries(bindings) as Array<[NPCAnimationSlot, string | null]>
-          ).flatMap(([slot, bindingId]) => {
-            const animDef = bindingId
-              ? getCharacterAnimationDefinition(state.contentLibrary, bindingId)
-              : null;
-            const sourceUrl = animDef
-              ? state.assetSources[animDef.source.relativeAssetPath] ?? null
-              : null;
-            return sourceUrl ? [{ slot, sourceUrl }] : [];
-          });
-          if (slotSources.length === 0) {
-            return;
-          }
-          void Promise.all(
-            slotSources.map(({ slot, sourceUrl }) =>
-              gltfLoader
-                .loadAsync(sourceUrl)
-                .then((animGltf) => ({ slot, clip: animGltf.animations[0] ?? null }))
-                .catch((error) => {
-                  // One unreadable clip must not cost the NPC the others: a
-                  // missing walk should leave it idling, not standing in its
-                  // bind pose.
-                  console.error("[web-runtime] npc-animation-load-failed", {
-                    instanceId: entry.object.instanceId,
-                    slot,
-                    sourceUrl,
-                    error
-                  });
-                  return { slot, clip: null };
-                })
-            )
-          ).then((loaded) => {
-            const clips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
-            for (const { slot, clip } of loaded) {
-              if (clip) {
-                clips.set(slot, clip);
-              }
-            }
-            if (clips.size === 0) {
-              return;
-            }
-            const host = entry.host as HostEntryData;
-            host.mixer = new THREE.AnimationMixer(renderable);
-            host.animationClips = clips;
-            // Start idle where it exists, otherwise whatever is bound, so an
-            // NPC with only a walk clip still animates instead of freezing.
-            setNpcAnimationSlot(
-              entry,
-              clips.has("idle") ? "idle" : [...clips.keys()][0]!
-            );
-          })
-          .catch((error) => {
-            // Mixer construction and slot selection run after the loads
-            // resolve, so their failures land here rather than in the
-            // per-clip catch above. A player mid-session keeps playing with
-            // an unanimated NPC.
-            console.error("[web-runtime] npc-animation-bind-failed", {
-              instanceId: entry.object.instanceId,
-              error
-            });
-          });
-        }
-      });
-      renderableReconciler.reconcile(
-        objects.filter(
-          (object) =>
-            object.kind !== "item" ||
-            activeItemPresenceIds.has(object.instanceId)
-        )
-      );
-    }
-    world = new World();
     uiContextStore = createUIContextStore();
     // Story 47.10.5 — the store always boots in the same "no
     // menu, not paused" baseline; whether the start menu opens at
@@ -3134,215 +3691,37 @@ export function createWebRuntimeHost(
         })();
       }
     });
-    world.addSystem(
-      new UIContextSystem({
-        contextStore: uiContextStore,
-        stateStore: uiStateStore,
-        gameStateStore,
-        getRegion: () =>
-          activeRegion
-            ? { id: activeRegion.identity.id, name: activeRegion.displayName }
-            : null
-      })
-    );
-    console.info("[web-runtime] plugin-bootstrap", {
-      installedPluginIds: state.installedPluginIds,
-      pluginConfigurations: state.pluginConfigurations.map((configuration) => ({
-        pluginId: configuration.pluginId,
-        enabled: configuration.enabled,
-        // Story 47.10 verify — log the per-game config so we can
-        // see whether an enabled plugin actually carries the values
-        // that drive its contribution decisions (e.g. SugarProfile's
-        // enableLogin + supabaseUrl + supabaseAnonKey).
-        config: configuration.config
-      })),
-      runtimePluginIds: pluginManager
-        .getPlugins()
-        .map((plugin) => plugin.pluginId),
-      identityProviderContributions: pluginManager
-        .getContributions("identity.provider")
-        .map((contribution) => ({
-          pluginId: contribution.pluginId,
-          contributionId: contribution.contributionId,
-          providerId: contribution.payload.providerId,
-          priority: contribution.priority
-        })),
-      saveStoreContributions: pluginManager
-        .getContributions("save.store")
-        .map((contribution) => ({
-          pluginId: contribution.pluginId,
-          contributionId: contribution.contributionId,
-          storeId: contribution.payload.storeId,
-          priority: contribution.priority
-        })),
-      conversationProviderContributionIds: pluginManager
-        .getContributions("conversation.provider")
-        .map((contribution) => contribution.payload.providerId)
-    });
-    // Plan 055 §055.3 — playerPosition now comes from the
-    // host.player participant's restored slice (which itself
-    // came from either the real save or the authored default
-    // via upgradeLegacyPayload). Null falls through to the
-    // region's playerPresence default (spawnRuntimePlayerEntity
-    // handles that when positionOverride is null).
-    const playerSpawn = spawnRuntimePlayerEntity(
-      world,
-      // Plan 058 §058.1 — authored spawn point comes from the
-      // composed Scene overlay, not the region document.
-      activeRegionContents?.playerPresence ?? null,
-      state.playerDefinition,
-      state.mechanics,
-      {
-        positionOverride: hostPlayerRestore?.playerPosition ?? null
-      }
-    );
-    playerEyeHeight = playerSpawn.eyeHeight;
-
-    playerVisualController = createPlayerVisualController(scene);
-    // Face the model in the authored spawn direction. Facing is purely
-    // visual here -- the per-frame velocity heading writes
-    // root.rotation.y, and only while moving, so a standing player keeps
-    // its last yaw. Without seeding it the player ignores its authored
-    // spawn rotation and stands at yaw 0 until it first moves. Only yaw
-    // matters for an upright character, matching the velocity heading.
-    const authoredSpawnRotation =
-      activeRegionContents?.playerPresence?.transform.rotation;
-    if (authoredSpawnRotation) {
-      playerVisualController.root.rotation.y = authoredSpawnRotation[1];
-    }
-    void playerVisualController.apply({
-      playerDefinition: state.playerDefinition,
-      contentLibrary: state.contentLibrary,
-      assetSources: state.assetSources,
-      activeAnimationSlot: state.playerDefinition.presentation
-        .animationAssetBindings.idle
-        ? "idle"
-        : null,
-      isPlaying: true
-    });
-
-    const movementSystem = new MovementSystem();
-    world.addSystem(movementSystem);
-
-    // Plan 069.2 — resolve the player's move against the collision world
-    // AFTER MovementSystem integrates it. Player radius from the shared
-    // agent-dimensions helper (the player has no live SceneObject here).
-    const collisionSystem = new CollisionSystem();
-    collisionSystem.setCollisionWorld(collisionWorld);
-    collisionSystem.setPlayerRadius(
-      computePlayerAgentDimensions(state.playerDefinition).radius
-    );
-    // Lazy getter: gameplaySession is null here but populated before the first
-    // world.update() fires. Each frame the player resolves against last-frame
-    // NPC positions (symmetric with how NPCs resolve against the player).
-    collisionSystem.setAgentsGetter(() => gameplaySession?.getNpcAgents() ?? []);
-    world.addSystem(collisionSystem);
-
-    inputManager = createRuntimeInputManager();
-    inputManager.attach(root);
-    spellCastFeedbackHost = createSpellCastFeedbackHost(root);
-    pluginBannerHost = createRuntimePluginBannerHost(root);
-    pluginBannerHost.apply(pluginManager.getContributions("runtime.banner"));
-    movementSystem.setInputProvider(
-      () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
-    );
-    gameplayAssembly = createRuntimeGameplayAssembly({
-      root,
-      world,
-      inputManager,
-      // Handed to plugin init so whoever asked a question on the way in can
-      // read its own answer. The host never looks up a key.
-      preNewGameStepAnswers: bootPreNewGameStepAnswers,
-      // The session asks for a framing by NAME; the host resolves it against
-      // the live camera. Requesting captures wherever the camera is now as the
-      // framing to give back, so a player who had zoomed gets their own zoom
-      // returned rather than the rig default.
-      cameraMoves: {
-        request: (moveName) => {
-          if (!cameraState) return;
-          cameraMoveDirector.request(moveName, {
-            pitch: cameraState.pitch,
-            distance: cameraState.distance
-          });
-        },
-        release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
-      },
-      // Plan 092.3 — a plugin resolves its shipped artifacts through this.
-      assetSources: currentAssetSources,
-      activeRegion,
+    const {
+      movementSystem,
+      gameplayAssembly: builtAssembly,
+      gameplaySession: builtSession,
+      world: builtWorld,
+      inputManager: builtInput
+    } = await buildRegionGameplay({
+        state,
+        activeScene,
+        activeRegion,
+        activeRegionContents,
+        collisionWorld,
+        renderView: renderView!,
+        scene: scene!,
+        pluginManager,
+        uiContextStore: uiContextStore!
+      });
+    // Assigning through narrows the outer handles for everything below,
+    // which read them directly before this was a function.
+    gameplayAssembly = builtAssembly;
+    gameplaySession = builtSession;
+    world = builtWorld;
+    inputManager = builtInput;
+    // A region change later needs what only the boot resolved. Captured
+    // here, once the world is standing, so `swapRegion` never has to guess.
+    regionSwapContext = {
+      state,
+      migratedContent,
       activeScene,
-      // Plan 069.3 — NPC movement resolves against the same static world.
-      collisionWorld,
-      // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
-      getPathfinder: () => navMeshPathfinder,
-      onSceneAction: hostHandleSceneAction,
-      onPlayNpcAnimation: playNpcAnimation,
-      // NO TRACK YET. The assembly is now built while the loading screen is
-      // still up, and a track handed over here starts playing under it. The
-      // real initial track starts where the loading gate closes, below.
-      backgroundMusicCueId: null,
-      playerDefinition: state.playerDefinition,
-      worldFlagDefinitions: state.worldFlagDefinitions,
-      spellDefinitions: state.spellDefinitions,
-      itemDefinitions: state.itemDefinitions,
-      documentDefinitions: state.documentDefinitions,
-      npcDefinitions: state.npcDefinitions,
-      npcInteractionModeStore,
-      telemetry: telemetryCollector,
-      dialogueDefinitions: state.dialogueDefinitions,
-      questDefinitions: state.questDefinitions,
-      contentLibrary: state.contentLibrary,
-      mechanics: state.mechanics,
-      soundEventBindings: state.soundEventBindings,
-      audioMixer: state.audioMixer,
-      pluginManager,
-      // Story 50.3 — same registry the host owns above; gameplay-
-      // session passes it to every UI module that wants a
-      // keyboard shortcut.
-      actionRegistry: runtimeActionRegistry ?? undefined,
-      // Story 50.5 — DialoguePanel needs the state store to flip
-      // `visibleMenuKey = "dialogue"` on show() so the mode
-      // resolver routes dialogue keys to the dialogue panel and
-      // suppresses in-game shortcuts.
-      uiStateStore: uiStateStore ?? undefined,
-      // Closure over `currentAssetSources` so the inventory UI re-resolves
-      // thumbnail URLs against the current map (which can change when the
-      // user regenerates a thumbnail mid-session).
-      getAssetUrl: (path) => currentAssetSources?.[path],
-      // Painted frames: caster (spell menu) and plain (inventory list).
-      frameArt: gameplayFrameArt,
-      onSpellCastSuccess: (feedback) => {
-        spellCastFeedbackHost?.show(feedback.message);
-      },
-      onAudioCommands: (commands) => {
-        webAudioAdapter?.handleCommands(commands);
-      },
-      onItemPresenceCollected: (presenceId) => {
-        // Plan 055 §055.6 — record for the world.presence tracker
-        // so the item stays collected across save+load. Reads the
-        // captured region id, not the live one, so a mid-session
-        // transition (future story) picks the region the item was
-        // actually in.
-        worldPresenceTracker.markCollected(
-          activeRegionIdForSave,
-          // Plan 058 §058.5 — collections key per (region, Scene)
-          // so revisiting the region in another Scene has its own
-          // collected set.
-          activeSceneIdForSave,
-          presenceId
-        );
-        // Plan 070.2 — the reconciler owns removal + disposal + drops it
-        // from its desired set (a later reconcile won't re-add it).
-        renderableReconciler?.remove(presenceId);
-      },
-      shouldSkipItemPresence: (presenceId) =>
-        worldPresenceTracker.shouldSkip(
-          activeRegionIdForSave,
-          activeSceneIdForSave,
-          presenceId
-        )
-    });
-    gameplaySession = gameplayAssembly.gameplaySession;
+      pluginManager
+    };
     // Plan 055 §055.4 — Phase 2: register participants whose
     // subsystems only exist now that gameplayAssembly is
     // constructed, then run the region-aware + default tier
@@ -3561,33 +3940,7 @@ export function createWebRuntimeHost(
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;
-    inputManager.onRightDrag = (dx, dy) => {
-      // Touching the camera by hand takes it back. Reachable during a move's
-      // RETURN, when the input lock has already been released -- and a move
-      // that kept animating through the player's own input would feel broken.
-      cameraMoveDirector.cancel();
-      if (cameraState) {
-        cameraState = applyCameraDrag(
-          cameraState,
-          DEFAULT_CAMERA_CONFIG,
-          dx,
-          dy
-        );
-      }
-    };
-    inputManager.onScroll = (delta) => {
-      cameraMoveDirector.cancel();
-      if (cameraState) {
-        cameraState = applyCameraZoom(
-          cameraState,
-          DEFAULT_CAMERA_CONFIG,
-          delta
-        );
-      }
-    };
-    movementSystem.setCameraYawProvider(
-      () => cameraState?.yaw ?? Math.PI * 1.25
-    );
+    bindCameraControls(movementSystem);
 
     renderView.mount(root);
     uiLayerElement = ownerWindow.document.createElement("div");
@@ -3679,6 +4032,7 @@ export function createWebRuntimeHost(
       handleResize();
       lastTime = ownerWindow.performance.now();
       publishSmperfStats({ lastBootMs: Number((lastTime - bootStart).toFixed(1)) });
+      frameLoopRunning = true;
       animationId = ownerWindow.requestAnimationFrame(renderFrame);
     });
   }

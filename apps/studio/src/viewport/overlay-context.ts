@@ -11,7 +11,8 @@ import type * as THREE from "three";
 import type {
   LandscapePaintStroke,
   TransformDraft,
-  StoreBundleState
+  StoreBundleState,
+  ShellState
 } from "@sugarmagic/shell";
 import type {
   AuthoringSession,
@@ -59,6 +60,10 @@ export interface ViewportOverlayStateAccess {
   getSession(): AuthoringSession | null;
   getActiveRegion(): RegionDocument | null;
   updateSession(session: AuthoringSession): void;
+  /** Read-only shell state. Overlays that behave differently per
+   *  product mode -- the scene composer locks the region -- read it
+   *  here rather than each holding its own store reference. */
+  getShellState(): ShellState;
   getSelectionIds(): string[];
   setSelection(entityIds: string[]): void;
   setTransformDraft(instanceId: string, transform: TransformDraft): void;

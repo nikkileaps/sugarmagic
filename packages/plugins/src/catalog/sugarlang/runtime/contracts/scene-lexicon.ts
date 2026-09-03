@@ -59,7 +59,7 @@ export interface SourceLocation {
 export interface SceneAuthorWarning {
   severity: SceneAuthorWarningSeverity;
   message: string;
-  sceneId: string;
+  regionId: string;
   lemmaId?: string;
   suggestion?: string;
 }
@@ -155,7 +155,7 @@ export interface VoiceChannelSpec {
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
  */
 export interface SceneVocabularyModel {
-  sceneId: string;
+  regionId: string;
   contentHash: string;
   pipelineVersion: string;
   atlasVersion: string;

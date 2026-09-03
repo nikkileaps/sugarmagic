@@ -50,9 +50,11 @@ import {
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
+  createRegionMarker,
   createSceneFolderId,
   type ComposedRegionContents,
-  type Scene
+  type Scene,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import {
   PanelSection,
@@ -142,15 +144,8 @@ export interface LayoutWorkspaceViewProps {
   getAllScenes: () => Scene[];
   /** Plan 058 §058.3 — move an asset between region base and the
    *  active Scene's overlay. */
-  onConvertAssetScope: (regionId: string, instanceId: string) => void;
   /** Plan 058 §058.3 — copy a presence / overlay asset from the
    *  active Scene into another Scene's overlay. */
-  onCopyEntryToScene: (options: {
-    toSceneId: string;
-    regionId: string;
-    kind: "npc" | "item" | "player" | "asset";
-    id: string;
-  }) => void;
   assetDefinitions: AssetDefinition[];
   /** Library surfaces for the Surface Brush palette (Plan 068.9). */
   surfaceDefinitions: SurfaceDefinition[];
@@ -292,6 +287,16 @@ function buildSceneTree(
     return [...childFolders, ...childAssets];
   };
 
+  const markerNodes = (region.markers ?? []).map((marker) => ({
+    type: "entity" as const,
+    instanceId: marker.markerId,
+    displayName: marker.displayName,
+    entityKind: "marker" as const,
+    assetKind: "marker",
+    assetDefinitionId: null,
+    visible: true
+  }));
+
   const playerNode = regionContents.playerPresence
     ? [
         {
@@ -352,6 +357,7 @@ function buildSceneTree(
       children: [
         landscapeNode,
         ...playerNode,
+        ...markerNodes,
         ...npcNodes,
         ...itemNodes,
         ...buildChildren(null)
@@ -374,8 +380,6 @@ export function useLayoutWorkspaceView(
     getRegionContents,
     getActiveScene,
     getAllScenes,
-    onConvertAssetScope,
-    onCopyEntryToScene,
     assetDefinitions,
     surfaceDefinitions,
     playerDefinition,
@@ -506,7 +510,8 @@ export function useLayoutWorkspaceView(
     if (!region || !activeScene) return new Set<string>();
     return new Set(
       (
-        activeScene.regionOverlays[region.identity.id]?.placedAssets ?? []
+        sceneOverlayForRegion(activeScene, region.identity.id)?.placedAssets ??
+        []
       ).map((asset) => asset.instanceId)
     );
   }, [region, activeScene]);
@@ -631,6 +636,15 @@ export function useLayoutWorkspaceView(
     return regionContents.playerPresence;
   }, [region, selectedIds]);
 
+  const selectedMarker = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      (region.markers ?? []).find(
+        (marker) => marker.markerId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, selectedIds]);
+
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
@@ -722,7 +736,12 @@ export function useLayoutWorkspaceView(
         currentContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
-      const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
+      const marker =
+        (currentRegion.markers ?? []).find(
+          (candidate) => candidate.markerId === instanceId
+        ) ?? null;
+      const source =
+        asset ?? playerPresence ?? npcPresence ?? itemPresence ?? marker;
       if (!source) return;
 
       const nextPosition: [number, number, number] = [
@@ -750,6 +769,28 @@ export function useLayoutWorkspaceView(
             position: nextPosition,
             rotation: nextRotation,
             scale: nextScale
+          }
+        });
+        return;
+      }
+
+      if (marker) {
+        onCommand({
+          kind: "UpdateRegionMarker",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "region-marker", subjectId: instanceId },
+          payload: {
+            markerId: instanceId,
+            patch: {
+              transform: {
+                position: nextPosition,
+                rotation: nextRotation,
+                scale: nextScale
+              }
+            }
           }
         });
         return;
@@ -791,20 +832,32 @@ export function useLayoutWorkspaceView(
         return;
       }
 
-      onCommand({
-        kind: "TransformNPCPresence",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: currentRegion.identity.id
-        },
-        subject: { subjectKind: "npc-presence", subjectId: instanceId },
-        payload: {
-          presenceId: instanceId,
-          position: nextPosition,
-          rotation: nextRotation,
-          scale: nextScale
-        }
-      });
+      if (npcPresence) {
+        onCommand({
+          kind: "TransformNPCPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "npc-presence", subjectId: instanceId },
+          payload: {
+            presenceId: instanceId,
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        });
+        return;
+      }
+
+      // Every branch above is explicit so nothing reaches here by falling
+      // through. This used to be an unguarded NPC command, which is how a
+      // marker drag quietly fired a presence transform for an id no
+      // presence had.
+      console.warn(
+        "[layout] no transform command for this selection",
+        instanceId
+      );
     },
     [getRegion, getRegionContents, onCommand]
   );
@@ -850,9 +903,10 @@ export function useLayoutWorkspaceView(
           folderId,
           displayName: displayName.trim(),
           parentFolderId,
-          // Plan 058 §058.2 — folders follow the same ambient
-          // scoping as the assets they'll group.
-          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+          // Build authors the region (epic #226). A folder made here
+          // groups region content; Scene-scoped grouping belongs to the
+          // composer, with the rest of the overlay.
+          scope: "base" as const
         }
       });
     },
@@ -1122,10 +1176,10 @@ export function useLayoutWorkspaceView(
           position: [0, 0.5, 0],
           rotation: [0, 0, 0],
           scale: [1, 1, 1],
-          // Plan 058 §058.2 — Ambient Context: new placements land
-          // in the active Scene's overlay. Promote to Base via the
-          // scope-conversion action (Plan 058.3).
-          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+          // Build authors the world at rest, so a placement made here
+          // belongs to the region (epic #226). What a Scene temporarily
+          // adds is authored in the composer instead.
+          scope: "base" as const
         }
       });
       onSelect([instanceId]);
@@ -1170,6 +1224,26 @@ export function useLayoutWorkspaceView(
     });
     onSelect([presenceId]);
   }, [onCommand, onSelect, playerDefinition, region]);
+
+  const handleAddMarker = useCallback(() => {
+    if (!region) return;
+    // Dropped at the origin like every other add, then dragged into place
+    // with the gizmo. Numbered so two markers are distinguishable before
+    // either has been named.
+    const marker = createRegionMarker({
+      displayName: `Marker ${(region.markers ?? []).length + 1}`
+    });
+    onCommand({
+      kind: "CreateRegionMarker",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: { subjectKind: "region-marker", subjectId: marker.markerId },
+      payload: { marker }
+    });
+    onSelect([marker.markerId]);
+  }, [onCommand, onSelect, region]);
 
   const handleAddNPCPresence = useCallback(
     (definition: NPCDefinition) => {
@@ -1326,30 +1400,6 @@ export function useLayoutWorkspaceView(
     return null;
   }, [contextMenu, regionContents, overlayAssetIds]);
 
-  const otherScenes = useMemo(() => {
-    const activeId = activeScene?.sceneId;
-    return getAllScenes().filter((scene) => scene.sceneId !== activeId);
-  }, [getAllScenes, activeScene]);
-
-  const handleConvertScope = useCallback(() => {
-    if (!region || !contextMenuEntry) return;
-    onConvertAssetScope(region.identity.id, contextMenuEntry.id);
-    setContextMenu(null);
-  }, [region, contextMenuEntry, onConvertAssetScope]);
-
-  const handleCopyToScene = useCallback(
-    (toSceneId: string) => {
-      if (!region || !contextMenuEntry) return;
-      onCopyEntryToScene({
-        toSceneId,
-        regionId: region.identity.id,
-        kind: contextMenuEntry.kind,
-        id: contextMenuEntry.id
-      });
-      setContextMenu(null);
-    },
-    [region, contextMenuEntry, onCopyEntryToScene]
-  );
 
   const filteredNPCDefinitions = useMemo(() => {
     const query = npcQuery.trim().toLowerCase();
@@ -1407,6 +1457,7 @@ export function useLayoutWorkspaceView(
                   >
                     Player
                   </Menu.Item>
+                  <Menu.Item onClick={handleAddMarker}>Marker</Menu.Item>
                   <Menu.Item
                     onClick={() => {
                       setAddNPCOpen(true);
@@ -1470,25 +1521,6 @@ export function useLayoutWorkspaceView(
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
             onMoveEntityToFolder={handleMoveEntityToFolder}
-            getEntityScopeAction={(instanceId) => {
-              // Same action pair as the viewport context menu
-              // (Plan 058.3); placed assets only.
-              if (
-                !region ||
-                !regionContents.placedAssets.some(
-                  (entry) => entry.instanceId === instanceId
-                )
-              ) {
-                return null;
-              }
-              return {
-                label: overlayAssetIds.has(instanceId)
-                  ? "Promote to Base"
-                  : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`,
-                onClick: () =>
-                  onConvertAssetScope(region.identity.id, instanceId)
-              };
-            }}
           />
         </Stack>
         <Modal
@@ -1908,6 +1940,60 @@ export function useLayoutWorkspaceView(
                 </>
               )}
             </Stack>
+          </Stack>
+        ) : selectedMarker ? (
+          <Stack gap="md">
+            <Stack gap={4}>
+              <FactRow label="Type" value="Marker" />
+              <FactRow label="Scope" value="🗺️ Region" />
+            </Stack>
+            <TextInput
+              label="Name"
+              size="xs"
+              description="What a door or a behavior task calls this spot."
+              value={selectedMarker.displayName}
+              onChange={(event) =>
+                onCommand({
+                  kind: "UpdateRegionMarker",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "region-marker",
+                    subjectId: selectedMarker.markerId
+                  },
+                  payload: {
+                    markerId: selectedMarker.markerId,
+                    patch: { displayName: event.currentTarget.value }
+                  }
+                })
+              }
+            />
+            <TransformInspector
+              label="Position"
+              value={selectedMarker.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedMarker.markerId,
+                  "position",
+                  axis,
+                  value
+                )
+              }
+            />
+            <TransformInspector
+              label="Facing"
+              value={selectedMarker.transform.rotation}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedMarker.markerId,
+                  "rotation",
+                  axis,
+                  value
+                )
+              }
+            />
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">
@@ -2446,61 +2532,6 @@ export function useLayoutWorkspaceView(
             >
               <Text size="sm">Snap to Origin</Text>
             </UnstyledButton>
-            {/* Plan 058 §058.3 — scope conversion (assets only:
-                presences are inherently Scene-scoped). */}
-            {contextMenuEntry?.kind === "asset" && (
-              <UnstyledButton
-                onClick={handleConvertScope}
-                styles={{
-                  root: {
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "8px 10px",
-                    borderRadius: "var(--sm-radius-sm)",
-                    color: "var(--sm-color-text)",
-                    background: "transparent",
-                    transition: "var(--sm-transition-fast)",
-                    "&:hover": {
-                      background: "var(--sm-active-bg)"
-                    }
-                  }
-                }}
-              >
-                <Text size="sm">
-                  {contextMenuEntry.inOverlay
-                    ? "Promote to Base"
-                    : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`}
-                </Text>
-              </UnstyledButton>
-            )}
-            {/* Plan 058 §058.3 — cross-Scene copy for overlay
-                entries. Hidden with a single Scene, or for base
-                assets (they're already visible everywhere). */}
-            {contextMenuEntry?.inOverlay &&
-              otherScenes.map((scene) => (
-                <UnstyledButton
-                  key={scene.sceneId}
-                  onClick={() => handleCopyToScene(scene.sceneId)}
-                  styles={{
-                    root: {
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "8px 10px",
-                      borderRadius: "var(--sm-radius-sm)",
-                      color: "var(--sm-color-text)",
-                      background: "transparent",
-                      transition: "var(--sm-transition-fast)",
-                      "&:hover": {
-                        background: "var(--sm-active-bg)"
-                      }
-                    }
-                  }}
-                >
-                  <Text size="sm">Copy to 🎬 {scene.displayName}</Text>
-                </UnstyledButton>
-              ))}
           </Box>
         )}
       </>

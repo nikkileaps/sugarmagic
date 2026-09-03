@@ -65,7 +65,7 @@ import { seedCefrPosteriorFromPlacement } from "../learner/cefr-posterior";
 
 /** One directive per band, plus the slate the bake actually consumes. */
 export interface SceneTeachPlan {
-  sceneId: string;
+  regionId: string;
   /** Absent band = the Teacher failed for it; bake that band without a slate. */
   byBand: Map<CEFRBand, { directive: PedagogicalDirective; slate: GradedTextSlate }>;
 }
@@ -80,7 +80,7 @@ export interface SceneTeachPlan {
  * checking whether the scene context was there.
  */
 export async function planSceneTeaching(args: {
-  sceneId: string;
+  regionId: string;
   sceneContext: SceneContextModel | null;
   bands: readonly CEFRBand[];
   targetLanguage: string;
@@ -90,7 +90,7 @@ export async function planSceneTeaching(args: {
   onLog?: (message: string, detail?: Record<string, unknown>) => void;
 }): Promise<SceneTeachPlan> {
   const {
-    sceneId,
+    regionId,
     sceneContext,
     bands,
     targetLanguage,
@@ -101,7 +101,7 @@ export async function planSceneTeaching(args: {
   } = args;
 
   const situation = composeSituation({
-    sceneId,
+    regionId,
     sceneContext,
     runtimeContext: undefined
   });
@@ -151,7 +151,7 @@ export async function planSceneTeaching(args: {
         // Not a real conversation. The id only has to be stable and unique per
         // (scene, band) so a directive cache, if one is ever put in front of
         // this, cannot serve one band's answer for another.
-        conversationId: `bake:${sceneId}:${band}`,
+        conversationId: `bake:${regionId}:${band}`,
         learner,
         atlas,
         situation,
@@ -173,7 +173,7 @@ export async function planSceneTeaching(args: {
       // and a silent failure here surfaces later as "the bake stopped teaching"
       // with nothing pointing at the Teacher.
       onLog?.("teach-plan-failed", {
-        sceneId,
+        regionId,
         band,
         error: error instanceof Error ? error.message : String(error)
       });
@@ -181,12 +181,12 @@ export async function planSceneTeaching(args: {
   }
 
   onLog?.("teach-plan", {
-    sceneId,
+    regionId,
     sceneContextAvailable: sceneContext !== null,
     conceptCount: sceneContext?.concepts.length ?? 0,
     bandsPlanned: [...byBand.keys()],
     bandsFailed: bands.filter((band) => !byBand.has(band))
   });
 
-  return { sceneId, byBand };
+  return { regionId, byBand };
 }

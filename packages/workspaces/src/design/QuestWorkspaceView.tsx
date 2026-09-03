@@ -75,7 +75,8 @@ import {
   createDefaultQuestStageDefinition,
   createNodeGroup,
   createQuestNodeId,
-  getAllScenes
+  getAllScenes,
+  findSceneByQuestDefinitionId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
 import { WorldFlagSelect } from "../world-flags";
@@ -331,13 +332,71 @@ function MiniStageGraph({ stage }: { stage: QuestStageDefinition }) {
   );
 }
 
+/**
+ * Options for a picker whose current value may name content that has
+ * since been deleted. The stale id stays on the list, labelled, so the
+ * picker shows what the condition actually says rather than looking
+ * like nothing was ever picked.
+ */
+function pickerOptions(
+  available: { value: string; label: string }[],
+  current: string
+): { value: string; label: string }[] {
+  if (!current || available.some((option) => option.value === current)) {
+    return available;
+  }
+  return [...available, { value: current, label: `${current} (missing)` }];
+}
+
+/** Pick a quest from the project. The ids exist already; an author
+ *  retyping one is how a condition ends up naming nothing. */
+function QuestPicker({
+  label,
+  questDefinitions,
+  value,
+  excludeQuestDefinitionId,
+  onChange
+}: {
+  label: string;
+  questDefinitions: QuestDefinition[];
+  value: string;
+  /** A quest to leave off the list, where naming it would be a condition
+   *  that can never come true. */
+  excludeQuestDefinitionId?: string;
+  onChange: (questDefinitionId: string) => void;
+}) {
+  const available = questDefinitions
+    .filter((quest) => quest.definitionId !== excludeQuestDefinitionId)
+    .map((quest) => ({
+      value: quest.definitionId,
+      label: quest.displayName
+    }));
+
+  return (
+    <Select
+      size="xs"
+      label={label}
+      searchable
+      data={pickerOptions(available, value)}
+      value={value || null}
+      onChange={(next) => next && onChange(next)}
+    />
+  );
+}
+
 function QuestConditionEditor({
   condition,
   spellDefinitions,
+  questDefinitions,
+  excludeQuestDefinitionId,
   onChange
 }: {
   condition: QuestConditionDefinition;
   spellDefinitions: SpellDefinition[];
+  /** Every quest in the project: the conditions that name one pick from
+   *  this rather than asking the author to type an id. */
+  questDefinitions: QuestDefinition[];
+  excludeQuestDefinitionId?: string;
   onChange: (condition: QuestConditionDefinition) => void;
 }) {
   function handleTypeChange(type: string) {
@@ -385,6 +444,8 @@ function QuestConditionEditor({
         <QuestConditionEditor
           condition={condition.condition}
           spellDefinitions={spellDefinitions}
+          questDefinitions={questDefinitions}
+          excludeQuestDefinitionId={excludeQuestDefinitionId}
           onChange={(inner) => onChange({ type: "not", condition: inner })}
         />
       </Paper>
@@ -463,51 +524,61 @@ function QuestConditionEditor({
           }
         />
       )}
-      {condition.type === "questActive" && (
-        <TextInput
-          size="xs"
-          label="Quest ID"
+      {(condition.type === "questActive" ||
+        condition.type === "questCompleted") && (
+        <QuestPicker
+          label="Quest"
+          questDefinitions={questDefinitions}
           value={condition.questDefinitionId}
-          onChange={(event) =>
-            onChange({
-              ...condition,
-              questDefinitionId: event.currentTarget.value
-            })
-          }
-        />
-      )}
-      {condition.type === "questCompleted" && (
-        <TextInput
-          size="xs"
-          label="Quest ID"
-          value={condition.questDefinitionId}
-          onChange={(event) =>
-            onChange({
-              ...condition,
-              questDefinitionId: event.currentTarget.value
-            })
+          excludeQuestDefinitionId={excludeQuestDefinitionId}
+          onChange={(questDefinitionId) =>
+            onChange({ ...condition, questDefinitionId })
           }
         />
       )}
       {condition.type === "questStage" && (
         <>
-          <TextInput
-            size="xs"
-            label="Quest ID"
+          <QuestPicker
+            label="Quest"
+            questDefinitions={questDefinitions}
             value={condition.questDefinitionId}
-            onChange={(event) =>
+            excludeQuestDefinitionId={excludeQuestDefinitionId}
+            onChange={(questDefinitionId) =>
               onChange({
                 ...condition,
-                questDefinitionId: event.currentTarget.value
+                questDefinitionId,
+                // The old stage belonged to the old quest. Move to the
+                // new quest's first stage rather than keep an id that
+                // names nothing in it.
+                stageId:
+                  questDefinitions.find(
+                    (quest) => quest.definitionId === questDefinitionId
+                  )?.startStageId ?? ""
               })
             }
           />
-          <TextInput
+          <Select
             size="xs"
-            label="Stage ID"
-            value={condition.stageId}
-            onChange={(event) =>
-              onChange({ ...condition, stageId: event.currentTarget.value })
+            label="Stage"
+            searchable
+            data={pickerOptions(
+              (
+                questDefinitions.find(
+                  (quest) =>
+                    quest.definitionId === condition.questDefinitionId
+                )?.stageDefinitions ?? []
+              ).map((stage) => ({
+                value: stage.stageId,
+                label: stage.displayName
+              })),
+              condition.stageId
+            )}
+            value={condition.stageId || null}
+            placeholder={
+              condition.questDefinitionId ? undefined : "Pick a quest first"
+            }
+            onChange={(value) =>
+              value && onChange({ ...condition, stageId: value })
             }
           />
           <Select
@@ -550,6 +621,7 @@ function QuestActionFields({
   npcDefinitions,
   episodes,
   soundCueDefinitions,
+  regions,
   onChange
 }: {
   action: QuestActionDefinition;
@@ -557,6 +629,8 @@ function QuestActionFields({
   npcDefinitions: NPCDefinition[];
   episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
+  /** Destination sources for `goToRegion`: the regions and their markers. */
+  regions: RegionDocument[];
   onChange: (action: QuestActionDefinition) => void;
 }) {
   switch (action.type) {
@@ -661,6 +735,47 @@ function QuestActionFields({
           onChange={(value) => onChange({ ...action, sceneId: value })}
         />
       );
+
+    case "goToRegion": {
+      const destination = regions.find(
+        (candidate) => candidate.identity.id === action.regionId
+      );
+      return (
+        <Stack gap="xs">
+          <Select
+            size="xs"
+            label="Region"
+            searchable
+            placeholder="Pick a region"
+            data={regions.map((candidate) => ({
+              value: candidate.identity.id,
+              label: candidate.displayName
+            }))}
+            value={action.regionId}
+            onChange={(value) =>
+              // The marker belongs to the old region, so it cannot survive
+              // the region changing.
+              onChange({ ...action, regionId: value, markerId: null })
+            }
+          />
+          <Select
+            size="xs"
+            label="Arrive at"
+            searchable
+            clearable
+            placeholder={
+              action.regionId ? "That region's player start" : "Pick a region first"
+            }
+            data={(destination?.markers ?? []).map((marker) => ({
+              value: marker.markerId,
+              label: marker.displayName
+            }))}
+            value={action.markerId}
+            onChange={(value) => onChange({ ...action, markerId: value })}
+          />
+        </Stack>
+      );
+    }
 
     case "playCue":
     case "stopCue":
@@ -851,6 +966,7 @@ export function QuestActionsEditor({
   npcDefinitions,
   episodes,
   soundCueDefinitions,
+  regions,
   onChange,
   label
 }: {
@@ -859,6 +975,7 @@ export function QuestActionsEditor({
   npcDefinitions: NPCDefinition[];
   episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
+  regions: RegionDocument[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -935,6 +1052,7 @@ export function QuestActionsEditor({
                 npcDefinitions={npcDefinitions}
                 episodes={episodes}
                 soundCueDefinitions={soundCueDefinitions}
+                regions={regions}
                 onChange={(updated) => {
                   const next = [...actions];
                   next[index] = updated;
@@ -967,6 +1085,18 @@ export function useQuestWorkspaceView({
   renderInspectorSections
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
   const [searchQuery, setSearchQuery] = useState("");
+  /** Every Scene a quest could happen in, in narrative order. */
+  const storyScenes = useMemo(() => getAllScenes(episodes), [episodes]);
+  const [newQuestSceneId, setNewQuestSceneId] = useState<string | null>(null);
+  // Follow the project: default to the first Scene, and recover if the
+  // chosen one is deleted while this workspace is open.
+  useEffect(() => {
+    setNewQuestSceneId((current) =>
+      current && storyScenes.some((scene) => scene.sceneId === current)
+        ? current
+        : (storyScenes[0]?.sceneId ?? null)
+    );
+  }, [storyScenes]);
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(
     questDefinitions[0]?.definitionId ?? null
   );
@@ -1083,9 +1213,10 @@ export function useQuestWorkspaceView({
     [regions]
   );
 
-  // Plan 079.7 -- all NPC presences across all scenes/regions, for the stage picker.
-  // Deduped by presenceId (first scene overlay wins); tracks which region owns each
-  // and the presence's current condition (to derive checked state in the picker).
+  // Plan 079.7 -- every NPC presence an author can bind a quest stage to:
+  // the regions' own residents plus every Scene's overlay placements.
+  // Deduped by presenceId; tracks which region owns each and the presence's
+  // current condition (to derive checked state in the picker).
   const allNpcPresences = useMemo(() => {
     const seen = new Set<string>();
     const items: Array<{
@@ -1098,30 +1229,50 @@ export function useQuestWorkspaceView({
         questStageId: string | null;
       } | null;
     }> = [];
+    const addPresence = (
+      presence: {
+        presenceId: string;
+        npcDefinitionId: string;
+        placementLabel?: string | null;
+        condition?: {
+          questDefinitionId: string | null;
+          questStageId: string | null;
+        } | null;
+      },
+      regionId: string,
+      regionDisplayName: string
+    ): void => {
+      if (seen.has(presence.presenceId)) return;
+      seen.add(presence.presenceId);
+      const npcDef = npcDefinitions.find(
+        (n) => n.definitionId === presence.npcDefinitionId
+      );
+      const baseName = npcDef?.displayName ?? presence.npcDefinitionId;
+      items.push({
+        presenceId: presence.presenceId,
+        regionId,
+        regionDisplayName,
+        displayLabel: presence.placementLabel ?? baseName,
+        condition: presence.condition
+          ? {
+              questDefinitionId: presence.condition.questDefinitionId,
+              questStageId: presence.condition.questStageId
+            }
+          : null
+      });
+    };
+    // Residents first: they are present in every Scene, so they are the
+    // most bindable thing in the list.
+    for (const region of regions) {
+      for (const presence of region.npcPresences) {
+        addPresence(presence, region.identity.id, region.displayName);
+      }
+    }
     for (const scene of getAllScenes(episodes)) {
-      for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-        const region = regions.find((r) => r.identity.id === regionId);
-        const regionDisplayName = region?.displayName ?? regionId;
-        for (const presence of overlay.npcPresences) {
-          if (seen.has(presence.presenceId)) continue;
-          seen.add(presence.presenceId);
-          const npcDef = npcDefinitions.find(
-            (n) => n.definitionId === presence.npcDefinitionId
-          );
-          const baseName = npcDef?.displayName ?? presence.npcDefinitionId;
-          items.push({
-            presenceId: presence.presenceId,
-            regionId,
-            regionDisplayName,
-            displayLabel: presence.placementLabel ?? baseName,
-            condition: presence.condition
-              ? {
-                  questDefinitionId: presence.condition.questDefinitionId,
-                  questStageId: presence.condition.questStageId
-                }
-              : null
-          });
-        }
+      const region = regions.find((r) => r.identity.id === scene.regionId);
+      const regionDisplayName = region?.displayName ?? scene.regionId;
+      for (const presence of scene.overlay.npcPresences) {
+        addPresence(presence, scene.regionId, regionDisplayName);
       }
     }
     return items;
@@ -1191,7 +1342,9 @@ export function useQuestWorkspaceView({
   );
 
   const createQuest = useCallback(() => {
-    if (!gameProjectId) return;
+    // A quest happens somewhere: no Scene to put it in means no quest,
+    // and the button is disabled rather than creating one that vanishes.
+    if (!gameProjectId || !newQuestSceneId) return;
     const definition = createDefaultQuestDefinition();
     onCommand({
       kind: "CreateQuestDefinition",
@@ -1200,12 +1353,12 @@ export function useQuestWorkspaceView({
         subjectKind: "quest-definition",
         subjectId: definition.definitionId
       },
-      payload: { definition }
+      payload: { definition, sceneId: newQuestSceneId }
     });
     setSelectedQuestId(definition.definitionId);
     setGraphStageId(null);
     setSelectedNodeId(null);
-  }, [gameProjectId, onCommand]);
+  }, [gameProjectId, newQuestSceneId, onCommand]);
 
   const deleteQuest = useCallback(
     (definitionId: string) => {
@@ -1580,16 +1733,40 @@ export function useQuestWorkspaceView({
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Quests
         </Text>
-        <Tooltip label="Add Quest">
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            onClick={createQuest}
-            aria-label="Add Quest"
+        <Group gap={6} wrap="nowrap">
+          {/* Which Scene a new quest happens in -- shown, not inferred
+              from whatever was last selected elsewhere. */}
+          <Select
+            size="xs"
+            aria-label="New quest in Scene"
+            placeholder="No Scenes"
+            style={{ width: 150 }}
+            data={storyScenes.map((scene) => ({
+              value: scene.sceneId,
+              label: scene.displayName
+            }))}
+            value={newQuestSceneId}
+            disabled={storyScenes.length === 0}
+            onChange={(value) => setNewQuestSceneId(value)}
+          />
+          <Tooltip
+            label={
+              storyScenes.length === 0
+                ? "Add a Scene first -- a quest happens in one"
+                : "Add Quest"
+            }
           >
-            +
-          </ActionIcon>
-        </Tooltip>
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={createQuest}
+              disabled={!newQuestSceneId}
+              aria-label="Add Quest"
+            >
+              +
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
       <Box p="sm" style={{ borderBottom: "1px solid var(--sm-panel-border)" }}>
         <TextInput
@@ -1974,6 +2151,68 @@ export function useQuestWorkspaceView({
                 })
               }
             />
+            {/* Where this quest happens. The Scene HOLDS its quests
+                (epic #226), so this is the same operation the Scene's
+                own quest list performs -- one command, two doors. */}
+            <Select
+              label="Scene"
+              description="The Scene this quest happens in"
+              data={storyScenes.map((scene) => ({
+                value: scene.sceneId,
+                label: scene.displayName
+              }))}
+              value={
+                findSceneByQuestDefinitionId(
+                  episodes,
+                  selectedQuest.definitionId
+                )?.sceneId ?? null
+              }
+              allowDeselect={false}
+              onChange={(value) => {
+                if (!value || !gameProjectId) return;
+                onCommand({
+                  kind: "MoveQuestToScene",
+                  target: {
+                    aggregateKind: "game-project",
+                    aggregateId: gameProjectId
+                  },
+                  subject: {
+                    subjectKind: "quest-definition",
+                    subjectId: selectedQuest.definitionId
+                  },
+                  payload: {
+                    questDefinitionId: selectedQuest.definitionId,
+                    toSceneId: value
+                  }
+                });
+              }}
+            />
+            {/* When this quest starts on its own. Unticked means at boot,
+                which is what every quest did before conditions existed. */}
+            <Checkbox
+              size="xs"
+              label="Starts on a condition"
+              checked={selectedQuest.startCondition !== undefined}
+              onChange={(event) =>
+                commitQuest({
+                  ...selectedQuest,
+                  startCondition: event.currentTarget.checked
+                    ? createWorldFlagCondition()
+                    : undefined
+                })
+              }
+            />
+            {selectedQuest.startCondition && (
+              <QuestConditionEditor
+                condition={selectedQuest.startCondition}
+                spellDefinitions={spellDefinitions}
+                questDefinitions={questDefinitions}
+                excludeQuestDefinitionId={selectedQuest.definitionId}
+                onChange={(startCondition) =>
+                  commitQuest({ ...selectedQuest, startCondition })
+                }
+              />
+            )}
             <Textarea
               label="Description"
               value={selectedQuest.description}
@@ -2496,6 +2735,7 @@ export function useQuestWorkspaceView({
                   selectedNode.condition ?? createWorldFlagCondition()
                 }
                 spellDefinitions={spellDefinitions}
+                questDefinitions={questDefinitions}
                 onChange={(condition) =>
                   updateNode({ ...selectedNode, condition })
                 }
@@ -2516,6 +2756,7 @@ export function useQuestWorkspaceView({
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onEnterActions) =>
                 updateNode({ ...selectedNode, onEnterActions })
               }
@@ -2527,6 +2768,7 @@ export function useQuestWorkspaceView({
               npcDefinitions={npcDefinitions}
               episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
+              regions={regions}
               onChange={(onCompleteActions) =>
                 updateNode({ ...selectedNode, onCompleteActions })
               }

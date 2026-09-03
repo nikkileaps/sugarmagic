@@ -151,14 +151,14 @@ function createQuestEssentialLemma(
 
 function makeDiagnostic(
   severity: SceneAuthorWarning["severity"],
-  sceneId: string,
+  regionId: string,
   message: string,
   lemmaId?: string,
   suggestion?: string
 ): SceneAuthorWarning {
   return {
     severity,
-    sceneId,
+    regionId,
     message,
     lemmaId,
     suggestion
@@ -359,7 +359,7 @@ export function compileSugarlangScene(
       diagnostics.push(
         makeDiagnostic(
           "warning",
-          scene.sceneId,
+          scene.regionId,
           "Scene has more than 3% unclassified tokens; review morphology coverage.",
           undefined,
           "Add morphology coverage or revise unusual surface forms."
@@ -378,7 +378,7 @@ export function compileSugarlangScene(
       diagnostics.push(
         makeDiagnostic(
           "warning",
-          scene.sceneId,
+          scene.regionId,
           "Scene has more than 30% high-band lemmas; consider simplifying authored content.",
           undefined,
           "Reduce C1/C2 vocabulary density in core scene text."
@@ -392,7 +392,7 @@ export function compileSugarlangScene(
         diagnostics.push(
           makeDiagnostic(
             "warning",
-            scene.sceneId,
+            scene.regionId,
             "Narrative-critical lemma relies on frequency-derived CEFR prior.",
             lemmaId,
             "Review this lemma for a human CEFR override if it matters narratively."
@@ -430,7 +430,7 @@ export function compileSugarlangScene(
       diagnostics.push(
         makeDiagnostic(
           "warning",
-          scene.sceneId,
+          scene.regionId,
           `Objective "${bucket.displayName}" is deadlock-prone: ${uniqueHighBandLemmas.join(", ")} are above B2.`,
           undefined,
           `Revise objective ${objectiveNodeId} to reduce high-band vocabulary density.`
@@ -441,7 +441,7 @@ export function compileSugarlangScene(
 
   const npcVoiceSpecs = buildNpcVoiceSpecs(scene);
   const lexicon: SceneVocabularyModel = {
-    sceneId: scene.sceneId,
+    regionId: scene.regionId,
     contentHash,
     pipelineVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
     atlasVersion,
@@ -460,7 +460,7 @@ export function compileSugarlangScene(
     );
     lexicon.diagnostics = diagnostics.sort((left, right) =>
       left.message === right.message
-        ? compareStrings(left.sceneId, right.sceneId)
+        ? compareStrings(left.regionId, right.regionId)
         : compareStrings(left.message, right.message)
     );
   }

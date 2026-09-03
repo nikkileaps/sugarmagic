@@ -150,7 +150,9 @@ export function createTestRegion(): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState(),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 
@@ -223,8 +225,9 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
 export function createTestActiveScene(regionId: string): Scene {
   return createDefaultScene({
     sceneId: "scene:test",
-    regionOverlays: {
-      [regionId]: {
+    regionId: regionId,
+    overlay: {
+        suppressedRegionIds: [],
         assetAppearanceOverrides: {},
         folders: [],
         placedAssets: [],
@@ -236,7 +239,6 @@ export function createTestActiveScene(regionId: string): Scene {
           createRegionItemPresence({ itemDefinitionId: "item-ticket" })
         ]
       }
-    }
   });
 }
 

@@ -34,7 +34,7 @@ function createEntry(
       lang: "es",
       extractorPromptVersion: "1"
     },
-    sceneId: "scene-1",
+    regionId: "scene-1",
     extractedAtMs: 10,
     extractedByModel: "claude-sonnet-4-6",
     chunks: [

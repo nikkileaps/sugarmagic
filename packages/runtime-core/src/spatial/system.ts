@@ -111,8 +111,7 @@ export function createRuntimeSpatialResolverSystem(
       x: position.x,
       y: position.y,
       z: position.z,
-      regionId: currentLocation.regionId,
-      sceneId: currentLocation.sceneId
+      regionId: currentLocation.regionId
     });
     setEntityCurrentArea(
       blackboard,

@@ -60,15 +60,28 @@ describe("WorldPresenceTracker", () => {
       expect(tracker.serializeSaveSlice()).toEqual({ collectedByRegion: {} });
     });
 
-    it("null sceneId keys under the default Scene (pre-Scenes callers)", () => {
+    it("no active Scene keys to its own bucket, not the default Scene", () => {
       const tracker = new WorldPresenceTracker();
       tracker.markCollected("region:hollow", null, "presence:coin-1");
+
       expect(
         tracker.shouldSkip("region:hollow", null, "presence:coin-1")
       ).toBe(true);
+      // The failure this guards (epic #226): `scene:default` is a REAL
+      // Scene in a live project, so sharing its bucket would mark the coin
+      // collected in that Scene too.
       expect(
         tracker.shouldSkip("region:hollow", "scene:default", "presence:coin-1")
-      ).toBe(true);
+      ).toBe(false);
+    });
+
+    it("a Scene collection does not leak into the no-Scene bucket", () => {
+      const tracker = new WorldPresenceTracker();
+      tracker.markCollected("region:hollow", "scene:default", "presence:coin-1");
+
+      expect(
+        tracker.shouldSkip("region:hollow", null, "presence:coin-1")
+      ).toBe(false);
     });
   });
 
@@ -187,7 +200,7 @@ describe("createWorldPresenceSaveParticipant", () => {
     const p = createWorldPresenceSaveParticipant({ tracker });
     expect(p.participantId).toBe("world.presence");
     expect(p.tier).toBe("region-aware");
-    expect(p.schemaVersion).toBe(2);
+    expect(p.schemaVersion).toBe(3);
   });
 
   it("serialize forwards to the tracker", () => {

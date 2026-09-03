@@ -16,7 +16,10 @@
  */
 
 import { tasksAreAmbiguous } from "../behavior-specificity";
-import { getAllScenes } from "../episodes";
+import {
+  getAllQuestDefinitionsInEpisodes,
+  getAllScenes
+} from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestConditionDefinition,
@@ -122,6 +125,23 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
   }
   for (const message of emptyStageLoop(quest)) {
     issues.push(warning(path, message));
+  }
+
+  // The quest's own start condition, which decides whether it ever runs.
+  // Same grammar as a node condition and the same ways of being broken.
+  for (const flagCondition of worldFlagConditions(quest.startCondition)) {
+    if (!flagCondition.worldFlagId) {
+      issues.push(
+        warning(path, "Start condition has a flag condition with no flag picked.")
+      );
+    } else if (isBlankWorldFlagValue(flagCondition.value)) {
+      issues.push(
+        warning(
+          path,
+          "Start condition checks a flag with no value, so this quest never starts."
+        )
+      );
+    }
   }
 
   for (const stage of quest.stageDefinitions) {
@@ -257,16 +277,24 @@ function collectQuestBindings(
         });
       }
     }
+    // A resident's spawn condition validates like a Scene placement's; the
+    // region owns this one, so it is reachable with no Scene at all.
+    for (const presence of region.npcPresences) {
+      if (presence.condition) {
+        bindings.push({
+          binding: presence.condition,
+          where: `region "${region.displayName}" NPC placement`
+        });
+      }
+    }
   }
   for (const scene of getAllScenes(gameProject.episodes)) {
-    for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-      for (const presence of overlay.npcPresences) {
-        if (presence.condition) {
-          bindings.push({
-            binding: presence.condition,
-            where: `scene "${scene.displayName}" NPC placement in region "${regionId}"`
-          });
-        }
+    for (const presence of scene.overlay.npcPresences) {
+      if (presence.condition) {
+        bindings.push({
+          binding: presence.condition,
+          where: `scene "${scene.displayName}" NPC placement`
+        });
       }
     }
   }
@@ -286,7 +314,31 @@ export function validateProjectContent(
 ): ContentValidationResult {
   const issues: ContentValidationIssue[] = [];
 
-  for (const quest of gameProject.questDefinitions) {
+  // A Scene has to happen somewhere. The load path is permissive so Studio
+  // still opens a project whose Scene lost its region, and this is where
+  // that becomes a refusal -- errors block save and deploy.
+  const regionIds = new Set(regions.map((region) => region.identity.id));
+  for (const scene of getAllScenes(gameProject.episodes)) {
+    if (scene.regionId.trim().length === 0) {
+      issues.push(
+        error(
+          `scene.${scene.sceneId}.regionId`,
+          `Scene "${scene.displayName}" does not name a region. Pick the region it happens in.`
+        )
+      );
+      continue;
+    }
+    if (!regionIds.has(scene.regionId)) {
+      issues.push(
+        error(
+          `scene.${scene.sceneId}.regionId`,
+          `Scene "${scene.displayName}" names region "${scene.regionId}", which does not exist. Pick a region that does.`
+        )
+      );
+    }
+  }
+
+  for (const quest of getAllQuestDefinitionsInEpisodes(gameProject.episodes)) {
     issues.push(...validateQuest(quest));
   }
 
@@ -333,7 +385,7 @@ export function validateProjectContent(
   // A story point is authored as ids with no validation anywhere else, so a
   // quest or node that has since been deleted is only caught here.
   const nodeIdsByQuest = new Map(
-    gameProject.questDefinitions.map((quest) => [
+    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
       quest.definitionId,
       new Set(
         quest.stageDefinitions.flatMap((stage) =>
@@ -365,12 +417,78 @@ export function validateProjectContent(
     }
   }
 
+  issues.push(...findMissingPlaceReferences(regions));
   issues.push(...findAmbiguousBehaviorTasks(gameProject, regions));
 
   return {
     valid: !issues.some((issue) => issue.severity === "error"),
     issues
   };
+}
+
+/**
+ * Places named by id that no longer exist: a link to a deleted region, an
+ * arrival on a deleted marker, a behavior task sent to one.
+ *
+ * Errors rather than warnings. A door to nowhere and an NPC with no spot
+ * to stand are broken content, not a question of taste, and both fail
+ * quietly at runtime -- the door does nothing, the NPC reports blocked.
+ * The save gate is where the author finds out.
+ */
+function findMissingPlaceReferences(
+  regions: readonly RegionDocument[]
+): ContentValidationIssue[] {
+  const issues: ContentValidationIssue[] = [];
+  const markerIdsByRegion = new Map(
+    regions.map((region) => [
+      region.identity.id,
+      new Set((region.markers ?? []).map((marker) => marker.markerId))
+    ])
+  );
+
+  for (const region of regions) {
+    const at = `region "${region.displayName}"`;
+
+    for (const volume of region.volumes ?? []) {
+      for (const action of [...volume.onEnterActions, ...volume.onExitActions]) {
+        if (action.type !== "goToRegion" || !action.regionId) continue;
+        const destinationMarkers = markerIdsByRegion.get(action.regionId);
+        if (!destinationMarkers) {
+          issues.push(
+            error(
+              `${at} volume "${volume.volumeId}"`,
+              `Leads to region "${action.regionId}", which does not exist.`
+            )
+          );
+          continue;
+        }
+        if (action.markerId && !destinationMarkers.has(action.markerId)) {
+          issues.push(
+            error(
+              `${at} volume "${volume.volumeId}"`,
+              `Arrives at marker "${action.markerId}", which that region does not have.`
+            )
+          );
+        }
+      }
+    }
+
+    const ownMarkers = markerIdsByRegion.get(region.identity.id)!;
+    for (const behavior of region.behaviors) {
+      for (const task of behavior.tasks) {
+        if (task.target?.kind !== "marker") continue;
+        if (ownMarkers.has(task.target.markerId)) continue;
+        issues.push(
+          error(
+            `${at} behavior "${behavior.displayName}" task "${task.displayName}"`,
+            `Sends the NPC to marker "${task.target.markerId}", which this region does not have.`
+          )
+        );
+      }
+    }
+  }
+
+  return issues;
 }
 
 /**
@@ -401,7 +519,11 @@ function findAmbiguousBehaviorTasks(
           const left = behavior.tasks[index]!;
           const right = behavior.tasks[other]!;
           if (
-            !tasksAreAmbiguous(left, right, gameProject.questDefinitions)
+            !tasksAreAmbiguous(
+              left,
+              right,
+              getAllQuestDefinitionsInEpisodes(gameProject.episodes)
+            )
           ) {
             continue;
           }

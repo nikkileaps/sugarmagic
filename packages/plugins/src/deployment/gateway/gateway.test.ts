@@ -1108,7 +1108,7 @@ describe("handleTelemetryIngest", () => {
               playerResponseText: "also the player",
               originalText: "before repair",
               repairedText: "after repair",
-              sceneId: "scene-1",
+              regionId: "region-1",
               observations: [
                 { observation: { inputText: "nested typing", lemmaId: "hola" } }
               ]
@@ -1127,7 +1127,7 @@ describe("handleTelemetryIngest", () => {
       expect(logged).not.toHaveProperty("playerResponseText");
       expect(logged).not.toHaveProperty("originalText");
       expect(logged).not.toHaveProperty("repairedText");
-      expect(logged.sceneId).toBe("scene-1");
+      expect(logged.regionId).toBe("region-1");
       const observations = logged.observations as Array<{
         observation: Record<string, unknown>;
       }>;

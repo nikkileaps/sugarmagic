@@ -14,7 +14,7 @@ export interface SceneExplorerEntity {
   type: "entity";
   instanceId: string;
   displayName: string;
-  entityKind: "asset" | "player" | "npc" | "item";
+  entityKind: "asset" | "player" | "npc" | "item" | "marker";
   assetKind: string;
   assetDefinitionId: string | null;
   visible: boolean;

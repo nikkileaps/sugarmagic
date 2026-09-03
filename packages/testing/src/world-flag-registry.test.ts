@@ -14,9 +14,25 @@ import {
   normalizeRegionDocumentForLoad,
   validateProjectContent,
   type GameProject,
-  type RegionDocument
+  type RegionDocument,
+  getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
 import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
+
+/** A project whose Scenes name the given region. These tests are about flag
+ *  migration; a Scene naming nowhere is a separate validation error and
+ *  would drown the assertion under test. */
+function projectNaming(regionId: string) {
+  const base = createDefaultGameProject("Test", "test");
+  return {
+    ...base,
+    episodes: base.episodes.map((episode) => ({
+      ...episode,
+      scenes: episode.scenes.map((scene) => ({ ...scene, regionId }))
+    }))
+  };
+}
+
 
 /**
  * The flag registry and the chain that carries it. Most of that chain is
@@ -137,12 +153,14 @@ describe("a region written before the registry", () => {
       ],
       landscape: createDefaultRegionLandscapeState({}),
       markers: [],
-      gameplayPlacements: []
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null
     };
   }
 
   it("resolves its legacy flag key once normalized, then migrated", () => {
-    const project = createDefaultGameProject("Test", "test");
+    const project = projectNaming("region:test");
     const normalized = normalizeRegionDocumentForLoad(
       rawLegacyRegion() as unknown as RegionDocument,
       createEmptyContentLibrarySnapshot(project.identity.id)
@@ -168,7 +186,7 @@ describe("a region written before the registry", () => {
   // raw flag name and the save was refused. Migrating an unnormalized region
   // has to work, or the order of two calls in one function is load-bearing.
   it("resolves its legacy flag key even without normalizing first", () => {
-    const project = createDefaultGameProject("Test", "test");
+    const project = projectNaming("region:test");
     const migrated = migrateWorldFlagReferences(project, [
       rawLegacyRegion() as unknown as RegionDocument
     ]);
@@ -203,16 +221,28 @@ describe("migrating flag references written before the registry", () => {
       definitionId: "quest:test",
       displayName: "Test"
     });
+    const base = createDefaultGameProject("Test", "test");
+    const contained = {
+      ...quest,
+      startStageId: stage.stageId,
+      stageDefinitions: [stage]
+    };
     return {
-      ...createDefaultGameProject("Test", "test"),
-      questDefinitions: [
-        { ...quest, startStageId: stage.stageId, stageDefinitions: [stage] }
-      ]
+      ...base,
+      // Quests are held by the Scene they happen in (epic #226).
+      episodes: base.episodes.map((episode) => ({
+        ...episode,
+        scenes: episode.scenes.map((scene, index) => ({
+          ...scene,
+          questDefinitions: index === 0 ? [contained] : scene.questDefinitions
+        }))
+      }))
     };
   }
 
   function firstNodeOf(project: GameProject) {
-    return project.questDefinitions[0].stageDefinitions[0].nodeDefinitions[0];
+    return getAllQuestDefinitionsInEpisodes(project.episodes)[0]
+      .stageDefinitions[0].nodeDefinitions[0];
   }
 
   it("creates one entry per name and rewrites the references to its id", () => {

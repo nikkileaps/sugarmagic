@@ -334,11 +334,9 @@ describe("GenerateStage", () => {
     input.execution.runtimeContext = {
       ...input.execution.runtimeContext,
       here: {
-        regionId: "region-1",
-        regionDisplayName: "Region",
+        regionId: "scene-1",
+        regionDisplayName: "Station Courtyard",
         regionLorePageId: null,
-        sceneId: "scene-1",
-        sceneDisplayName: "Station Courtyard",
         area: {
           areaId: "area-1",
           displayName: "Station Courtyard",

@@ -1834,8 +1834,7 @@ describe("buildSupabaseManagedFiles", () => {
       itemDefinitions: [],
       documentDefinitions: [],
       npcDefinitions: [],
-      dialogueDefinitions: [],
-      questDefinitions: []
+      dialogueDefinitions: []
     });
   }
 

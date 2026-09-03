@@ -40,7 +40,7 @@ function task(
     taskId: `task:${displayName}`,
     displayName,
     description: "",
-    targetAreaId: null,
+    target: null,
     currentActivity: "idle",
     currentGoal: "idle",
     activation: {

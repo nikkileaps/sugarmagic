@@ -25,7 +25,8 @@ import {
   Badge
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
-import { ManageScenesModal } from "./ManageScenesModal";
+import { StoryStructureView } from "./StoryStructureView";
+import { SceneComposerPanel } from "./SceneComposerPanel";
 import { CreditsPreview } from "./CreditsPreview";
 import { createCharacterWizardServices } from "./character-wizard/characterWizardServices";
 import type {
@@ -138,7 +139,10 @@ import {
   createDefaultSoundCueDefinition,
   createDefaultMechanicsDefinition,
   createDefaultRegion,
-  createScopedId
+  createScopedId,
+  sceneOverlayForRegion,
+  getAllScenes,
+  type Scene,
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -153,6 +157,12 @@ import {
   checkDirectoryHasProject,
   createProjectInDirectory,
   openProject,
+  loadProjectFromHandle,
+  rememberLastOpenedProject,
+  recallLastOpenedProject,
+  forgetLastOpenedProject,
+  requestProjectDirectoryAccess,
+  type ActiveProject,
   pickDirectory,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
@@ -203,7 +213,8 @@ import {
   useDesignProductModeView,
   usePublishProductModeView,
   useRenderProductModeView,
-  type WorkspaceNavigationTarget
+  type WorkspaceNavigationTarget,
+  useStoryProductModeView
 } from "@sugarmagic/workspaces";
 import {
   ActionStripe,
@@ -411,25 +422,34 @@ function activateDefaultEnvironment(environmentId: string | null | undefined) {
   shellStore.getState().setActiveEnvironmentId(environmentId ?? null);
 }
 
+/** Everything that has to happen once a project's files are loaded. Shared
+ *  by opening from the picker and reopening the remembered directory, so
+ *  the two cannot drift. */
+function activateLoadedProject(active: ActiveProject) {
+  const session = createAuthoringSession(
+    active.gameProject,
+    active.regions,
+    active.contentLibrary
+  );
+  // Drop the previous project's live painted-mask pixels on switch --
+  // the registry is module-scope in render-web, so stale masks would
+  // otherwise bleed into scatter sampling (068.13 mini-review).
+  clearLivePaintedMasks();
+  projectStore.getState().setActive(active.handle, active.descriptor, session);
+  activateRegion(active.regions[0]);
+  activateDefaultEnvironment(
+    session.contentLibrary.environmentDefinitions[0]?.definitionId
+  );
+  // The handle itself is already stored by `loadProjectFromHandle`; this
+  // only records WHICH of the stored ones was last open.
+  rememberLastOpenedProject(active.gameProject.identity.id);
+  return session;
+}
+
 async function handleOpenProject() {
   try {
     const active = await openProject();
-    const session = createAuthoringSession(
-      active.gameProject,
-      active.regions,
-      active.contentLibrary
-    );
-    // Drop the previous project's live painted-mask pixels on switch --
-    // the registry is module-scope in render-web, so stale masks would
-    // otherwise bleed into scatter sampling (068.13 mini-review).
-    clearLivePaintedMasks();
-    projectStore
-      .getState()
-      .setActive(active.handle, active.descriptor, session);
-    activateRegion(active.regions[0]);
-    activateDefaultEnvironment(
-      session.contentLibrary.environmentDefinitions[0]?.definitionId
-    );
+    activateLoadedProject(active);
     void seedAnimationLibraryIfNeeded(
       active.handle,
       active.descriptor,
@@ -437,6 +457,37 @@ async function handleOpenProject() {
     );
   } catch (e) {
     handleProjectError(e);
+  }
+}
+
+/**
+ * Open the directory Studio last had open, without a file picker.
+ *
+ * Returns false when there is nothing to reopen or the browser refused,
+ * which is when the welcome dialog earns its place.
+ */
+async function reopenRememberedProject(
+  handle: FileSystemDirectoryHandle
+): Promise<boolean> {
+  try {
+    const active = await loadProjectFromHandle(handle);
+    activateLoadedProject(active);
+    void seedAnimationLibraryIfNeeded(
+      active.handle,
+      active.descriptor,
+      active.gameProject.identity.id
+    );
+    return true;
+  } catch (error) {
+    // The folder moved, was renamed, or stopped being a game root. Forget
+    // it rather than offering a button that fails the same way every time,
+    // and say so -- a silently-empty welcome screen looks like a bug.
+    console.warn(
+      "[studio] could not reopen the last project; it has been forgotten.",
+      error
+    );
+    forgetLastOpenedProject();
+    return false;
   }
 }
 
@@ -798,6 +849,23 @@ function handleMoveSceneToEpisode(sceneId: string, toEpisodeId: string) {
     .updateSession(moveSceneToEpisodeInSession(session, sceneId, toEpisodeId));
 }
 
+function handleMoveQuestToScene(questDefinitionId: string, toSceneId: string) {
+  // Through the command, not the session function directly: the quest
+  // inspector performs the same move, and routing both here keeps one
+  // enforcer -- and gives the Scene-side list undo for free.
+  const { session } = projectStore.getState();
+  if (!session) return;
+  dispatchCommand({
+    kind: "MoveQuestToScene",
+    target: {
+      aggregateKind: "game-project",
+      aggregateId: session.gameProject.identity.id
+    },
+    subject: { subjectKind: "quest-definition", subjectId: questDefinitionId },
+    payload: { questDefinitionId, toSceneId }
+  });
+}
+
 function handleUpdateEpisodeEndRouting(routing: EpisodeEndRouting) {
   const { session } = projectStore.getState();
   if (!session) return;
@@ -863,6 +931,7 @@ function handleStartPreview(
     activeProductMode: shell.activeProductMode,
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+    activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
     activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
     activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
     activeRegionId: shell.activeRegionId,
@@ -939,6 +1008,9 @@ function handleStopPreview() {
   }
   if (snapshot.activeProductMode === "design") {
     shell.setActiveDesignWorkspaceKind(snapshot.activeDesignWorkspaceKind);
+  }
+  if (snapshot.activeProductMode === "story") {
+    shell.setActiveStoryWorkspaceKind(snapshot.activeStoryWorkspaceKind);
   }
   if (snapshot.activeProductMode === "render") {
     shell.setActiveRenderWorkspaceKind(snapshot.activeRenderWorkspaceKind);
@@ -1042,7 +1114,7 @@ async function postPreviewBootMessage(
       documentDefinitions: session.gameProject.documentDefinitions,
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
-      questDefinitions: session.gameProject.questDefinitions,
+      questDefinitions: getAllQuestDefinitions(session),
       menuDefinitions: session.gameProject.menuDefinitions,
       hudDefinition: session.gameProject.hudDefinition,
       uiTheme: session.gameProject.uiTheme,
@@ -1092,6 +1164,10 @@ export function App() {
     shellStore,
     (s) => s.activeDesignWorkspaceKind
   );
+  const activeStoryKind = useStore(
+    shellStore,
+    (s) => s.activeStoryWorkspaceKind
+  );
   const activeRenderKind = useStore(
     shellStore,
     (s) => s.activeRenderWorkspaceKind
@@ -1107,6 +1183,35 @@ export function App() {
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
   const previewWindow = useStore(previewStore, (s) => s.previewWindow);
+
+  // The project Studio last had open. When the browser still grants access
+  // it reopens on its own and the author never sees the welcome dialog --
+  // which is the common case after a reload. When the browser wants a
+  // gesture first, the dialog offers a one-click way back in.
+  const [reopenable, setReopenable] = useState<{
+    handle: FileSystemDirectoryHandle;
+    name: string;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const remembered = await recallLastOpenedProject();
+      if (cancelled || !remembered) return;
+      if (remembered.access === "granted") {
+        await reopenRememberedProject(remembered.handle);
+        return;
+      }
+      setReopenable({
+        handle: remembered.handle,
+        name: remembered.handle.name
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Boot only: reopening on every render would fight the author's own
+    // File > Open.
+  }, []);
 
   // Studio itself needs the open project's id, because some
   // author-facing panels read the PLAYER's storage directly (the SugarProfile
@@ -1128,6 +1233,7 @@ export function App() {
   const hasSession = session != null;
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
+  const isStory = activeProductMode === "story";
   const isRender = activeProductMode === "render";
   const isPublish = activeProductMode === "publish";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
@@ -1146,7 +1252,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [manageScenesOpen, setManageScenesOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -1400,6 +1505,7 @@ export function App() {
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+      activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
       activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
       activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
       activeRegionId: shell.activeRegionId,
@@ -2557,11 +2663,14 @@ export function App() {
     []
   );
 
-  // Bake the region navmesh from the collision geometry inside nav-bounds
-  // volumes, write the artifact and publish the in-memory blob to the
-  // asset-source store -- never read-after-write, because FSAccess
-  // intermittently returns null right after one -- then record the
-  // reference and its input hash (for staleness) on the region.
+  // Bake the navmeshes this region needs: its own, plus one for each Scene
+  // whose composition actually changes what blocks movement.
+  //
+  // [LAW:one-source-of-truth] A navmesh is DERIVED from a composition, so
+  // there is one artifact per composition that differs -- decided by the
+  // input hash, not by an author remembering which Scene they had open.
+  // Baking whatever Scene happened to be selected is what made a region's
+  // single artifact silently belong to the wrong Scene.
   const handleBakeNavMesh = useCallback(async () => {
     const { session, handle } = projectStore.getState();
     if (!session || !handle) {
@@ -2571,31 +2680,52 @@ export function App() {
     if (!region) {
       return;
     }
-    const input = buildRegionNavMeshInput({
+
+    const shared = {
       region,
       contentLibrary: session.contentLibrary,
       playerDefinition: getPlayerDefinition(session),
       itemDefinitions: getAllItemDefinitions(session),
-      npcDefinitions: getAllNPCDefinitions(session),
-      activeScene: getActiveScene(session)
-    });
-    const bytes = await bakeNavMesh(input);
-    if (!bytes) {
+      npcDefinitions: getAllNPCDefinitions(session)
+    };
+
+    /** Bake one composition and write its artifact, or null if there is
+     *  nothing walkable to bake. */
+    const bakeComposition = async (
+      activeScene: Scene | null,
+      assetPath: string
+    ) => {
+      const input = buildRegionNavMeshInput({ ...shared, activeScene });
+      const bytes = await bakeNavMesh(input);
+      if (!bytes) return null;
+      const blob = new Blob([new Uint8Array(bytes)], {
+        type: "application/octet-stream"
+      });
+      await writeBlobFile(handle, assetPath.split("/"), blob);
+      // Publish the in-memory blob so the runtime resolves it without a
+      // read-after-write (the known FSAccess flake).
+      assetSourceStore.getState().setSource(assetPath, blob);
+      return {
+        assetPath,
+        inputHash: computeNavMeshInputHash(input),
+        agentRadius: input.agentRadius
+      };
+    };
+
+    // The region first: baked with NO Scene, so it is the free-roam mesh
+    // and the default every Scene inherits.
+    // Under assets/ so the deploy workflow ships it (it copies only assets/)
+    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
+    const regionArtifact = await bakeComposition(
+      null,
+      `assets/navmesh/${region.identity.id}.navmesh.bin`
+    );
+    if (!regionArtifact) {
       window.alert(
         "Draw a nav-bounds volume over the walkable ground first, then bake."
       );
       return;
     }
-    // Under assets/ so the deploy workflow ships it (it copies only assets/)
-    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
-    const assetPath = `assets/navmesh/${region.identity.id}.navmesh.bin`;
-    const blob = new Blob([new Uint8Array(bytes)], {
-      type: "application/octet-stream"
-    });
-    await writeBlobFile(handle, assetPath.split("/"), blob);
-    // Publish the in-memory blob so the runtime resolves it without a
-    // read-after-write (the known FSAccess flake).
-    assetSourceStore.getState().setSource(assetPath, blob);
     dispatchCommand({
       kind: "SetRegionNavMesh",
       target: {
@@ -2606,16 +2736,38 @@ export function App() {
         subjectKind: "region-document",
         subjectId: region.identity.id
       },
-      payload: {
-        navMesh: {
-          assetPath,
-          inputHash: computeNavMeshInputHash(input),
-          agentRadius: input.agentRadius,
-          // Scene provenance — the bake composed THIS Scene's overlay.
-          sceneId: getActiveScene(session)?.sceneId ?? null
-        }
-      }
+      payload: { navMesh: regionArtifact }
     });
+
+    // Then every Scene that happens here. A Scene whose composed input
+    // hashes the same as the region's changes nothing about collision, so
+    // it owns no artifact and inherits -- and any it owned before is
+    // cleared, or it would keep pathing against a composition that no
+    // longer differs.
+    for (const scene of getAllScenes(session.gameProject.episodes)) {
+      if (scene.regionId !== region.identity.id) continue;
+      const sceneInput = buildRegionNavMeshInput({
+        ...shared,
+        activeScene: scene
+      });
+      const differs =
+        computeNavMeshInputHash(sceneInput) !== regionArtifact.inputHash;
+      const artifact = differs
+        ? await bakeComposition(
+            scene,
+            `assets/navmesh/${region.identity.id}.${scene.sceneId}.navmesh.bin`
+          )
+        : null;
+      dispatchCommand({
+        kind: "SetSceneNavMesh",
+        target: {
+          aggregateKind: "game-project",
+          aggregateId: session.gameProject.identity.id
+        },
+        subject: { subjectKind: "scene", subjectId: scene.sceneId },
+        payload: { sceneId: scene.sceneId, navMesh: artifact }
+      });
+    }
   }, []);
 
   // Idempotent paint-UV ensure: generate only when the asset
@@ -3004,7 +3156,7 @@ export function App() {
       return null;
     }
     const overlay =
-      getActiveScene(session)?.regionOverlays[region.identity.id] ?? null;
+      sceneOverlayForRegion(getActiveScene(session), region.identity.id);
     const instance =
       region.placedAssets.find(
         (asset) => asset.instanceId === surfaceStudioTarget.instanceId
@@ -3129,29 +3281,6 @@ export function App() {
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
-    // Scope conversion and cross-Scene copy.
-    onConvertAssetScope: (regionId, instanceId) => {
-      const { session } = projectStore.getState();
-      if (!session) return;
-      projectStore
-        .getState()
-        .updateSession(
-          convertAssetScopeInSession(session, { regionId, instanceId })
-        );
-    },
-    onCopyEntryToScene: (options) => {
-      const { session } = projectStore.getState();
-      const fromScene = session ? getActiveScene(session) : null;
-      if (!session || !fromScene) return;
-      projectStore
-        .getState()
-        .updateSession(
-          copyOverlayEntryToScene(session, {
-            fromSceneId: fromScene.sceneId,
-            ...options
-          })
-        );
-    },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
     onBakeNavMesh: handleBakeNavMesh,
     navMeshStale,
@@ -3374,6 +3503,122 @@ export function App() {
         }
       )
   });
+  const storyView = useStoryProductModeView({
+    activeStoryKind,
+    onSelectKind: (kind) =>
+      shellStore.getState().setActiveStoryWorkspaceKind(kind),
+    // The Episode holding the Scene being worked in -- the graph draws the
+    // chapter the author is actually inside, not whichever came first.
+    graphEpisode: session
+      ? (session.gameProject.episodes.find((episode) =>
+          episode.scenes.some(
+            (scene) => scene.sceneId === session.activeSceneId
+          )
+        ) ??
+        session.gameProject.episodes[0] ??
+        null)
+      : null,
+    structurePanel: session ? (
+      <StoryStructureView
+        episodes={session.gameProject.episodes}
+        activeSceneId={session.activeSceneId}
+        questDefinitions={getAllQuestDefinitions(session)}
+        environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
+          (definition) => ({
+            definitionId: definition.definitionId,
+            displayName: definition.displayName
+          })
+        )}
+        regions={[...session.regions.values()].map((region) => ({
+          regionId: region.identity.id,
+          displayName: region.displayName
+        }))}
+        soundCueDefinitions={(
+          session.contentLibrary.soundCueDefinitions ?? []
+        ).map((cue) => ({
+          definitionId: cue.definitionId,
+          displayName: cue.displayName
+        }))}
+        onAddScene={handleAddScene}
+        onRenameScene={handleRenameScene}
+        onUpdateScene={handleUpdateScene}
+        onDeleteScene={handleDeleteScene}
+        onReorderScene={handleReorderScene}
+        onSelectScene={handleSceneSelect}
+        episodeEndRouting={session.gameProject.episodeEndRouting}
+        onUpdateEpisodeEndRouting={handleUpdateEpisodeEndRouting}
+        onAddEpisode={handleAddEpisode}
+        onUpdateEpisode={handleUpdateEpisode}
+        onDeleteEpisode={handleDeleteEpisode}
+        onReorderEpisode={handleReorderEpisode}
+        onMoveSceneToEpisode={handleMoveSceneToEpisode}
+        onMoveQuestToScene={handleMoveQuestToScene}
+      />
+    ) : null,
+    composerPanel: session ? (
+      <SceneComposerPanel
+        scenes={getAllScenes(session.gameProject.episodes)}
+        selectedScene={getActiveScene(session)}
+        region={session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null}
+        // Only the Scene changes. The composer's region is derived from
+        // it in `selectViewportProjection`, so writing the shell's active
+        // region here would be a second copy of an answer the Scene
+        // already holds -- and would move Build's region under the author.
+        onSelectScene={handleSceneSelect}
+        onPromotePresence={(presenceId) => {
+          const scene = getActiveScene(session);
+          if (!scene) return;
+          dispatchCommand({
+            kind: "PromotePresenceToRegion",
+            target: {
+              aggregateKind: "game-project",
+              aggregateId: session.gameProject.identity.id
+            },
+            subject: { subjectKind: "scene", subjectId: scene.sceneId },
+            payload: { sceneId: scene.sceneId, presenceId }
+          });
+        }}
+        onSetSuppressed={(regionOwnedId, suppressed) => {
+          const scene = getActiveScene(session);
+          if (!scene) return;
+          dispatchCommand({
+            kind: "SetSceneSuppression",
+            target: {
+              aggregateKind: "game-project",
+              aggregateId: session.gameProject.identity.id
+            },
+            subject: { subjectKind: "scene", subjectId: scene.sceneId },
+            payload: { sceneId: scene.sceneId, regionOwnedId, suppressed }
+          });
+        }}
+      />
+    ) : null,
+    quests: {
+      isActive: false,
+      gameProjectId: session?.gameProject.identity.id ?? null,
+      questDefinitions: session ? getAllQuestDefinitions(session) : [],
+      regions: regionDocuments,
+      episodes: session?.gameProject.episodes ?? [],
+      soundCueDefinitions,
+      dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
+      itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+      npcDefinitions: session?.gameProject.npcDefinitions ?? [],
+      spellDefinitions: session?.gameProject.spellDefinitions ?? [],
+      onCommand: dispatchCommand,
+      navigationTarget: workspaceNavigationTarget,
+      onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
+      onNavigateToTarget: handleWorkspaceNavigation
+    },
+    dialogues: {
+      isActive: false,
+      gameProjectId: session?.gameProject.identity.id ?? null,
+      dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
+      itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+      npcDefinitions: session?.gameProject.npcDefinitions ?? [],
+      spellDefinitions: session?.gameProject.spellDefinitions ?? [],
+      onCommand: dispatchCommand
+    }
+  });
   const renderView = useRenderProductModeView({
     activeRenderKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
@@ -3549,7 +3794,8 @@ export function App() {
     activeBuildKind,
     activeDesignKind,
     buildCenterPanelVisible: Boolean(buildView.centerPanel),
-    designCenterPanelVisible: Boolean(activeDesignPanels.centerPanel)
+    designCenterPanelVisible: Boolean(activeDesignPanels.centerPanel),
+    activeStoryKind
   });
 
   useEffect(() => {
@@ -3695,6 +3941,20 @@ export function App() {
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
         onCreate={handleCreateProject}
+        reopenProjectName={reopenable?.name ?? null}
+        onReopen={() => {
+          void (async () => {
+            if (!reopenable) return;
+            // requestPermission only prompts inside a user gesture, which
+            // this click is.
+            const allowed = await requestProjectDirectoryAccess(
+              reopenable.handle
+            );
+            if (!allowed) return;
+            const opened = await reopenRememberedProject(reopenable.handle);
+            if (!opened) setReopenable(null);
+          })();
+        }}
       />
       <CreateRegionDialog
         opened={createRegionOpen}
@@ -3761,44 +4021,6 @@ export function App() {
           });
         }}
       />
-      {session && (
-        <ManageScenesModal
-          opened={manageScenesOpen}
-          onClose={() => setManageScenesOpen(false)}
-          episodes={session.gameProject.episodes}
-          activeSceneId={session.activeSceneId}
-          questDefinitions={session.gameProject.questDefinitions}
-          environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
-            (definition) => ({
-              definitionId: definition.definitionId,
-              displayName: definition.displayName
-            })
-          )}
-          regions={[...session.regions.values()].map((region) => ({
-            regionId: region.identity.id,
-            displayName: region.displayName
-          }))}
-          soundCueDefinitions={(
-            session.contentLibrary.soundCueDefinitions ?? []
-          ).map((cue) => ({
-            definitionId: cue.definitionId,
-            displayName: cue.displayName
-          }))}
-          onAddScene={handleAddScene}
-          onRenameScene={handleRenameScene}
-          onUpdateScene={handleUpdateScene}
-          onDeleteScene={handleDeleteScene}
-          onReorderScene={handleReorderScene}
-          onSelectScene={handleSceneSelect}
-          episodeEndRouting={session.gameProject.episodeEndRouting}
-          onUpdateEpisodeEndRouting={handleUpdateEpisodeEndRouting}
-          onAddEpisode={handleAddEpisode}
-          onUpdateEpisode={handleUpdateEpisode}
-          onDeleteEpisode={handleDeleteEpisode}
-          onReorderEpisode={handleReorderEpisode}
-          onMoveSceneToEpisode={handleMoveSceneToEpisode}
-        />
-      )}
       <Modal
         opened={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
@@ -4008,6 +4230,23 @@ export function App() {
                       }
                     }}
                   >
+                    {/* Studio reopens the last project on its own now, so
+                        the welcome dialog no longer appears -- this is the
+                        way to switch to a different one. */}
+                    <Menu.Item
+                      onClick={handleOpenProject}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      📁 Open Game
+                    </Menu.Item>
+                    <Menu.Divider />
                     <Menu.Item
                       onClick={handleSave}
                       // Always available: not every mutation flips the
@@ -4290,24 +4529,6 @@ export function App() {
                         ))}
                       </Fragment>
                     ))}
-                    <Menu.Divider
-                      styles={{
-                        divider: { borderColor: "var(--sm-panel-border)" }
-                      }}
-                    />
-                    <Menu.Item
-                      onClick={() => setManageScenesOpen(true)}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
-                        }
-                      }}
-                    >
-                      ⚙ Manage Story...
-                    </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               </Group>
@@ -4342,8 +4563,10 @@ export function App() {
           phase === "active"
             ? isBuild
               ? buildView.subHeaderPanel
-              : isDesign
-                ? designView.subHeaderPanel
+              : isStory
+                ? storyView.subHeaderPanel
+                : isDesign
+                  ? designView.subHeaderPanel
                 : isRender
                   ? renderView.subHeaderPanel
                   : isPublish
@@ -4354,8 +4577,10 @@ export function App() {
         leftPanel={
           isBuild
             ? buildView.leftPanel
-            : isDesign
-              ? activeDesignPanels.leftPanel
+            : isStory
+              ? storyView.leftPanel
+              : isDesign
+                ? activeDesignPanels.leftPanel
               : isRender
                 ? renderView.leftPanel
                 : isPublish
@@ -4365,8 +4590,10 @@ export function App() {
         rightPanel={
           isBuild
             ? buildView.rightPanel
-            : isDesign
-              ? activeDesignPanels.rightPanel
+            : isStory
+              ? storyView.rightPanel
+              : isDesign
+                ? activeDesignPanels.rightPanel
               : isRender
                 ? renderView.rightPanel
                 : isPublish
@@ -4383,6 +4610,8 @@ export function App() {
         centerPanel={
           phase === "active" && isBuild && buildView.centerPanel ? (
             buildView.centerPanel
+          ) : phase === "active" && isStory && storyView.centerPanel ? (
+            storyView.centerPanel
           ) : phase === "active" &&
             isDesign &&
             activeDesignPanels.centerPanel ? (

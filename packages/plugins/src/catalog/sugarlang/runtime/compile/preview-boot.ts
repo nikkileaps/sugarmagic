@@ -58,7 +58,7 @@ export async function buildSugarlangPreviewBootPayload(
   const sceneContextModels: SceneContextModel[] = [];
 
   for (const scene of [...scenes].sort((left, right) =>
-    left.sceneId.localeCompare(right.sceneId)
+    left.regionId.localeCompare(right.regionId)
   )) {
     const expected = compileSugarlangScene(
       scene,
@@ -67,7 +67,7 @@ export async function buildSugarlangPreviewBootPayload(
       "runtime-preview"
     );
     const cached = await cache.get(
-      scene.sceneId,
+      scene.regionId,
       expected.contentHash,
       "runtime-preview"
     );
@@ -91,7 +91,7 @@ export async function buildSugarlangPreviewBootPayload(
       // whether the build never ran or the key simply disagrees. Print both
       // sides so the difference is readable instead of inferred.
       console.warn(
-        `[sugarlang preview] no scene context for "${scene.sceneId}"`,
+        `[sugarlang preview] no scene context for "${scene.regionId}"`,
         {
           lookedUp: contextKey,
           availableInCache: await sceneContextCache.listEntries()

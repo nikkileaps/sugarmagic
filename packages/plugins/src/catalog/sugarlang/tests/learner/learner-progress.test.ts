@@ -51,7 +51,7 @@ function board(
   };
   return {
     learner: { cefrBand: "A2", lemmaCards: {} },
-    scene: { sceneId: "scene-1", dayIndex: null },
+    scene: { regionId: "scene-1", dayIndex: null },
     conversationId: "conv-1",
     ...overrides,
     curriculum: { ...baseCurriculum, ...(overrides.curriculum ?? {}) }
@@ -263,11 +263,11 @@ describe("OuterLoopScheduler", () => {
       expect(deriveLearnerProgress(input)).toEqual(deriveLearnerProgress(input));
     });
 
-    it("propagates sceneId and conversationId", () => {
+    it("propagates regionId and conversationId", () => {
       const state = deriveLearnerProgress(
-        board({ scene: { sceneId: "plaza", dayIndex: 3 }, conversationId: "conv-9" })
+        board({ scene: { regionId: "plaza", dayIndex: 3 }, conversationId: "conv-9" })
       );
-      expect(state.sceneId).toBe("plaza");
+      expect(state.regionId).toBe("plaza");
       expect(state.conversationId).toBe("conv-9");
     });
 

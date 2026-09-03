@@ -34,7 +34,9 @@ function makeRegion(): RegionDocument {
       paintPayload: null
     },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 
@@ -54,8 +56,7 @@ describe("layout scene presences", () => {
         npcDefinitions: [],
         dialogueDefinitions: [],
         itemDefinitions: [],
-        documentDefinitions: [],
-        questDefinitions: []
+        documentDefinitions: []
       }),
       [makeRegion()],
       {
@@ -135,8 +136,9 @@ describe("layout scene presences", () => {
     // compose onto the region base at resolve time.
     const scene: Scene = createDefaultScene({
       sceneId: "scene:test",
-      regionOverlays: {
-        [region.identity.id]: {
+      regionId: region.identity.id,
+      overlay: {
+          suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
           placedAssets: [],
@@ -165,7 +167,6 @@ describe("layout scene presences", () => {
           ],
           itemPresences: []
         }
-      }
     });
 
     const sceneObjects = resolveSceneObjects(region, {
@@ -182,24 +183,24 @@ describe("layout scene presences", () => {
   });
 });
 
-describe("Scene.startingRegionId (first-playable region binding)", () => {
-  it("defaults null, survives normalize, rejects blanks", async () => {
+describe("Scene.regionId (the one region a Scene happens in)", () => {
+  it("survives normalize, and a blank or non-string names nowhere", async () => {
     const { createDefaultScene, normalizeScene } = await import(
       "@sugarmagic/domain"
     );
-    expect(createDefaultScene().startingRegionId).toBeNull();
     const scene = normalizeScene({
       ...createDefaultScene(),
-      startingRegionId: "region:arrival-station"
+      regionId: "region:arrival-station"
     });
-    expect(scene?.startingRegionId).toBe("region:arrival-station");
+    expect(scene?.regionId).toBe("region:arrival-station");
+    // Naming nowhere loads rather than throwing -- Studio has to open so
+    // the author can fix it -- and content validation is what refuses the
+    // save.
     expect(
-      normalizeScene({ ...createDefaultScene(), startingRegionId: "  " })
-        ?.startingRegionId
-    ).toBeNull();
+      normalizeScene({ ...createDefaultScene(), regionId: "  " })?.regionId
+    ).toBe("");
     expect(
-      normalizeScene({ ...createDefaultScene(), startingRegionId: 42 })
-        ?.startingRegionId
-    ).toBeNull();
+      normalizeScene({ ...createDefaultScene(), regionId: 42 })?.regionId
+    ).toBe("");
   });
 });

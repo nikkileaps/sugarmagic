@@ -54,7 +54,7 @@ function task(
     taskId: "task:x",
     displayName: "Task",
     description: null,
-    targetAreaId: null,
+    target: null,
     currentActivity: "idle",
     currentGoal: "idle",
     activation: {

@@ -9,9 +9,7 @@ export const designProductMode: ProductModeDescriptor = {
     "npcs",
     "spells",
     "items",
-    "documents",
-    "dialogues",
-    "quests"
+    "documents"
   ],
   commandSurfaceId: "design-command-surface",
   panelLayoutId: "design-panel-layout"

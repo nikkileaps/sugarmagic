@@ -61,7 +61,7 @@ import {
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
-  getSceneId,
+  getRegionId,
   getTurnsSinceLastProbe,
   isQuestObjectiveInFocus,
   isScriptedMode,
@@ -339,11 +339,11 @@ export function createSugarLangTeacherMiddleware(
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;
-      const sceneId = execution.runtimeContext?.here?.sceneId;
+      const regionId = execution.runtimeContext?.here?.regionId;
       const scene =
-        prePlacementOpeningLine || sceneId == null
+        prePlacementOpeningLine || regionId == null
           ? null
-          : await services.sceneLexiconStore.ensure(sceneId);
+          : await services.sceneLexiconStore.ensure(regionId);
       const npc: TeacherNpcContext = {
         npcDefinitionId: execution.selection.npcDefinitionId ?? null,
         displayName: execution.selection.npcDisplayName ?? null,
@@ -355,11 +355,11 @@ export function createSugarLangTeacherMiddleware(
       // runtime context. Null only when there is no scene at all -- a situation
       // needs somewhere to BE, but needs nothing else.
       const situation =
-        sceneId == null
+        regionId == null
           ? null
           : composeSituation({
-              sceneId,
-              sceneContext: deps.services.getSceneContext(sceneId),
+              regionId,
+              sceneContext: deps.services.getSceneContext(regionId),
               runtimeContext: execution.runtimeContext,
               npc,
               recentTurns,
@@ -372,7 +372,7 @@ export function createSugarLangTeacherMiddleware(
       const conversationId = getSugarlangConversationId(execution);
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "prepare");
-      const currentSceneId = getSceneId(execution);
+      const currentRegionId = getRegionId(execution);
       // 090.4: this annotation-fed set still drives the VERIFIER's
       // parenthetical-gloss check (constraint.questEssentialLemmas below) --
       // that consumer is unchanged. The Teacher itself no longer reads it; it
@@ -405,7 +405,7 @@ export function createSugarLangTeacherMiddleware(
             sessionId,
             turnId: traceTurnId,
             timestamp: Date.now(),
-            sceneId: currentSceneId,
+            regionId: currentRegionId,
             lineId: prePlacementOpeningLine.lineId
           }),
           logger
@@ -573,7 +573,7 @@ export function createSugarLangTeacherMiddleware(
         conversationId,
         sessionId,
         turnId: traceTurnId,
-        sceneId: currentSceneId,
+        regionId: currentRegionId,
         npcDefinitionId: execution.selection.npcDefinitionId ?? null,
         npcDisplayName: execution.selection.npcDisplayName ?? null,
         directive,
@@ -609,7 +609,7 @@ export function createSugarLangTeacherMiddleware(
             turnId: traceTurnId,
             timestamp: Date.now(),
             probeId,
-            sceneId: currentSceneId ?? "unknown-scene",
+            regionId: currentRegionId ?? "unknown-scene",
             npcId: execution.selection.npcDefinitionId ?? null,
             npcDisplayName: execution.selection.npcDisplayName ?? null,
             targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas,
@@ -645,7 +645,7 @@ export function createSugarLangTeacherMiddleware(
             sessionId,
             turnId: traceTurnId,
             timestamp: Date.now(),
-            sceneId: currentSceneId ?? undefined,
+            regionId: currentRegionId ?? undefined,
             hardFloorReason:
               (
                 execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as

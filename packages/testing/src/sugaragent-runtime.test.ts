@@ -596,8 +596,6 @@ describe("SugarAgent runtime provider", () => {
           regionId: "region:earendale",
           regionDisplayName: "Earendale",
           regionLorePageId: "lore.locations.towns.earendale",
-          sceneId: null,
-          sceneDisplayName: null,
           area: {
             areaId: "area:earendale-square",
             displayName: "Earendale Square",

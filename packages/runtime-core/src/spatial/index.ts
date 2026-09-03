@@ -414,8 +414,6 @@ export function buildLocationReference(
     regionId: region.identity.id,
     regionDisplayName: region.displayName,
     regionLorePageId: region.lorePageId ?? null,
-    sceneId: region.identity.id,
-    sceneDisplayName: region.displayName,
     area: buildAreaReference(area),
     parentArea: buildAreaReference(parentArea)
   };

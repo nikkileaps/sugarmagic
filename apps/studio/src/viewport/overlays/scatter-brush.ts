@@ -16,7 +16,8 @@ import {
   createPlacedAssetInstanceId,
   createSceneFolderId,
   getActiveScene,
-  type BrushPlacement
+  type BrushPlacement,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import { shallowEqual } from "@sugarmagic/shell";
 import {
@@ -78,7 +79,7 @@ export const mountScatterBrushOverlay: ViewportOverlayFactory = (context) => {
       }
       const overlayAssets =
         (session &&
-          getActiveScene(session)?.regionOverlays[region.identity.id]
+          sceneOverlayForRegion(getActiveScene(session), region.identity.id)
             ?.placedAssets) ??
         [];
       return [...region.placedAssets, ...overlayAssets].map((asset) => ({

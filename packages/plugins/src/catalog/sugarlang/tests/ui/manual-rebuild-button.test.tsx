@@ -66,8 +66,7 @@ function createGameProjectFixture(): { gameProject: GameProject; region: ReturnT
       itemDefinitions: scene.items,
       documentDefinitions: createTestDocumentDefinitions(),
       npcDefinitions: scene.npcs,
-      dialogueDefinitions: scene.dialogues,
-      questDefinitions: scene.quests
+      dialogueDefinitions: scene.dialogues
     })
   };
 }

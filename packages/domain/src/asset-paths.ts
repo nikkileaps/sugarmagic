@@ -25,6 +25,7 @@ import type { DocumentDefinition } from "./document-definition";
 import type { ItemDefinition } from "./item-definition";
 import type { PluginConfigurationRecord } from "./plugins";
 import type { RegionDocument } from "./region-authoring";
+import type { Scene } from "./scenes";
 
 /**
  * The config key a plugin writes its file-backed asset paths under.
@@ -45,6 +46,11 @@ export function collectFileBackedAssetPaths(input: {
    *  `.bin` on project open, so NPC pathfinding silently falls back to
    *  straight-line after a restart (and deployed games ship no navmesh). */
   regions?: RegionDocument[];
+  /** Scenes carry their own baked navmesh when their composition changes
+   *  what blocks movement. Missed here, a deploy ships a Scene pointing at
+   *  a `.bin` that is not in the bundle -- and the runtime falls back to
+   *  straight-line steering without saying anything. */
+  scenes?: Scene[];
   /** Plan 092.2 — a DISABLED plugin's files are skipped, so uninstalling or
    *  switching one off leaves a project that still opens and still deploys.
    *  That property is the reason this is read generically rather than by
@@ -89,6 +95,11 @@ export function collectFileBackedAssetPaths(input: {
   for (const region of input.regions ?? []) {
     if (region.navMesh?.assetPath) {
       paths.push(region.navMesh.assetPath);
+    }
+  }
+  for (const scene of input.scenes ?? []) {
+    if (scene.navMesh?.assetPath) {
+      paths.push(scene.navMesh.assetPath);
     }
   }
   for (const record of input.pluginConfigurations ?? []) {

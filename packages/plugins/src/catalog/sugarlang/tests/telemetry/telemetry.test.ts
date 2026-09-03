@@ -78,7 +78,7 @@ describe("telemetry sinks", () => {
     sink.emit(
       createTelemetryEvent("chunk.extraction-started", {
         timestamp: 1,
-        sceneId: "scene-1",
+        regionId: "scene-1",
         contentHash: "hash-1",
         lang: "es",
         extractorModel: "claude-sonnet-4-6",
@@ -90,7 +90,7 @@ describe("telemetry sinks", () => {
         timestamp: 2,
         conversationId: "conversation-1",
         turnId: "turn-1",
-        sceneId: "scene-1",
+        regionId: "scene-1",
         matchedChunks: [
           {
             chunkId: "de_vez_en_cuando",
@@ -172,7 +172,7 @@ describe("sugarlang events on the shared collector", () => {
     sink.emit(
       createTelemetryEvent("observe.observations-applied", {
         timestamp: 1,
-        sceneId: "scene-1",
+        regionId: "scene-1",
         observations: [
           {
             observation: {
@@ -184,7 +184,7 @@ describe("sugarlang events on the shared collector", () => {
             context: {
               sessionId: "session-pii",
               turnId: "turn-1",
-              sceneId: "scene-1",
+              regionId: "scene-1",
               lang: "es",
               conversationId: "conversation-1"
             }
@@ -197,7 +197,7 @@ describe("sugarlang events on the shared collector", () => {
       createTelemetryEvent("comprehension.probe-passed", {
         timestamp: 2,
         probeId: "probe-1",
-        sceneId: "scene-1",
+        regionId: "scene-1",
         npcId: null,
         npcDisplayName: null,
         targetLemmas: [{ lemmaId: "manzana", lang: "es" }],

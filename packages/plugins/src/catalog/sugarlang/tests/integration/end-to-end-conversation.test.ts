@@ -95,15 +95,13 @@ const TEST_DIALOGUE_DEFINITIONS: DialogueDefinition[] = [
 const SCENE_ID = "scene-station";
 
 // Injected by the runtimeContextMiddleware so the sugarlang context middleware
-// can read sceneId without a full runtime framework.
+// can read regionId without a full runtime framework.
 function makeRuntimeContextMiddleware(): ConversationMiddleware {
   const runtimeContext: ConversationRuntimeContext = {
     here: {
       regionId: SCENE_ID,
       regionDisplayName: "Test Station",
       regionLorePageId: null,
-      sceneId: SCENE_ID,
-      sceneDisplayName: "Test Station",
       area: null,
       parentArea: null
     },
@@ -228,7 +226,6 @@ function makeSharedSetup(
     activeScene,
     npcDefinitions: TEST_NPC_DEFINITIONS,
     dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-    questDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: []
   });
@@ -286,7 +283,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: [],
       dialogueDefinitions: [],
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });
@@ -715,7 +711,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: TEST_NPC_DEFINITIONS,
       dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });
@@ -959,7 +954,6 @@ describe("end-to-end conversation golden", () => {
       activeScene: null,
       npcDefinitions: TEST_NPC_DEFINITIONS,
       dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
-      questDefinitions: [],
       itemDefinitions: [],
       documentDefinitions: []
     });

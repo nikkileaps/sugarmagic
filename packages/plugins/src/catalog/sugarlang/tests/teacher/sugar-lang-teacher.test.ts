@@ -161,7 +161,7 @@ describe("SugarLangTeacher", () => {
     expect(planned.situation?.turnsSinceLastProbe).toBeUndefined();
     // The rest of the situation is untouched -- this narrows, it does not
     // rebuild.
-    expect(planned.situation?.sceneId).toBe(base.situation?.sceneId);
+    expect(planned.situation?.regionId).toBe(base.situation?.regionId);
   });
 
   it("refuses to serve a directive after dispose", async () => {

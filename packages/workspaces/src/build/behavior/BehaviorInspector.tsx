@@ -66,16 +66,28 @@ function BehaviorInspectorComponent(props: BehaviorInspectorProps) {
         : null,
     [questDefinitions, task]
   );
-  const targetAreaOptions = useMemo(
+  // Areas and markers in one control because they answer one question:
+  // where does this task send the NPC. The value is prefixed so the two id
+  // spaces cannot be confused for each other.
+  const targetOptions = useMemo(
     () => [
       { value: "", label: "No Movement Target" },
-      ...((region?.areas ?? []).map((area) => ({
-        value: area.areaId,
-        label: area.displayName
-      })))
+      ...(region?.markers ?? []).map((marker) => ({
+        value: `marker:${marker.markerId}`,
+        label: `${marker.displayName} (exact spot)`
+      })),
+      ...(region?.areas ?? []).map((area) => ({
+        value: `area:${area.areaId}`,
+        label: `${area.displayName} (anywhere inside)`
+      }))
     ],
-    [region?.areas]
+    [region?.areas, region?.markers]
   );
+  const targetValue = task?.target
+    ? task.target.kind === "marker"
+      ? `marker:${task.target.markerId}`
+      : `area:${task.target.areaId}`
+    : "";
   const questStageOptions = useMemo(
     () => [
       { value: "", label: "Any Stage" },
@@ -181,14 +193,18 @@ function BehaviorInspectorComponent(props: BehaviorInspectorProps) {
                 }
               />
               <Select
-                label="Target Area"
+                label="Movement Target"
                 size="xs"
-                data={targetAreaOptions}
-                value={task.targetAreaId ?? ""}
+                data={targetOptions}
+                value={targetValue}
                 onChange={(value) =>
                   onUpdateTask({
                     ...task,
-                    targetAreaId: value && value.length > 0 ? value : null
+                    target: !value
+                      ? null
+                      : value.startsWith("marker:")
+                        ? { kind: "marker", markerId: value.slice(7) }
+                        : { kind: "area", areaId: value.slice(5) }
                   })
                 }
               />

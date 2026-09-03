@@ -91,7 +91,7 @@ export function ManualRebuildButton(
   const [progress, setProgress] = useState({
     completedScenes: 0,
     totalScenes: 0,
-    currentSceneId: null as string | null
+    currentRegionId: null as string | null
   });
   const [message, setMessage] = useState<string | null>(null);
   /** Non-null means the last rebuild did not fully succeed. Never inferred from
@@ -336,7 +336,7 @@ export function ManualRebuildButton(
             </div>
             <span style={{ fontSize: "0.75rem", color: "var(--sm-color-overlay0)" }}>
               {progress.completedScenes} / {progress.totalScenes} scenes rebuilt
-              {progress.currentSceneId ? ` · ${progress.currentSceneId}` : ""}
+              {progress.currentRegionId ? ` · ${progress.currentRegionId}` : ""}
             </span>
           </div>
         ) : null}

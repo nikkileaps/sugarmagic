@@ -45,8 +45,7 @@ function makeProject(): GameProject {
     npcDefinitions: [],
     dialogueDefinitions: [],
     itemDefinitions: [],
-    documentDefinitions: [],
-    questDefinitions: []
+    documentDefinitions: []
   });
 }
 
@@ -69,7 +68,9 @@ function makeRegion(): RegionDocument {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
   };
 }
 

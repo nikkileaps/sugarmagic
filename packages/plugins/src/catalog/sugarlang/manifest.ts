@@ -167,7 +167,7 @@ export function createSugarlangPlugin(
   // lives in IndexedDB and memory.
   const sceneContextCardContribution = createSceneContextHudCard({
     pluginId: context.configuration.pluginId,
-    getSceneContext: (sceneId) => services.getSceneContext(sceneId)
+    getSceneContext: (regionId) => services.getSceneContext(regionId)
   });
 
   // What the teaching system knows about the learner, while playing. Contributed
@@ -302,6 +302,23 @@ export function createSugarlangPlugin(
       // minutes of play -- a feature that looks wired and never runs.
       regionWarmer.tick(deltaSeconds * 1000);
     },
+    /**
+     * The player walked into another region. The bound context holds the
+     * one they left -- `listWarmableNpcIds` reads its `activeRegion`, so
+     * without this the warmer keeps preparing conversations for NPCs who
+     * are no longer anywhere near the player.
+     *
+     * Rebinding is the whole job: everything else `init` does is one-time
+     * (telemetry binding, cache seeding, the interaction-mode
+     * subscription) and re-running it would be wrong.
+     */
+    onRegionChanged(runtimeContext) {
+      services.bindRuntime(runtimeContext);
+      // The warm key has no region axis, so a swap leaves it looking
+      // valid. Forcing it is what stops the first conversation in the new
+      // region being answered from the old one's warm.
+      regionWarmer.invalidate();
+    },
     async init(runtimeContext) {
       services.bindRuntime(runtimeContext);
       // A quest can flip an NPC between scripted and agent mid-session.
@@ -355,7 +372,7 @@ export function createSugarlangPlugin(
         {
           source: isPublished ? "shipped artifact" : "studio boot payload",
           models: seededContexts.map((model) => ({
-            sceneId: model.sceneId,
+            regionId: model.regionId,
             concepts: model.concepts.length
           }))
         }

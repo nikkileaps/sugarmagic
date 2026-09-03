@@ -70,8 +70,8 @@ function servicesWithOverrides(
     // composes the two, which is why it needs the Scene at all.
     activeScene: createDefaultScene({
       sceneId: "scene-1",
-      regionOverlays: {
-        [region.identity.id]: createRegionSceneOverlay({
+      regionId: region.identity.id,
+      overlay: createRegionSceneOverlay({
           npcPresences: [
             createRegionNPCPresence({
               npcDefinitionId: SCRIPTED_NPC.definitionId
@@ -81,11 +81,9 @@ function servicesWithOverrides(
             })
           ]
         })
-      }
     }),
     npcDefinitions: [SCRIPTED_NPC, AGENT_NPC],
     dialogueDefinitions: [],
-    questDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: [],
     getEffectiveNpcInteractionMode: (npcDefinitionId) =>

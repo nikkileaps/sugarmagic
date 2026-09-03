@@ -23,7 +23,7 @@ import type { SceneVocabularyModel } from "../types";
 
 export interface CacheEntryMeta {
   cacheKey: string;
-  sceneId: string;
+  regionId: string;
   contentHash: string;
   profile: RuntimeCompileProfile;
   estimatedBytes: number;
@@ -31,32 +31,32 @@ export interface CacheEntryMeta {
 }
 
 export function createCompileCacheKey(
-  sceneId: string,
+  regionId: string,
   contentHash: string,
   profile: RuntimeCompileProfile
 ): string {
-  return `${profile}:${sceneId}:${contentHash}`;
+  return `${profile}:${regionId}:${contentHash}`;
 }
 
 export interface SugarlangCompileCache {
   get: (
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ) => Promise<SceneVocabularyModel | null>;
   set: (lexicon: SceneVocabularyModel) => Promise<void>;
   has: (
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ) => Promise<boolean>;
-  invalidate: (sceneId?: string) => Promise<void>;
+  invalidate: (regionId?: string) => Promise<void>;
   listEntries: () => Promise<CacheEntryMeta[]>;
 }
 
 export abstract class BaseSugarlangCompileCache implements SugarlangCompileCache {
   abstract get(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ): Promise<SceneVocabularyModel | null>;
@@ -64,14 +64,14 @@ export abstract class BaseSugarlangCompileCache implements SugarlangCompileCache
   abstract set(lexicon: SceneVocabularyModel): Promise<void>;
 
   async has(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ): Promise<boolean> {
-    return (await this.get(sceneId, contentHash, profile)) !== null;
+    return (await this.get(regionId, contentHash, profile)) !== null;
   }
 
-  abstract invalidate(sceneId?: string): Promise<void>;
+  abstract invalidate(regionId?: string): Promise<void>;
 
   abstract listEntries(): Promise<CacheEntryMeta[]>;
 }

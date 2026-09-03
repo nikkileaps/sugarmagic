@@ -28,6 +28,62 @@ store.
 
 ---
 
+## The story timeline
+
+**Story timeline** -- the ordered record of which narrative units have been
+completed. The world at any point is DERIVED from that record and never
+stored alongside it.
+
+The narrative is containment: a game holds Episodes, an Episode holds
+Scenes (`Episode.scenes`), a Scene holds quests
+(`Scene.questDefinitions`). Containment is by value, so a quest belongs to
+exactly one Scene and a Scene to exactly one Episode.
+
+It is ordered by that containment and by quest start conditions, not by
+wall clock. Two quests whose conditions do not reference each other have no
+order between them, so this is a PARTIAL order rather than a sequence --
+the one place it departs from event sourcing as normally described.
+
+**Position on the timeline decides the world.** What the player sees is a
+function of where they are: at a quest or its Scene, the region plus that
+Scene's overlay; above the Scene tier, no overlay at all, which is the
+region at rest. `composeRegionContents(region, scene | null)` computes
+both -- a null Scene is the "above the Scene tier" answer, not a missing
+value.
+
+**Things elsewhere read the timeline rather than being contained by it.** A
+resident who appears only after a quest, a barrier that opens at a stage,
+an NPC behaviour that applies during one: each carries its own condition
+(`RegionNPCPresence.condition`, `RegionVolumeDefinition.condition`,
+`RegionNPCBehaviorTask.activation`, all `RegionBehaviorQuestBinding`) and
+is composed onto a REGION. That is why such a change outlives the Episode
+that triggered it: the region does.
+
+`turn_timeline` (`runtime-core/src/turn-timeline`) uses "timeline" the same
+way -- an ordered record of what happened -- against wall-clock
+milliseconds within one conversation turn. Same shape, different scale, and
+it is a diagnostic that is discarded after the turn rather than the thing
+game state derives from.
+
+### What the code does not do yet
+
+Stated because this document describes the present:
+
+- **Completion does not roll up.** Quest completion is stored
+  (`QuestManager`'s slice) and Episode completion is stored SEPARATELY
+  (`completedEpisodeIds`, `campaignProgressionParticipant`). There is no
+  Scene-level completion at all, so "every child is done" is not
+  computable at the Scene tier, and the stored Episode list is a second
+  representation that can disagree with the quests it summarises.
+- **Resolution cannot report "nothing active".** `resolveActiveEpisode`
+  falls back requested -> first unlocked -> first enterable, and
+  `resolveActiveScene` is `requested ?? episode.scenes[0]`. Both always
+  find something, so a position above the Scene tier is expressible in the
+  composition but never produced by the runtime.
+- **A placed asset cannot be conditioned.** Presences, volumes and
+  behaviour tasks carry a condition; `PlacedAssetInstance` does not. So
+  "this statue exists after the festival" has nowhere to live.
+
 ## The whole model
 
 ```mermaid
@@ -256,8 +312,11 @@ owns every cross-system bridge described below.
 
 `QuestManager` (`packages/runtime-core/src/quest`) holds active quests as
 per-stage, per-node progress (`inactive | active | completed` +
-`branchResult`). Every loaded quest auto-starts at session start; there is
-no quest-giver or accept step. A fixed-point refresh loop activates nodes
+`branchResult`). A quest with no `startCondition` starts at session start;
+one with a condition starts when it holds, which `update()` re-checks as
+quest and flag state moves. There is no accept step -- a quest granted by
+an NPC is one whose start condition reads a flag that NPC's dialogue sets.
+A fixed-point refresh loop activates nodes
 whose prerequisites completed, completes condition/collect/branch nodes,
 and advances the stage when every non-optional node is completed or
 unreachable. External completions arrive by notification: dialogue finished

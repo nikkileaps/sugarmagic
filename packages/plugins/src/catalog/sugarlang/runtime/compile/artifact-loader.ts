@@ -134,7 +134,16 @@ export async function loadSceneContextsFromArtifact(
   }
   // Shape-checked rather than trusted: this file is fetched from the network,
   // and a half-written or hand-edited one must not take the game down.
-  return (models as SceneContextModel[]).filter(
-    (model) => Boolean(model?.sceneId) && Array.isArray(model?.concepts)
-  );
+  //
+  // Schema v1 wrote the region key under the old name "sceneId". Mapped here
+  // so a game deployed before the rename still loads a non-empty
+  // scene-context set -- the filter below would otherwise silently empty it,
+  // which is the failure mode this loader exists to avoid.
+  return (models as Array<SceneContextModel & { sceneId?: string }>)
+    .map((model) =>
+      model?.regionId || !model?.sceneId
+        ? model
+        : { ...model, regionId: model.sceneId }
+    )
+    .filter((model) => Boolean(model?.regionId) && Array.isArray(model?.concepts));
 }

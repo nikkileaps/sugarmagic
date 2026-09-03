@@ -308,7 +308,7 @@ describe("sugarlang runtime contracts", () => {
       sourceObjectiveDisplayName: "Ask for a ticket"
     };
     const lexicon: SceneVocabularyModel = {
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-1",
       pipelineVersion: "pipeline-1",
       atlasVersion: "atlas-1",
@@ -330,7 +330,7 @@ describe("sugarlang runtime contracts", () => {
         {
           severity: "warning",
           message: "Low-frequency lemma",
-          sceneId: "scene-1",
+          regionId: "scene-1",
           lemmaId: "hola",
           suggestion: "Consider a gloss"
         }
@@ -391,7 +391,7 @@ describe("sugarlang runtime contracts", () => {
     // TeacherContext's two content doors -- see contracts/providers.ts's own
     // note on the collapse.
     const situation: Situation = {
-      sceneId: lexicon.sceneId,
+      regionId: lexicon.regionId,
       sceneContext: unavailable(),
       runtime: {
         questObjectives: unavailable(),
@@ -696,7 +696,7 @@ mapObservationKind("hovered");
 // Quest-essential lemmas are required on the compiled scene lexicon.
 // @ts-expect-error missing questEssentialLemmas
 const invalidLexicon: SceneVocabularyModel = {
-  sceneId: "scene-1",
+  regionId: "scene-1",
   contentHash: "hash",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",
@@ -707,7 +707,7 @@ const invalidLexicon: SceneVocabularyModel = {
 void invalidLexicon;
 
 const lexiconWithoutChunks: SceneVocabularyModel = {
-  sceneId: "scene-2",
+  regionId: "scene-2",
   contentHash: "hash-2",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",

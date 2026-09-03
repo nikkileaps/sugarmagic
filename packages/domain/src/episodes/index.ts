@@ -33,11 +33,12 @@
 
 import { createScopedId } from "../shared/identity";
 import {
-  normalizeScene,
+  normalizeScenes,
   normalizeTransitionConfig,
   type Scene,
   type TransitionConfig
 } from "../scenes";
+import type { QuestDefinition } from "../quest-definition";
 
 /**
  * Stable id for the Episode that the load-time migration
@@ -167,13 +168,12 @@ export function normalizeEpisode(input: unknown): Episode | null {
     return null;
   }
   const scenes: Scene[] = [];
-  const seenSceneIds = new Set<string>();
-  for (const candidate of Array.isArray(record.scenes) ? record.scenes : []) {
-    const scene = normalizeScene(candidate);
-    if (!scene || seenSceneIds.has(scene.sceneId)) continue;
-    seenSceneIds.add(scene.sceneId);
-    scenes.push(scene);
-  }
+  // Through `normalizeScenes`, not a local loop over `normalizeScene`:
+  // that function owns list-level normalization, including filling a Scene
+  // that names no region from the Scene before it. A private loop here is
+  // how that rule silently stopped applying to Scenes inside Episodes,
+  // which is every Scene there is.
+  scenes.push(...normalizeScenes(record.scenes));
   return {
     episodeId: record.episodeId.trim(),
     displayName:
@@ -272,26 +272,35 @@ export function resolveActiveEpisode(input: {
   episodes: readonly Episode[];
   unlockedEpisodeIds: ReadonlySet<string>;
   requestedEpisodeId: string | null;
+  /**
+   * Reads quest completion, so a finished Episode is not offered as the one
+   * the player is in. Omit and every Episode counts as unfinished, which is
+   * the pre-story-timeline behaviour.
+   */
+  isQuestCompleted?: QuestCompletionReader;
 }): Episode | null {
   // An Episode with no Scenes cannot be entered -- `resolveActiveScene`
   // returns null for one -- so boot never lands on it. The session
   // functions cannot produce an empty Episode; a hand-edited file can.
-  const enterable = input.episodes.filter(
-    (episode) => episode.scenes.length > 0
-  );
-  const requested = enterable.find(
+  const { isQuestCompleted } = input;
+  const open = input.episodes.filter(
     (episode) =>
-      episode.episodeId === input.requestedEpisodeId &&
-      input.unlockedEpisodeIds.has(episode.episodeId)
+      episode.scenes.length > 0 &&
+      input.unlockedEpisodeIds.has(episode.episodeId) &&
+      // No reader means the caller is not tracking completion, so nothing
+      // is finished and every unlocked Episode is open -- the behaviour
+      // before the story timeline existed.
+      (!isQuestCompleted || !isEpisodeComplete(episode, isQuestCompleted))
   );
-  return (
-    requested ??
-    enterable.find((episode) =>
-      input.unlockedEpisodeIds.has(episode.episodeId)
-    ) ??
-    enterable[0] ??
-    null
+  const requested = open.find(
+    (episode) => episode.episodeId === input.requestedEpisodeId
   );
+  // NULL when nothing is open: every unlocked Episode is finished, or the
+  // next is gated shut. That is a real position on the story timeline --
+  // above the Episode tier -- not a failure to find one. The old fallback
+  // to "the first Episode that exists" put the player back inside content
+  // they had already played.
+  return requested ?? open[0] ?? null;
 }
 
 /**
@@ -304,17 +313,112 @@ export function resolveActiveEpisode(input: {
 export function resolveActiveScene(input: {
   episode: Episode | null;
   requestedSceneId: string | null;
+  /** Same role as on `resolveActiveEpisode`: without it every Scene counts
+   *  as unfinished and the first one wins, as it did before. */
+  isQuestCompleted?: QuestCompletionReader;
 }): Scene | null {
   if (!input.episode) return null;
-  const requested = input.episode.scenes.find(
+  const { isQuestCompleted } = input;
+  const open = input.episode.scenes.filter(
+    (scene) => !isQuestCompleted || !isSceneComplete(scene, isQuestCompleted)
+  );
+  const requested = open.find(
     (scene) => scene.sceneId === input.requestedSceneId
   );
-  return requested ?? input.episode.scenes[0] ?? null;
+  // An Episode the caller resolved is unfinished, so it has an open Scene.
+  // Null here means every Scene is done, which only happens when the caller
+  // asked about an Episode it did not resolve.
+  return requested ?? open[0] ?? null;
+}
+
+/**
+ * Whether a quest has been finished. Supplied by the caller because the
+ * answer lives in the player's save, and this package is pure.
+ */
+export type QuestCompletionReader = (questDefinitionId: string) => boolean;
+
+/**
+ * A Scene is complete when every quest it holds is.
+ *
+ * [LAW:one-source-of-truth] Derived, never stored. Quest completion is the
+ * one recorded fact; everything above it on the story timeline is
+ * arithmetic over containment.
+ *
+ * A Scene with no quests is complete: every one of its quests is done,
+ * vacuously. Note the consequence -- an Episode made only of quest-less
+ * Scenes is complete the moment it exists, so it can never be entered.
+ * Authoring a Scene as pure dressing is a real thing to want; making it
+ * the only Scene in an Episode is not.
+ */
+export function isSceneComplete(
+  scene: Scene,
+  isQuestCompleted: QuestCompletionReader
+): boolean {
+  return scene.questDefinitions.every((quest) =>
+    isQuestCompleted(quest.definitionId)
+  );
+}
+
+/**
+ * An Episode is complete when every Scene it holds is.
+ *
+ * An Episode with no Scenes is NOT complete -- it cannot be entered
+ * (`resolveActiveScene` returns null for one), so calling it finished would
+ * claim the player did something they had no way to do.
+ */
+export function isEpisodeComplete(
+  episode: Episode,
+  isQuestCompleted: QuestCompletionReader
+): boolean {
+  if (episode.scenes.length === 0) return false;
+  return episode.scenes.every((scene) => isSceneComplete(scene, isQuestCompleted));
 }
 
 /** Every Scene in the project, in narrative order across Episodes. */
 export function getAllScenes(episodes: readonly Episode[]): Scene[] {
   return episodes.flatMap((episode) => episode.scenes);
+}
+
+/**
+ * Every quest in the project, in narrative order (epic #226).
+ *
+ * Quests are HELD BY the Scene they happen in, but most consumers -- the
+ * runtime's quest manager, the deploy bundle, validation -- want them all
+ * and do not care which Scene owns which. This is that flat view, derived
+ * on read. Containment is the storage; this is the projection.
+ */
+export function getAllQuestDefinitionsInEpisodes(
+  episodes: readonly Episode[]
+): QuestDefinition[] {
+  return getAllScenes(episodes).flatMap((scene) => scene.questDefinitions);
+}
+
+/** The quest with this id, or null. */
+export function findQuestDefinitionById(
+  episodes: readonly Episode[],
+  questDefinitionId: string | null
+): QuestDefinition | null {
+  if (!questDefinitionId) return null;
+  return (
+    getAllQuestDefinitionsInEpisodes(episodes).find(
+      (quest) => quest.definitionId === questDefinitionId
+    ) ?? null
+  );
+}
+
+/** The Scene holding this quest, or null. */
+export function findSceneByQuestDefinitionId(
+  episodes: readonly Episode[],
+  questDefinitionId: string | null
+): Scene | null {
+  if (!questDefinitionId) return null;
+  return (
+    getAllScenes(episodes).find((scene) =>
+      scene.questDefinitions.some(
+        (quest) => quest.definitionId === questDefinitionId
+      )
+    ) ?? null
+  );
 }
 
 /** The Scene with this id, or null. */

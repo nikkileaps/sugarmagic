@@ -24,6 +24,7 @@
 import type {
   PlacedAssetInstance,
   RegionDocument,
+  RegionNavMeshArtifact,
   RegionItemPresence,
   RegionNPCPresence,
   RegionPlayerPresence,
@@ -33,6 +34,7 @@ import {
   createDefaultScene,
   createRegionSceneOverlay,
   DEFAULT_SCENE_ID,
+  type RegionSceneOverlay,
   type Scene
 } from "./index";
 
@@ -52,22 +54,101 @@ export interface ComposedRegionContents {
 }
 
 /**
- * Compose a region's base layer with the active Scene's overlay
- * for that region. Null scene (or no overlay for this region)
- * yields base-only contents — presences empty, base assets
- * visible. Pure; call at the spawn/read seam, never per-tick.
+ * Whether this Scene happens in this region.
+ *
+ * A Scene happens in exactly one region, so every caller holding a Scene
+ * and a region has to ask whether they match. This is the one place that
+ * answers it, for the overlay and for the Scene's own fields alike.
+ */
+export function sceneDressesRegion(
+  scene: Scene | null | undefined,
+  regionId: string
+): boolean {
+  // [LAW:single-enforcer] The one comparison.
+  return Boolean(scene && scene.regionId === regionId);
+}
+
+/**
+ * The Scene's overlay when it dresses this region, otherwise nothing.
+ *
+ * Studio panels, the viewport brushes, and the command executor all route
+ * through here rather than each comparing ids themselves.
+ */
+export function sceneOverlayForRegion(
+  scene: Scene | null | undefined,
+  regionId: string
+): RegionSceneOverlay | null {
+  return sceneDressesRegion(scene, regionId) ? scene!.overlay : null;
+}
+
+/**
+ * The navmesh to path against in this region: the Scene's when it dresses
+ * this region and baked one, otherwise the region's own.
+ *
+ * A Scene's navmesh is a Scene field rather than part of the overlay, so it
+ * needs the same region test the overlay gets. Without it, walking through
+ * a doorway pathed the new region against the navmesh baked for the Scene
+ * in the region just left.
+ */
+export function navMeshForRegion(
+  scene: Scene | null | undefined,
+  region: RegionDocument
+): RegionNavMeshArtifact | null {
+  const fromScene = sceneDressesRegion(scene, region.identity.id)
+    ? (scene?.navMesh ?? null)
+    : null;
+  return fromScene ?? region.navMesh ?? null;
+}
+
+/**
+ * Compose one region with the active Scene's overlay for that region
+ * (epic #226). Two layers: the region is the world at rest -- its
+ * dressing AND its residents -- and the Scene overlay is a diff that
+ * adds, suppresses, and restyles. A null scene, or a Scene that happens
+ * somewhere else, yields the region alone: a populated place, which is
+ * what free roam composes.
+ *
+ * Suppression names region-owned ids, so a Scene hides a resident or a
+ * prop without the overlay holding a copy of it. It cannot reach the
+ * overlay's own content -- a Scene that does not want something simply
+ * does not add it.
+ *
+ * Pure; call at the spawn/read seam, never per-tick.
  */
 export function composeRegionContents(
   region: RegionDocument,
   scene: Scene | null
 ): ComposedRegionContents {
-  const overlay = scene?.regionOverlays[region.identity.id] ?? null;
+  const overlay = sceneOverlayForRegion(scene, region.identity.id);
+  const suppressed = new Set(overlay?.suppressedRegionIds ?? []);
+  const regionPlayerPresence =
+    region.playerPresence && !suppressed.has(region.playerPresence.presenceId)
+      ? region.playerPresence
+      : null;
   return {
     folders: [...region.folders, ...(overlay?.folders ?? [])],
-    placedAssets: [...region.placedAssets, ...(overlay?.placedAssets ?? [])],
-    playerPresence: overlay?.playerPresence ?? null,
-    npcPresences: [...(overlay?.npcPresences ?? [])],
-    itemPresences: [...(overlay?.itemPresences ?? [])]
+    placedAssets: [
+      ...region.placedAssets.filter(
+        (asset) => !suppressed.has(asset.instanceId)
+      ),
+      ...(overlay?.placedAssets ?? [])
+    ],
+    // Exactly one player spawn: the Scene's answer wins where it has one,
+    // otherwise the region's. Reading the overlay alone used to be the
+    // whole rule, so a region start plus a Scene start meant two spawns.
+    playerPresence: overlay?.playerPresence ?? regionPlayerPresence,
+    npcPresences: [
+      ...region.npcPresences.filter(
+        (presence) => !suppressed.has(presence.presenceId)
+      ),
+      ...(overlay?.npcPresences ?? [])
+    ],
+    itemPresences: [
+      ...region.itemPresences.filter(
+        (presence) => !suppressed.has(presence.presenceId)
+      ),
+      ...(overlay?.itemPresences ?? [])
+    ]
   };
 }
 
@@ -129,9 +210,13 @@ export function migrateToScenes(input: {
       defaultScene = scenes[0];
       return defaultScene!;
     }
+    // A project with regions and no Scenes at all: the minted Scene has
+    // to name somewhere, and the project's first region is the only
+    // information there is. A Scene naming nowhere would be invalid.
     defaultScene = createDefaultScene({
       sceneId: DEFAULT_SCENE_ID,
-      displayName: "Scene 1"
+      displayName: "Scene 1",
+      regionId: input.regions[0]?.identity.id ?? ""
     });
     scenes.push(defaultScene);
     didMigrate = true;
@@ -167,29 +252,39 @@ export function migrateToScenes(input: {
       (folder) => folder.folderId
     );
 
-    // Presence move: into the default Scene's overlay for this
-    // region — but never clobber an overlay that already exists
-    // (a half-migrated file re-encountered keeps first-run data).
-    const hasPresences =
-      (legacy.itemPresences?.length ?? 0) > 0 ||
-      (legacy.npcPresences?.length ?? 0) > 0 ||
-      legacy.playerPresence != null;
-    if (hasPresences) {
-      const target = ensureDefaultScene();
-      if (!target.regionOverlays[region.identity.id]) {
-        target.regionOverlays[region.identity.id] =
-          createRegionSceneOverlay({
-            itemPresences: legacy.itemPresences ?? [],
-            npcPresences: legacy.npcPresences ?? [],
-            playerPresence: legacy.playerPresence ?? null
-          });
-      }
-    }
+    // Presence hoist: a pre-058 file nested its presences under the
+    // region, which is where epic #226 puts them again — so they come
+    // straight back out onto the region rather than detouring through a
+    // Scene overlay. Deduped by presenceId so re-running is a no-op.
+    base.npcPresences = dedupeByKey(
+      [...(base.npcPresences ?? []), ...(legacy.npcPresences ?? [])],
+      (presence) => presence.presenceId
+    );
+    base.itemPresences = dedupeByKey(
+      [...(base.itemPresences ?? []), ...(legacy.itemPresences ?? [])],
+      (presence) => presence.presenceId
+    );
+    base.playerPresence = base.playerPresence ?? legacy.playerPresence ?? null;
     return base;
   });
 
   if (scenes.length === 0) {
     ensureDefaultScene();
+  }
+
+  // A Scene still naming nowhere gets the project's first region. This is
+  // the floor under `normalizeScenes`, which fills a Scene in from the one
+  // before it: that cannot help the FIRST Scene, and a project's opening
+  // Scene naming nowhere is unenterable. Runs here because this is the
+  // pass that holds the regions.
+  const firstRegionId = regions[0]?.identity.id ?? "";
+  if (firstRegionId.length > 0) {
+    for (let index = 0; index < scenes.length; index += 1) {
+      const scene = scenes[index]!;
+      if (scene.regionId.length > 0) continue;
+      scenes[index] = { ...scene, regionId: firstRegionId };
+      didMigrate = true;
+    }
   }
 
   return { scenes, regions, didMigrate };

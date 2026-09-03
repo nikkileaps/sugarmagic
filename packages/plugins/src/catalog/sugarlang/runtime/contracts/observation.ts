@@ -93,7 +93,7 @@ export type LemmaObservation =
 export interface ObservationContext {
   sessionId: string;
   turnId: string;
-  sceneId: string;
+  regionId: string;
   lang: string;
   conversationId: string;
 }

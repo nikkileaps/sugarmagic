@@ -317,7 +317,7 @@ describe("SugarLangVerifyMiddleware", () => {
           },
           sceneLexiconStore: {
             ensure: vi.fn().mockResolvedValue({
-              sceneId: "scene-1",
+              regionId: "scene-1",
               contentHash: "hash",
               pipelineVersion: "v1",
               atlasVersion: "v1",
@@ -365,7 +365,7 @@ describe("SugarLangVerifyMiddleware", () => {
       services: createServicesStub({
         resolveForExecution: () => ({
           learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
-          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ regionId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
           classifier: {
             check: vi.fn().mockReturnValue({
               withinEnvelope: true,
@@ -400,7 +400,7 @@ describe("SugarLangVerifyMiddleware", () => {
           },
           sceneLexiconStore: {
             ensure: vi.fn().mockResolvedValue({
-              sceneId: "scene-1",
+              regionId: "scene-1",
               contentHash: "hash",
               pipelineVersion: "v1",
               atlasVersion: "v1",
@@ -495,7 +495,7 @@ describe("SugarLangVerifyMiddleware", () => {
       services: createServicesStub({
         resolveForExecution: () => ({
           learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
-          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ regionId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
           classifier: { check: classifierCheck },
           llmClient
         })
@@ -527,7 +527,7 @@ describe("SugarLangVerifyMiddleware", () => {
       services: createServicesStub({
         resolveForExecution: () => ({
           learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
-          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ regionId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
           classifier: { check: classifierCheck },
           llmClient
         })
@@ -598,7 +598,7 @@ describe("SugarLangVerifyMiddleware", () => {
         resolveForExecution: () => ({
           learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
           sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({
-            sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1",
+            regionId: "scene-1", contentHash: "hash", pipelineVersion: "v1",
             atlasVersion: "v1", profile: "runtime-preview",
             lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [],
             npcVoiceSpecs: { "npc-1": { interjections: ["ay"], hasGestureTags: false } }
@@ -650,7 +650,7 @@ describe("SugarLangVerifyMiddleware", () => {
           },
           sceneLexiconStore: {
             ensure: vi.fn().mockResolvedValue({
-              sceneId: "scene-1",
+              regionId: "scene-1",
               contentHash: "hash",
               pipelineVersion: "v1",
               atlasVersion: "v1",
@@ -694,7 +694,7 @@ describe("SugarLangVerifyMiddleware", () => {
           },
           sceneLexiconStore: {
             ensure: vi.fn().mockResolvedValue({
-              sceneId: "scene-1",
+              regionId: "scene-1",
               contentHash: "hash",
               pipelineVersion: "v1",
               atlasVersion: "v1",

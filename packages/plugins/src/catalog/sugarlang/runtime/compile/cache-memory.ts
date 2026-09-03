@@ -83,11 +83,11 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
   }
 
   override async get(
-    sceneId: string,
+    regionId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
   ): Promise<SceneVocabularyModel | null> {
-    const key = createCompileCacheKey(sceneId, contentHash, profile);
+    const key = createCompileCacheKey(regionId, contentHash, profile);
     const record = this.records.get(key);
     if (!record) {
       return null;
@@ -99,7 +99,7 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
 
   override async set(lexicon: SceneVocabularyModel): Promise<void> {
     const key = createCompileCacheKey(
-      lexicon.sceneId,
+      lexicon.regionId,
       lexicon.contentHash,
       lexicon.profile
     );
@@ -111,14 +111,14 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
     this.evictIfNeeded();
   }
 
-  override async invalidate(sceneId?: string): Promise<void> {
-    if (!sceneId) {
+  override async invalidate(regionId?: string): Promise<void> {
+    if (!regionId) {
       this.records.clear();
       return;
     }
 
     for (const [key, record] of this.records.entries()) {
-      if (record.lexicon.sceneId === sceneId) {
+      if (record.lexicon.regionId === regionId) {
         this.records.delete(key);
       }
     }
@@ -128,7 +128,7 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
     return [...this.records.entries()]
       .map(([cacheKey, record]) => ({
         cacheKey,
-        sceneId: record.lexicon.sceneId,
+        regionId: record.lexicon.regionId,
         contentHash: record.lexicon.contentHash,
         profile: record.lexicon.profile,
         estimatedBytes: record.estimatedBytes,

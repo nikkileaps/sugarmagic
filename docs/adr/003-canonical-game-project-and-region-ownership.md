@@ -51,6 +51,16 @@ Those concerns will not be split into separate canonical authored models.
 - region documents must be designed carefully to stay clear without becoming monolithic
 - some old boundaries from Sugarbuilder and Sugarengine must be removed instead of preserved
 
+## Amendment (epic #226)
+
+Region-local gameplay placements concretely means the region's
+`npcPresences`, `itemPresences`, and `playerPresence` fields, which live on
+the `RegionDocument` beside its placed assets, folders, and behaviors. A
+Scene overlay is a diff against the region document -- it adds, suppresses,
+or restyles region-owned content for the duration of its Scene -- never a
+second canonical home for it. Plan 058 temporarily moved presences onto
+Scene overlays; epic #226 restored this rule.
+
 ## Builds On
 
 - [Proposal 002: Sugarmagic Domain Model](/Users/nikki/projects/sugarmagic/docs/proposals/002-sugarmagic-domain-model.md)

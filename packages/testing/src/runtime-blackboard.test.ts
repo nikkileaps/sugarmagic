@@ -45,7 +45,6 @@ describe("RuntimeBlackboard", () => {
           y: 2,
           z: 0,
           regionId: "region:station",
-          sceneId: "scene:kiosk"
         },
         sourceSystem: "quest-system"
       })
@@ -116,7 +115,6 @@ describe("RuntimeBlackboard", () => {
       y: 2,
       z: 0,
       regionId: "region:station",
-      sceneId: "scene:lobby"
     });
     setActiveQuestStage(blackboard, {
       questId: "quest:suitcase",
@@ -124,7 +122,7 @@ describe("RuntimeBlackboard", () => {
       stageDisplayName: "Start"
     });
 
-    expect(getEntityPosition(blackboard, "npc:station-manager")?.sceneId).toBe("scene:lobby");
+    expect(getEntityPosition(blackboard, "npc:station-manager")?.regionId).toBe("region:station");
     expect(getActiveQuestStage(blackboard, "quest:suitcase")?.stageId).toBe("stage:start");
 
     blackboard.advanceFrame();
@@ -150,7 +148,6 @@ describe("RuntimeBlackboard", () => {
         y: 0,
         z: 0,
         regionId: "region:station",
-        sceneId: "scene:lobby"
       });
 
     entityIds.forEach(place);
@@ -181,7 +178,6 @@ describe("RuntimeBlackboard", () => {
         y: 0,
         z: 0,
         regionId: "region:station",
-        sceneId: "scene:lobby"
       });
     }
 
@@ -209,7 +205,6 @@ describe("RuntimeBlackboard", () => {
       y: 3,
       z: 0,
       regionId: "region:station",
-      sceneId: "scene:kiosk"
     });
     setEntityPlayerSpatialRelation(blackboard, {
       entityId: "npc:rick-roll",

@@ -51,7 +51,7 @@ function situationSection(
   return formatSituation(
     createTeacherContext({
       situation: composeSituation({
-        sceneId: "scene-station",
+        regionId: "scene-station",
         runtimeContext: runtimeContext(overrides)
       })
     })
@@ -67,7 +67,7 @@ describe("the scene's concepts reach the model", () => {
   // missing: not "the block renders" but "the affordances are IN it".
   function promptFor(...conceptLabels: string[]): string {
     const model: SceneContextModel = {
-      sceneId: "scene-dock",
+      regionId: "scene-dock",
       contentHash: "hash",
       promptVersion: "090.1.0",
       supportLanguage: "en",
@@ -83,7 +83,7 @@ describe("the scene's concepts reach the model", () => {
     };
     return buildTeacherPrompt(
       createTeacherContext({
-        situation: composeSituation({ sceneId: "scene-dock", sceneContext: model })
+        situation: composeSituation({ regionId: "scene-dock", sceneContext: model })
       })
     ).user;
   }
@@ -159,7 +159,7 @@ describe("buildTeacherPrompt -- the situation reaches the model", () => {
     const prompt = buildTeacherPrompt(
       createTeacherContext({
         situation: composeSituation({
-          sceneId: "scene-station",
+          regionId: "scene-station",
           runtimeContext: runtimeContext({ timeOfDay: "evening", knownFacts: [] })
         })
       })
@@ -175,7 +175,7 @@ describe("buildTeacherPrompt -- the situation reaches the model", () => {
     const prompt = buildTeacherPrompt(
       createTeacherContext({
         situation: composeSituation({
-          sceneId: "scene-station",
+          regionId: "scene-station",
           runtimeContext: runtimeContext()
         })
       })

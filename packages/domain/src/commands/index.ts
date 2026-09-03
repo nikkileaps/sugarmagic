@@ -197,6 +197,16 @@ export type SetRegionNavMeshCommand = SemanticCommandBase<
   }
 >;
 
+/** Set (or clear) a Scene's own baked navmesh. `null` means the Scene does
+ *  not change collision and inherits the region's. */
+export type SetSceneNavMeshCommand = SemanticCommandBase<
+  "SetSceneNavMesh",
+  {
+    sceneId: string;
+    navMesh: import("../region-authoring").RegionNavMeshArtifact | null;
+  }
+>;
+
 export type CreateRegionAreaCommand = SemanticCommandBase<
   "CreateRegionArea",
   {
@@ -253,6 +263,30 @@ export type DeleteRegionVolumeCommand = SemanticCommandBase<
   "DeleteRegionVolume",
   {
     volumeId: string;
+  }
+>;
+
+export type CreateRegionMarkerCommand = SemanticCommandBase<
+  "CreateRegionMarker",
+  {
+    marker: import("../region-authoring").RegionMarker;
+  }
+>;
+
+export type UpdateRegionMarkerCommand = SemanticCommandBase<
+  "UpdateRegionMarker",
+  {
+    markerId: string;
+    patch: Partial<
+      Omit<import("../region-authoring").RegionMarker, "markerId">
+    >;
+  }
+>;
+
+export type DeleteRegionMarkerCommand = SemanticCommandBase<
+  "DeleteRegionMarker",
+  {
+    markerId: string;
   }
 >;
 
@@ -738,6 +772,63 @@ export type CreateQuestDefinitionCommand = SemanticCommandBase<
   "CreateQuestDefinition",
   {
     definition: QuestDefinition;
+    /**
+     * The Scene the quest happens in (epic #226). Named by the caller
+     * rather than read from ambient session state: a quest belongs to
+     * exactly one Scene, and which one is the author's choice, not a
+     * side effect of what they last clicked.
+     */
+    sceneId: string;
+  }
+>;
+
+/**
+ * Hand a Scene's own presence over to the region (epic #226): it stops
+ * being something this Scene adds and becomes a resident, present
+ * whenever the region is.
+ *
+ * The counterpart to suppression. Assets have had this since 058 as
+ * scope conversion; presences never did, which is why a world authored
+ * before this epic has its whole cast trapped in one Scene's overlay.
+ */
+export type PromotePresenceToRegionCommand = SemanticCommandBase<
+  "PromotePresenceToRegion",
+  {
+    sceneId: string;
+    presenceId: string;
+  }
+>;
+
+/**
+ * Hide a region-owned thing for the duration of one Scene (epic #226).
+ *
+ * Names a region id -- a placed asset's `instanceId` or a presence's
+ * `presenceId` -- rather than copying the thing into the overlay, so
+ * there is never a second copy to drift. An id that matches nothing is
+ * ignored on compose, so deleting a suppressed asset does not break the
+ * Scene that hid it.
+ */
+export type SetSceneSuppressionCommand = SemanticCommandBase<
+  "SetSceneSuppression",
+  {
+    sceneId: string;
+    /** The region-owned id to hide or reveal. */
+    regionOwnedId: string;
+    suppressed: boolean;
+  }
+>;
+
+/**
+ * Move a quest to another Scene (epic #226). A command rather than a
+ * plain session edit so it joins the transaction history like every
+ * other quest edit -- create, update and delete all undo, and a move
+ * that did not would be the odd one out.
+ */
+export type MoveQuestToSceneCommand = SemanticCommandBase<
+  "MoveQuestToScene",
+  {
+    questDefinitionId: string;
+    toSceneId: string;
   }
 >;
 
@@ -1085,12 +1176,16 @@ export type SemanticCommand =
   | DeleteSceneFolderCommand
   | UpdateRegionMetadataCommand
   | SetRegionNavMeshCommand
+  | SetSceneNavMeshCommand
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand
   | CreateRegionVolumeCommand
   | UpdateRegionVolumeCommand
   | DeleteRegionVolumeCommand
+  | CreateRegionMarkerCommand
+  | UpdateRegionMarkerCommand
+  | DeleteRegionMarkerCommand
   | CreateRegionNPCBehaviorCommand
   | UpdateRegionNPCBehaviorCommand
   | DeleteRegionNPCBehaviorCommand
@@ -1148,6 +1243,9 @@ export type SemanticCommand =
   | CreateDocumentDefinitionCommand
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
+  | MoveQuestToSceneCommand
+  | SetSceneSuppressionCommand
+  | PromotePresenceToRegionCommand
   | UpdateNPCDefinitionCommand
   | UpdateSpellDefinitionCommand
   | UpdateItemDefinitionCommand

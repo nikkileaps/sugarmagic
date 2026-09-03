@@ -35,14 +35,14 @@ export interface ChunkCacheKey {
 
 export interface ChunkCacheEntry {
   key: ChunkCacheKey;
-  sceneId: string;
+  regionId: string;
   chunks: LexicalChunk[];
   extractedAtMs: number;
   extractedByModel: string;
 }
 
 export interface ChunkCacheEntryMeta extends ChunkCacheKey {
-  sceneId: string;
+  regionId: string;
   estimatedBytes: number;
   accessOrdinal: number;
 }
@@ -120,7 +120,7 @@ async function emitDriftIfNeeded(
     telemetry,
     createTelemetryEvent("chunk.extraction-drift-detected", {
       timestamp: next.extractedAtMs,
-      sceneId: next.sceneId,
+      regionId: next.regionId,
       contentHash: next.key.contentHash,
       previousChunkCount: previous.chunks.length,
       newChunkCount: next.chunks.length,
@@ -234,7 +234,7 @@ export class MemoryChunkCache implements SugarlangChunkCache {
     return [...this.records.values()]
       .map((record) => ({
         ...record.entry.key,
-        sceneId: record.entry.sceneId,
+        regionId: record.entry.regionId,
         estimatedBytes: record.estimatedBytes,
         accessOrdinal: record.accessOrdinal
       }))
@@ -404,7 +404,7 @@ export class IndexedDBChunkCache implements SugarlangChunkCache {
     const record: IndexedDbChunkRecord & { storageKey: string } = {
       storageKey,
       ...entry.key,
-      sceneId: entry.sceneId,
+      regionId: entry.regionId,
       workspaceId: this.workspaceId,
       estimatedBytes: estimateBytes(entry),
       accessOrdinal: ++this.accessCounter,
@@ -447,7 +447,7 @@ export class IndexedDBChunkCache implements SugarlangChunkCache {
     return (await this.getAllRecords())
       .map((record) => ({
         ...record.entry.key,
-        sceneId: record.entry.sceneId,
+        regionId: record.entry.regionId,
         estimatedBytes: record.estimatedBytes,
         accessOrdinal: record.accessOrdinal
       }))

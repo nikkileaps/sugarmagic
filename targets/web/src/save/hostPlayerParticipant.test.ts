@@ -33,6 +33,7 @@ describe("createHostPlayerParticipant", () => {
     const participant = createHostPlayerParticipant({
       getWorld: () => null,
       getCurrentRegionId: () => null,
+      getPlayerYaw: () => null,
       applyRestoredSlice: () => {}
     });
     expect(participant.participantId).toBe(HOST_PLAYER_PARTICIPANT_ID);
@@ -46,11 +47,13 @@ describe("createHostPlayerParticipant", () => {
       const participant = createHostPlayerParticipant({
         getWorld: () => world,
         getCurrentRegionId: () => "region:hollow",
+      getPlayerYaw: () => null,
         applyRestoredSlice: () => {}
       });
       expect(participant.serialize()).toEqual({
         currentRegionId: "region:hollow",
-        playerPosition: { x: 3, y: 1, z: 5 }
+        playerPosition: { x: 3, y: 1, z: 5 },
+        playerYaw: null
       });
     });
 
@@ -58,11 +61,13 @@ describe("createHostPlayerParticipant", () => {
       const participant = createHostPlayerParticipant({
         getWorld: () => null,
         getCurrentRegionId: () => "region:hollow",
+      getPlayerYaw: () => null,
         applyRestoredSlice: () => {}
       });
       expect(participant.serialize()).toEqual({
         currentRegionId: "region:hollow",
-        playerPosition: null
+        playerPosition: null,
+        playerYaw: null
       });
     });
 
@@ -71,12 +76,32 @@ describe("createHostPlayerParticipant", () => {
       const participant = createHostPlayerParticipant({
         getWorld: () => world,
         getCurrentRegionId: () => null,
+      getPlayerYaw: () => null,
         applyRestoredSlice: () => {}
       });
       expect(participant.serialize()).toEqual({
         currentRegionId: null,
-        playerPosition: null
+        playerPosition: null,
+        playerYaw: null
       });
+    });
+
+    it("records which way the player is facing", () => {
+      // Position alone puts a returning player in the right spot looking
+      // the wrong way -- and after a region transition, "the wrong way" is
+      // usually back at the wall they arrived through.
+      const world = new World();
+      const entity = world.createEntity();
+      world.addComponent(entity, new PlayerControlled());
+      world.addComponent(entity, new Position(3, 1, 5));
+      const participant = createHostPlayerParticipant({
+        getWorld: () => world,
+        getCurrentRegionId: () => "region:hollow",
+        getPlayerYaw: () => 1.5,
+        applyRestoredSlice: () => {}
+      });
+
+      expect(participant.serialize().playerYaw).toBe(1.5);
     });
   });
 
@@ -86,6 +111,7 @@ describe("createHostPlayerParticipant", () => {
       const participant = createHostPlayerParticipant({
         getWorld: () => null,
         getCurrentRegionId: () => null,
+      getPlayerYaw: () => null,
         applyRestoredSlice: apply
       });
       const restored: HostPlayerSlice = {
@@ -101,6 +127,7 @@ describe("createHostPlayerParticipant", () => {
       const participant = createHostPlayerParticipant({
         getWorld: () => null,
         getCurrentRegionId: () => null,
+      getPlayerYaw: () => null,
         applyRestoredSlice: apply
       });
       participant.deserialize(null);

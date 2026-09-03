@@ -118,8 +118,7 @@ function makeProject(): GameProject {
     itemDefinitions: [],
     documentDefinitions: [],
     npcDefinitions: [],
-    dialogueDefinitions: [],
-    questDefinitions: []
+    dialogueDefinitions: []
   });
 }
 

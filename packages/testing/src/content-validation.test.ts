@@ -4,6 +4,7 @@ import {
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
+  createDefaultRegion,
   createDefaultRegionLandscapeState,
   createRegionBehaviorQuestBinding,
   createRegionNPCBehaviorTask,
@@ -50,10 +51,30 @@ function questWith(
   };
 }
 
+const VALIDATION_REGION_ID = "region:test";
+
+/** A region for the project's Scenes to name, so scene-region validation
+ *  stays quiet and these tests only report on the quest under test. */
+function validationRegion(): RegionDocument {
+  return createDefaultRegion({
+    regionId: VALIDATION_REGION_ID,
+    displayName: "Test Region"
+  });
+}
+
 function projectWith(quest: QuestDefinition): GameProject {
+  const project = createDefaultGameProject("Test", "test");
   return {
-    ...createDefaultGameProject("Test", "test"),
-    questDefinitions: [quest]
+    ...project,
+    episodes: project.episodes.map((episode) => ({
+      ...episode,
+      scenes: episode.scenes.map((scene, index) => ({
+        ...scene,
+        regionId: VALIDATION_REGION_ID,
+        // Quests are held by the Scene they happen in (epic #226).
+        questDefinitions: index === 0 ? [quest] : scene.questDefinitions
+      }))
+    }))
   };
 }
 
@@ -100,7 +121,7 @@ describe("validateQuest", () => {
   // of its life; a save that refused an unfinished node would be unusable.
   it("reports only warnings, so an unfinished quest still saves", () => {
     const quest = questWith({ type: "hasFlag", worldFlagId: "", value: "" });
-    const result = validateProjectContent(projectWith(quest), []);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
 
     expect(result.issues.length).toBeGreaterThan(0);
     expect(result.issues.every((issue) => issue.severity === "warning")).toBe(
@@ -117,7 +138,7 @@ describe("dangling world flag references", () => {
       worldFlagId: "flag:deleted",
       value: "true"
     });
-    const result = validateProjectContent(projectWith(quest), []);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
 
     expect(result.valid).toBe(false);
     const dangling = result.issues.filter(
@@ -139,7 +160,7 @@ describe("dangling world flag references", () => {
     });
     const result = validateProjectContent(
       { ...projectWith(quest), worldFlagDefinitions: [flag] },
-      []
+      [validationRegion()]
     );
 
     expect(result.valid).toBe(true);
@@ -178,7 +199,7 @@ describe("dangling world flag references", () => {
       startStageId: stage.stageId,
       stageDefinitions: [stage]
     };
-    const result = validateProjectContent(projectWith(quest), []);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
 
     const errors = result.issues.filter((issue) => issue.severity === "error");
     expect(errors).toHaveLength(2);
@@ -221,7 +242,9 @@ describe("dangling story point references", () => {
       ],
       landscape: createDefaultRegionLandscapeState({}),
       markers: [],
-      gameplayPlacements: []
+      npcPresences: [],
+      itemPresences: [],
+      playerPresence: null
     };
     return [region];
   }
@@ -311,7 +334,9 @@ describe("behavior tasks with no ordering between them", () => {
         ],
         landscape: createDefaultRegionLandscapeState({}),
         markers: [],
-        gameplayPlacements: []
+        npcPresences: [],
+        itemPresences: [],
+        playerPresence: null
       }
     ];
   }

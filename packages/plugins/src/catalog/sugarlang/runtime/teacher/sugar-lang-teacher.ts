@@ -201,7 +201,7 @@ export class SugarLangTeacher {
         // supplies this list, so an absent one is also a first turn.
         firstTurnOfConversation: (context.situation?.recentTurns ?? []).length === 0,
         teacherMs: args.teacherMs,
-        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        regionId: context.situation?.regionId ?? "unknown-scene",
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
         fallback: args.fallback
@@ -216,7 +216,7 @@ export class SugarLangTeacher {
       ...context,
       calibrationActive
     };
-    const sceneId = effectiveContext.situation?.sceneId ?? "unknown-scene";
+    const regionId = effectiveContext.situation?.regionId ?? "unknown-scene";
     const npc = effectiveContext.situation?.npc ?? EMPTY_NPC_CONTEXT;
     // 090.4: the learner key is computed HERE rather than carried on the
     // context, because it must reflect the learner as of THIS turn -- the whole
@@ -304,7 +304,7 @@ export class SugarLangTeacher {
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
           timestamp: Date.now(),
-          sceneId: sceneId,
+          regionId: regionId,
           npcId: npc.npcDefinitionId,
           npcDisplayName: npc.displayName,
           directive: cached,
@@ -420,7 +420,7 @@ export class SugarLangTeacher {
         sessionId: effectiveContext.telemetryContext?.sessionId,
         turnId: effectiveContext.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: sceneId,
+        regionId: regionId,
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
         outcome,

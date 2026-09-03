@@ -150,35 +150,34 @@ describe("painted masks", () => {
 
     const scene = createDefaultScene({
       sceneId: "scene:snowy",
-      regionOverlays: {
-        glade: createRegionSceneOverlay({
-          placedAssets: [
-            createPlacedAssetInstance({
-              assetDefinitionId: "asset:bench",
-              surfaceSlotOverrides: [
-                {
-                  slotName: "wood",
-                  surface: createPaintedInlineSurface(
-                    "little-world:mask-texture:scene-instance"
-                  )
-                }
-              ]
-            })
-          ],
-          assetAppearanceOverrides: {
-            "some-base-instance": {
-              surfaceSlotOverrides: [
-                {
-                  slotName: "roof",
-                  surface: createPaintedInlineSurface(
-                    "little-world:mask-texture:scene-record"
-                  )
-                }
-              ]
-            }
+      regionId: "glade",
+      overlay: createRegionSceneOverlay({
+        placedAssets: [
+          createPlacedAssetInstance({
+            assetDefinitionId: "asset:bench",
+            surfaceSlotOverrides: [
+              {
+                slotName: "wood",
+                surface: createPaintedInlineSurface(
+                  "little-world:mask-texture:scene-instance"
+                )
+              }
+            ]
+          })
+        ],
+        assetAppearanceOverrides: {
+          "some-base-instance": {
+            surfaceSlotOverrides: [
+              {
+                slotName: "roof",
+                surface: createPaintedInlineSurface(
+                  "little-world:mask-texture:scene-record"
+                )
+              }
+            ]
           }
-        })
-      }
+        }
+      })
     });
 
     const reconciled = reconcilePaintedMaskDefinitionsForSave(

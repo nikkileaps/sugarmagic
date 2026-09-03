@@ -34,7 +34,7 @@ import type { SceneContextModel } from "../../runtime/contracts/scene-context";
  */
 function situationTeaching(...conceptLabels: string[]) {
   const sceneContext: SceneContextModel = {
-    sceneId: "scene-station",
+    regionId: "scene-station",
     contentHash: "hash",
     promptVersion: "090.1.0",
     supportLanguage: "en",
@@ -48,7 +48,7 @@ function situationTeaching(...conceptLabels: string[]) {
     extractedByModel: "gateway-resolved",
     reviewFlag: false
   };
-  return composeSituation({ sceneId: "scene-station", sceneContext });
+  return composeSituation({ regionId: "scene-station", sceneContext });
 }
 
 describe("FallbackTeacherPolicy", () => {

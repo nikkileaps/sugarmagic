@@ -32,7 +32,7 @@ import {
 
 function makeModel(overrides: Partial<SceneContextModel> = {}): SceneContextModel {
   return {
-    sceneId: "scene-a",
+    regionId: "scene-a",
     contentHash: "hash",
     promptVersion: "090.1.0",
     supportLanguage: "en",

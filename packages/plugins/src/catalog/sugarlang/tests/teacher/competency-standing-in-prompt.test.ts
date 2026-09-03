@@ -35,7 +35,7 @@ const STATE: LearnerProgress = {
   unmetCompetencyIds: ["ask-where", "buy"],
   dueItemIds: ["queso"],
   isColdStart: false,
-  sceneId: "scene-station",
+  regionId: "scene-station",
   conversationId: "conv-1"
 };
 

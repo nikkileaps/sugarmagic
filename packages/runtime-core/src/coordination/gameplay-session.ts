@@ -239,6 +239,18 @@ export interface RuntimeGameplaySessionControllerOptions {
     sceneId: string | null;
   }) => void;
   /**
+   * Walk the player into another region, landing on one of its markers.
+   *
+   * Separate from `onSceneAction` on purpose: that one is campaign
+   * progression -- the story moves on and the Scene changes. This is a
+   * doorway. The story does not change; the player is just somewhere else.
+   * The host owns it either way, because standing a region up is its job.
+   */
+  onRegionChange?: (input: {
+    regionId: string;
+    markerId: string | null;
+  }) => void;
+  /**
    * Plays one of an NPC's bound animation slots as a one-shot, on every
    * presence of that NPC. The mixer lives in the host, so the quest action
    * handler forwards here rather than reaching for it.
@@ -431,6 +443,12 @@ export interface RuntimeGameplayAssembly {
   readonly pluginManager: RuntimePluginManager | null;
   readonly gameplaySession: RuntimeGameplaySessionController;
   /**
+   * Tell every plugin the world has been rebuilt for another region. Call
+   * after a mid-session region change; `init` is guarded against running
+   * twice, so this is the only way a plugin hears about it.
+   */
+  notifyPluginsOfRegion: () => Promise<void>;
+  /**
    * Settles when every plugin's `init` has run.
    *
    * Boot does not wait on this -- a plugin that is slow to initialize must not
@@ -441,7 +459,12 @@ export interface RuntimeGameplayAssembly {
    * it when that plugin happens to be first in the project's list.
    */
   readonly pluginsInitialized: Promise<void>;
-  dispose: () => Promise<void>;
+  /**
+   * Free what this assembly built, and only that. The plugin manager is
+   * the caller's and spans the whole page, so it is not touched here.
+   * Synchronous, so a region teardown finishes before the rebuild starts.
+   */
+  dispose: () => void;
 }
 
 /** Plan 069.3 — sentinel agent id for the player in NPC collision (can't
@@ -477,7 +500,7 @@ interface DebugBillboardBinding {
   entityKind: DebugEntityBillboardKind;
   definitionId: string | null;
   displayName: string;
-  sceneId: string | null;
+  regionId: string | null;
 }
 
 function cloneSelectionMetadata(options: {
@@ -1467,7 +1490,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "npc",
         definitionId: presence.npcDefinitionId,
         displayName: npcDefinition?.displayName ?? "NPC",
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: interactableEntity,
@@ -1796,7 +1819,7 @@ export function createRuntimeGameplaySessionController(
       entityKind: binding.entityKind,
       definitionId: binding.definitionId,
       displayName: binding.displayName,
-      sceneId: binding.sceneId,
+      regionId: binding.regionId,
       blackboard
     };
   }
@@ -1908,7 +1931,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "player",
         definitionId: playerDefinition.definitionId,
         displayName: playerDefinition.displayName,
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: playerEntity,
@@ -1937,7 +1960,7 @@ export function createRuntimeGameplaySessionController(
         entityKind: "npc",
         definitionId: entry.npcDefinitionId,
         displayName: npcDefinition?.displayName ?? "NPC",
-        sceneId: activeRegion?.identity.id ?? null
+        regionId: activeRegion?.identity.id ?? null
       });
       createBillboard({
         entity: entry.entity,
@@ -2200,6 +2223,23 @@ export function createRuntimeGameplaySessionController(
       // QuestManager handles these before the handler is called.
       case "setFlag":
       case "emitEvent":
+        return;
+
+      // Standing a region up is the host's job, so this forwards rather
+      // than acting. A link with no region picked is authored breakage,
+      // reported rather than silently doing nothing.
+      case "goToRegion":
+        if (!action.regionId) {
+          console.warn(
+            "[runtime-core] a Go to Region action names no region.",
+            describeQuestActionSource(source)
+          );
+          return;
+        }
+        options.onRegionChange?.({
+          regionId: action.regionId,
+          markerId: action.markerId
+        });
         return;
 
       default: {
@@ -2883,8 +2923,14 @@ export function createRuntimeGameplayAssembly(
   const gameplaySession = createRuntimeGameplaySessionController(options);
 
   let pluginsInitialized: Promise<void> = Promise.resolve();
+  // Built once and kept, so the same context that initialized the plugins is
+  // the one handed back to them when the region changes. Two constructions
+  // would drift the moment either grew a field.
+  let pluginContext: Parameters<
+    NonNullable<typeof pluginManager>["init"]
+  >[0] | null = null;
   if (pluginManager) {
-    pluginsInitialized = pluginManager.init({
+    pluginContext = {
       blackboard: gameplaySession.blackboard,
       assetSources: options.assetSources,
       preNewGameStepAnswers: options.preNewGameStepAnswers ?? {},
@@ -2917,7 +2963,8 @@ export function createRuntimeGameplayAssembly(
       questDefinitions: options.questDefinitions,
       buildConversationRuntimeContext:
         gameplaySession.buildConversationRuntimeContext
-    });
+    };
+    pluginsInitialized = pluginManager.init(pluginContext);
     options.world.addSystem(new RuntimePluginSystem(pluginManager));
   }
 
@@ -2925,9 +2972,25 @@ export function createRuntimeGameplayAssembly(
     pluginManager,
     gameplaySession,
     pluginsInitialized,
-    async dispose() {
+    /**
+     * Tell every plugin the world it is looking at has been rebuilt for
+     * another region. `init` is guarded against running twice, so a plugin
+     * that snapshotted the region at boot has no other way to hear about
+     * it.
+     */
+    async notifyPluginsOfRegion(): Promise<void> {
+      if (!pluginManager || !pluginContext) return;
+      await pluginManager.notifyRegionChanged(pluginContext);
+    },
+    /**
+     * Free what this assembly built. The plugin manager is NOT disposed:
+     * it arrives through `options`, so the caller owns it and outlives any
+     * one region. Disposing it here ran on every region change, and a
+     * plugin whose `disposed` flag is one-way -- sugarlang's conversation
+     * warmer -- never came back for the rest of the session.
+     */
+    dispose() {
       gameplaySession.dispose();
-      await pluginManager?.dispose();
     }
   };
 }

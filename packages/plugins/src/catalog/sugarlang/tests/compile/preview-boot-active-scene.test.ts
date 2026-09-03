@@ -68,8 +68,9 @@ describe("preview boot composes the active Scene overlay", () => {
           scenes: [
             createDefaultScene({
               sceneId: "scene:overlay-test",
-              regionOverlays: {
-                [region.identity.id]: {
+              regionId: region.identity.id,
+              overlay: {
+                  suppressedRegionIds: [],
                   assetAppearanceOverrides: {},
                   folders: [],
                   placedAssets: [],
@@ -79,7 +80,6 @@ describe("preview boot composes the active Scene overlay", () => {
                   ],
                   itemPresences: []
                 }
-              }
             })
           ]
         })
@@ -95,7 +95,7 @@ describe("preview boot composes the active Scene overlay", () => {
 
     expect(payload).not.toBeNull();
     const lexicon = payload!.compiledScenes.find(
-      (scene) => scene.sceneId === region.identity.id
+      (scene) => scene.regionId === region.identity.id
     );
     expect(lexicon).toBeDefined();
 

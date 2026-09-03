@@ -54,11 +54,11 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
       profile: "runtime-preview"
     });
     const store = new DefaultSugarlangSceneLexiconStore(scheduler);
-    const seeded = await scheduler.ensureScene(scene.sceneId);
+    const seeded = await scheduler.ensureScene(scene.regionId);
 
     store.seed([seeded]);
 
-    expect(store.get(scene.sceneId)).toEqual(seeded);
+    expect(store.get(scene.regionId)).toEqual(seeded);
   });
 
   it("lazy-compiles missing entries via ensure()", async () => {
@@ -90,10 +90,10 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
     });
     const store = new DefaultSugarlangSceneLexiconStore(scheduler);
 
-    const lexicon = await store.ensure(scene.sceneId);
+    const lexicon = await store.ensure(scene.regionId);
 
-    expect(lexicon.sceneId).toBe(scene.sceneId);
-    expect(store.get(scene.sceneId)).toEqual(lexicon);
+    expect(lexicon.regionId).toBe(scene.regionId);
+    expect(store.get(scene.regionId)).toEqual(lexicon);
   });
 
   it("fires invalidation listeners", () => {
@@ -106,7 +106,7 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
 
     store.seed([
       {
-        sceneId: "scene-a",
+        regionId: "scene-a",
         contentHash: "hash",
         pipelineVersion: "1",
         atlasVersion: "atlas",

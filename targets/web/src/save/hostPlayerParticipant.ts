@@ -36,6 +36,17 @@ import {
 export interface HostPlayerSlice {
   currentRegionId: string | null;
   playerPosition: { x: number; y: number; z: number } | null;
+  /**
+   * Which way the player was facing, in radians.
+   *
+   * Yaw alone, because the character is upright: the per-frame velocity
+   * heading only ever writes `root.rotation.y`, so pitch and roll would be
+   * two fields that are always zero.
+   *
+   * Optional: a save written before this existed has none, and restores
+   * facing the authored spawn direction, which is what it did then.
+   */
+  playerYaw?: number | null;
 }
 
 export interface HostPlayerParticipantDeps {
@@ -45,6 +56,9 @@ export interface HostPlayerParticipantDeps {
   /** Called at serialize time — returns the current region id
    *  as tracked by the runtime host closure. */
   getCurrentRegionId: () => string | null;
+  /** Called at serialize time — the player's current yaw, or null before
+   *  a player has been spawned. */
+  getPlayerYaw: () => number | null;
   /** Called at deserialize time — hands the restored slice's
    *  data (or null when no slice was stored) back to the host
    *  so it can drive spawn resolution before world/player
@@ -65,7 +79,8 @@ export function createHostPlayerParticipant(
     serialize(): HostPlayerSlice {
       return {
         currentRegionId: deps.getCurrentRegionId(),
-        playerPosition: readPlayerPosition(deps.getWorld())
+        playerPosition: readPlayerPosition(deps.getWorld()),
+        playerYaw: deps.getPlayerYaw()
       };
     },
     deserialize(slice: SaveSlice<HostPlayerSlice> | null): void {

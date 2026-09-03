@@ -30,12 +30,12 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   } as unknown as Response;
 }
 
-const model = (sceneId: string) => ({
-  sceneId,
+const model = (regionId: string) => ({
+  regionId,
   contentHash: "h",
   promptVersion: "v",
   supportLanguage: "en",
-  prose: `about ${sceneId}`,
+  prose: `about ${regionId}`,
   concepts: [{ label: "cheese", provenance: "npc:finnick" }],
   extractedAtMs: 1,
   extractedByModel: "test",
@@ -52,6 +52,23 @@ describe("092.3 — the deployed game reads its shipped scene contexts", () => {
 
     expect(models).toHaveLength(2);
     expect(models[0]!.prose).toBe("about region-1");
+  });
+
+  it("accepts a v1 artifact whose entries carry the old sceneId key", async () => {
+    // Games deployed before the regionId rename shipped entries keyed
+    // `sceneId`. The loader maps them; dropping them would silently empty the
+    // shipped scene-context set for every already-deployed game.
+    const { regionId, ...rest } = model("region-1");
+    const legacy = { ...rest, sceneId: regionId };
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ sceneContextModels: [legacy, model("region-2")] })
+    );
+
+    const models = await loadSceneContextsFromArtifact(sources, fetchImpl);
+
+    expect(models).toHaveLength(2);
+    expect(models[0]!.regionId).toBe("region-1");
+    expect(models[1]!.regionId).toBe("region-2");
   });
 
   it("uses the VERSION-STAMPED url, never a hand-built path", async () => {
@@ -114,12 +131,12 @@ describe("092.3 — the deployed game reads its shipped scene contexts", () => {
         jsonResponse({
           sceneContextModels: [
             model("region-1"),
-            { sceneId: "", concepts: [] },
-            { sceneId: "region-3" }
+            { regionId: "", concepts: [] },
+            { regionId: "region-3" }
           ]
         })
       )
     );
-    expect(models.map((m) => m.sceneId)).toEqual(["region-1"]);
+    expect(models.map((m) => m.regionId)).toEqual(["region-1"]);
   });
 });

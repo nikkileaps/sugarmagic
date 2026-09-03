@@ -40,5 +40,8 @@ export const SUGARLANG_ARTIFACT_ASSET_PATHS: readonly string[] = [
   SUGARLANG_VARIANT_ASSET_PATH
 ];
 
-/** Bumped when an artifact file's shape changes in a way a reader must notice. */
-export const SUGARLANG_ARTIFACT_SCHEMA_VERSION = 1;
+/** Bumped when an artifact file's shape changes in a way a reader must notice.
+ *  v2: scene-context entries carry `regionId`; v1 wrote the same value under
+ *  the old name "sceneId" and is still accepted by the loader, mapped on
+ *  read. */
+export const SUGARLANG_ARTIFACT_SCHEMA_VERSION = 2;

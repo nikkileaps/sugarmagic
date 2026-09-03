@@ -20,49 +20,49 @@ import type { SceneVocabularyModel } from "../types";
 import type { RuntimeCompileScheduler } from "./compile-scheduler";
 
 export interface SugarlangSceneLexiconStore {
-  get: (sceneId: string) => SceneVocabularyModel | undefined;
-  ensure: (sceneId: string) => Promise<SceneVocabularyModel>;
-  onInvalidate: (listener: (sceneId: string) => void) => () => void;
+  get: (regionId: string) => SceneVocabularyModel | undefined;
+  ensure: (regionId: string) => Promise<SceneVocabularyModel>;
+  onInvalidate: (listener: (regionId: string) => void) => () => void;
 }
 
 export class DefaultSugarlangSceneLexiconStore
   implements SugarlangSceneLexiconStore
 {
   private readonly lexicons = new Map<string, SceneVocabularyModel>();
-  private readonly listeners = new Set<(sceneId: string) => void>();
+  private readonly listeners = new Set<(regionId: string) => void>();
 
   constructor(private readonly scheduler: RuntimeCompileScheduler) {}
 
   seed(lexicons: SceneVocabularyModel[]): void {
     for (const lexicon of lexicons) {
-      this.lexicons.set(lexicon.sceneId, lexicon);
+      this.lexicons.set(lexicon.regionId, lexicon);
     }
   }
 
-  invalidate(sceneId: string): void {
-    if (this.lexicons.delete(sceneId)) {
+  invalidate(regionId: string): void {
+    if (this.lexicons.delete(regionId)) {
       for (const listener of this.listeners) {
-        listener(sceneId);
+        listener(regionId);
       }
     }
   }
 
-  get(sceneId: string): SceneVocabularyModel | undefined {
-    return this.lexicons.get(sceneId);
+  get(regionId: string): SceneVocabularyModel | undefined {
+    return this.lexicons.get(regionId);
   }
 
-  async ensure(sceneId: string): Promise<SceneVocabularyModel> {
-    const cached = this.lexicons.get(sceneId);
+  async ensure(regionId: string): Promise<SceneVocabularyModel> {
+    const cached = this.lexicons.get(regionId);
     if (cached) {
       return cached;
     }
 
-    const lexicon = await this.scheduler.ensureScene(sceneId);
-    this.lexicons.set(sceneId, lexicon);
+    const lexicon = await this.scheduler.ensureScene(regionId);
+    this.lexicons.set(regionId, lexicon);
     return lexicon;
   }
 
-  onInvalidate(listener: (sceneId: string) => void): () => void {
+  onInvalidate(listener: (regionId: string) => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);

@@ -51,9 +51,9 @@ export interface WorldFlagWorkspaceViewProps {
 
 /**
  * The navigation target for content holding a reference, where one exists.
- * Quest nodes and behavior tasks are reachable; dialogue nodes, spells,
- * volumes and NPC placements have no navigation target yet, so those
- * references are listed without a jump.
+ * Quest nodes and behavior tasks are reachable; quest start conditions,
+ * dialogue nodes, spells, volumes and NPC placements have no navigation
+ * target yet, so those references are listed without a jump.
  */
 function navigationTargetFor(
   reference: WorldFlagReference

@@ -253,3 +253,60 @@ describe("transform controller hover", () => {
     expect(h.hoverTargets.at(-1)).toBeNull();
   });
 });
+
+/**
+ * Locking (epic #226 story 8). The scene composer draws the region so an
+ * author can see where things sit, and lets them edit only the Scene's
+ * overlay. "Locked" has to hold for picking, hovering AND dragging, or it
+ * is only cosmetic.
+ */
+describe("selection locking", () => {
+  function lockingHarness(locked: string) {
+    const selects: Array<string | null> = [];
+    const hovers: Array<THREE.Object3D | null> = [];
+    const object = new THREE.Object3D();
+    const hitTestService = {
+      testGizmo: () => null,
+      testSelect: () => ({
+        mode: "select" as const,
+        objectName: locked,
+        point: new THREE.Vector3(),
+        distance: 1,
+        object
+      }),
+      testSurface: () => null,
+      setCamera: () => {},
+      setAuthoredRoot: () => {},
+      setOverlayRoot: () => {},
+      setSurfaceRoot: () => {}
+    } as HitTestService;
+
+    const controller = createTransformController({
+      hitTestService,
+      getCamera: () => makeCamera(),
+      getActiveTool: () => "move",
+      onPreview: () => {},
+      onCommit: () => {},
+      onCancel: () => {},
+      onSelect: (id) => selects.push(id),
+      onHoverHandle: () => {},
+      onHoverTarget: (hit) => hovers.push(hit),
+      getSelectedId: () => locked,
+      getTransform: () => ({ ...IDENTITY }),
+      isSelectable: (instanceId) => instanceId !== locked
+    });
+    return { controller, selects, hovers };
+  }
+
+  it("clicking a locked object selects nothing, not the thing behind it", () => {
+    const { controller, selects } = lockingHarness("region:station-wall");
+    controller.onPointerDown!(pointer(0, 0));
+    expect(selects).toEqual([null]);
+  });
+
+  it("a locked object gets no hover cue", () => {
+    const { controller, hovers } = lockingHarness("region:station-wall");
+    controller.onHoverMove!(pointer(0, 0));
+    expect(hovers).toEqual([null]);
+  });
+});

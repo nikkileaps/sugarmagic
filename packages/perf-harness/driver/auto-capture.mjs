@@ -35,6 +35,13 @@ const PORT = Number(args.port ?? 9223);
 const STUDIO = args.studio ?? "http://localhost:5173/";
 const WD = Number(args.wd ?? 60000);
 const KEEP = args.keep === "true";
+// --smoke: boot the game and stop. A green run means Studio loaded, Preview
+// opened, and the host reached a live scene -- the end-to-end boot check
+// there is otherwise no automated coverage for.
+const SMOKE = args.smoke === "true";
+// --fresh: close any open preview first, so the run exercises a real boot
+// rather than reporting on one that already happened.
+const FRESH = args.fresh === "true";
 const PROFILE = join(homedir(), ".sugarmagic-perf-chrome");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
@@ -81,7 +88,38 @@ async function main() {
     log("attaching to Chrome already on :" + PORT);
   }
 
-  const browser = await chromium.connectOverCDP(cdp);
+  // Attaching to a long-lived Chrome sometimes fails with a CDP protocol
+  // error ("Browser context management is not supported") once the browser
+  // has been connected to and dropped a few times. The browser is wedged,
+  // not the run -- so retire it and launch a clean one rather than making
+  // the caller kill it by hand.
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(cdp);
+  } catch (error) {
+    if (launchedByUs) throw error;
+    log("could not attach (" + error.message.split("\n")[0] + "); relaunching Chrome ...");
+    spawn("pkill", ["-f", PROFILE], { stdio: "ignore" });
+    await sleep(2000);
+    const child = spawn(
+      CHROME,
+      [
+        `--remote-debugging-port=${PORT}`,
+        `--user-data-dir=${PROFILE}`,
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--enable-unsafe-webgpu",
+        "--disable-frame-rate-limit",
+        STUDIO
+      ],
+      { detached: true, stdio: "ignore" }
+    );
+    child.unref();
+    launchedByUs = true;
+    for (let i = 0; i < 40 && !(await portUp()); i += 1) await sleep(500);
+    if (!(await portUp())) throw new Error("Chrome debug port never came up");
+    browser = await chromium.connectOverCDP(cdp);
+  }
   const ctx = browser.contexts()[0];
   const findStudio = () => ctx.pages().find((p) => p.url().includes("5173") && !p.url().includes("preview.html"));
   const findPreview = () => ctx.pages().find((p) => p.url().includes("preview.html"));
@@ -92,7 +130,37 @@ async function main() {
     studio = await ctx.newPage();
     await studio.goto(STUDIO, { waitUntil: "domcontentloaded" });
   }
-  await studio.waitForTimeout(1500);
+  // Wait for Studio to have a PROJECT loaded, not just a painted page. The
+  // Preview button renders before the project does, so a fixed sleep here
+  // clicks a button that is present but not yet wired -- the click lands and
+  // nothing happens. Wait for the condition instead of guessing a duration.
+  let studioReady = false;
+  for (let i = 0; i < 60; i += 1) {
+    studioReady = await studio.evaluate(() =>
+      [...document.querySelectorAll("button,[role=button]")].some((b) =>
+        /Preview/.test(b.textContent || "")
+      ) &&
+      [...document.querySelectorAll("button,[role=button]")].some((b) =>
+        /^\uD83D\uDCC1/.test((b.textContent || "").trim())
+      )
+    );
+    if (studioReady) break;
+    await sleep(500);
+  }
+  if (!studioReady) {
+    throw new Error(
+      "Studio never finished loading a project (no project button after 30s)"
+    );
+  }
+
+  if (FRESH) {
+    const open = findPreview();
+    if (open) {
+      log("closing the open preview so this run boots from cold ...");
+      await open.close().catch(() => {});
+      await sleep(1000);
+    }
+  }
 
   // Start Preview if not already running (button reads "Preview" -> "Stop Preview").
   if (!findPreview()) {
@@ -155,6 +223,21 @@ async function main() {
   }
   if (!ready) throw new Error("__smperfRun never appeared (host didn't boot; sign-in may be blocking — set SM_TEST_EMAIL/SM_TEST_PASSWORD)");
   await preview.waitForTimeout(1500); // let it settle
+
+  if (SMOKE) {
+    clearTimeout(watchdog);
+    const bootMs = await preview.evaluate(
+      () => globalThis.__smperfStats?.lastBootMs ?? null
+    );
+    console.log(`\n[capture] BOOT OK — scene is live (lastBootMs: ${bootMs})`);
+    if (launchedByUs && !KEEP) {
+      for (const p of ctx.pages()) await p.close().catch(() => {});
+      await browser.close().catch(() => {});
+    } else {
+      await browser.close().catch(() => {});
+    }
+    return;
+  }
 
   log("running A/B matrix (~20s) ...");
   const res = await preview.evaluate(async () => globalThis.__smperfRun());

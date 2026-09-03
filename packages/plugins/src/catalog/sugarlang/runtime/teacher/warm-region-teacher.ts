@@ -16,7 +16,7 @@
  *
  * ONE CALL FOR THE WHOLE REGION
  *   The situation key is scene + content hash + quest stage + objectives +
- *   time, and `sceneId` IS the region id -- there is no per-area or per-NPC
+ *   time, and `regionId` IS the region id -- there is no per-area or per-NPC
  *   axis in it. The directive store holds ONE entry keyed by that pair of
  *   keys, so warming is one call and one write however many NPCs are standing
  *   there, and `warmRegion` takes no ids at all.

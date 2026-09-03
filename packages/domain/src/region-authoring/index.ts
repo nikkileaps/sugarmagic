@@ -143,16 +143,24 @@ export interface RegionLandscapeState {
   paintPayload: RegionLandscapePaintPayload | null;
 }
 
+/**
+ * A named point in a region: where a door puts the player down and which
+ * way they face, or the exact spot an NPC stands rather than somewhere
+ * inside a box.
+ *
+ * [LAW:one-type-per-behavior] There is no `kind` tag. A marker is a named
+ * place; what it MEANS comes from whoever references it, so tagging one
+ * "arrival" and another "npc-spot" would be a mode with no behaviour
+ * behind it.
+ *
+ * Carries a full transform rather than a bare position because facing is
+ * half the point in both cases -- arriving through a door pointed at a
+ * wall, or standing behind a counter looking away from it.
+ */
 export interface RegionMarker {
   markerId: string;
-  kind: string;
-  position: [number, number, number];
-}
-
-export interface RegionGameplayPlacement {
-  placementId: string;
-  placementKind: "npc" | "trigger" | "pickup" | "inspectable" | "vfx-spawn";
-  definitionId: string;
+  displayName: string;
+  transform: RegionSceneTransform;
 }
 
 export type RegionAudioTrigger =
@@ -317,11 +325,24 @@ export interface RegionVolumeDefinition {
   color: string | null;
 }
 
+/**
+ * Where a task sends the NPC.
+ *
+ * [LAW:types-are-the-program] One field with two shapes rather than an
+ * areaId and a markerId that can both be set and disagree. An area
+ * scatters the NPC to a hash-chosen point inside it, which is right for
+ * "wander the market"; a marker is the one exact spot, which is right for
+ * "stand behind the counter".
+ */
+export type RegionBehaviorTaskTarget =
+  | { kind: "area"; areaId: string }
+  | { kind: "marker"; markerId: string };
+
 export interface RegionNPCBehaviorTask {
   taskId: string;
   displayName: string;
   description: string | null;
-  targetAreaId: string | null;
+  target: RegionBehaviorTaskTarget | null;
   currentActivity: string;
   currentGoal: string;
   activation: RegionBehaviorQuestBinding;
@@ -370,18 +391,17 @@ export interface RegionNPCBehaviorDefinition {
 }
 
 /**
- * Plan 058 §058.1 — the region is the BASE of the Base + Overlay
- * split. Geography (placement, landscape, areas) plus the
- * always-visible placed assets and the folders that group them.
- * Presences (items, NPCs, player) and Scene-scoped decoration
- * live on `Scene.regionOverlays[regionId]` in the GameProject —
- * a region document no longer carries narrative content.
+ * The region document is the world at rest: geography (placement,
+ * landscape, areas), the placed assets and folders that dress it, how its
+ * residents behave (`behaviors`), and — epic #226 — the residents
+ * themselves (`npcPresences`, `itemPresences`, `playerPresence`). A Scene
+ * overlay is a diff against this document; composing a region with no
+ * Scene yields a populated place (ADR 003).
  *
- * The pre-058 `scene` nest ({folders, placedAssets,
- * playerPresence, npcPresences, itemPresences}) is gone from the
- * type; `normalizeRegionDocumentForLoad` + `migrateToScenes`
- * accept the legacy shape on disk and lift it into this shape +
- * the project's default Scene.
+ * The pre-058 `scene` nest ({folders, placedAssets, playerPresence,
+ * npcPresences, itemPresences}) is gone from the type;
+ * `normalizeRegionDocumentForLoad` + `migrateToScenes` accept the legacy
+ * shape on disk and lift its presences into the project's default Scene.
  */
 /**
  * Plan 069.8 — a baked navmesh artifact reference on the region. The binary
@@ -393,18 +413,25 @@ export interface RegionNPCBehaviorDefinition {
  * it on save. Staleness is `inputHash` vs a freshly-derived hash of the
  * collider + nav-volume inputs.
  */
+/**
+ * A baked navmesh and the inputs it was baked from.
+ *
+ * One artifact per COMPOSITION that actually differs. A region's is baked
+ * from its resting state -- no Scene overlay -- and is both the free-roam
+ * mesh and the default every Scene inherits. A Scene that changes what
+ * blocks movement owns one of its own; a Scene that does not owns none,
+ * and absence means "use the region's".
+ *
+ * There is no `sceneId` here. It used to record which Scene the bake
+ * happened to compose, because the artifact was region-global and could
+ * silently belong to the wrong Scene. Nothing ever read it. Now the
+ * region's is baked with no Scene and a Scene's belongs to the Scene that
+ * holds it, so the question the field answered cannot be asked.
+ */
 export interface RegionNavMeshArtifact {
   assetPath: string;
   inputHash: string;
   agentRadius: number;
-  /** DEFERRED SEAM (069.10): the bake composes ONE Scene's overlay (scene
-   *  collider overrides / scene-contained placements), but the artifact is
-   *  region-global — playing a different Scene paths against this Scene's
-   *  obstacle set. Recorded so a future per-Scene bake (or a runtime
-   *  mismatch warning) has the provenance. Null/absent = base-only or
-   *  pre-069.10 bake. Revisit trigger: a Scene meaningfully changes
-   *  collision geometry (adds/removes walls) and NPCs path wrong there. */
-  sceneId?: string | null;
 }
 
 export interface RegionDocument {
@@ -429,10 +456,16 @@ export interface RegionDocument {
    *  migrates areas + ambience zones into it. */
   volumes?: RegionVolumeDefinition[];
   behaviors: RegionNPCBehaviorDefinition[];
+  /** Epic #226 — the region's residents, composed whenever the region is,
+   *  Scene or no Scene. A Scene overlay adds to or suppresses them; it
+   *  never replaces the set. */
+  npcPresences: RegionNPCPresence[];
+  itemPresences: RegionItemPresence[];
+  /** Where the player stands when no Scene supplies a player presence. */
+  playerPresence: RegionPlayerPresence | null;
   landscape: RegionLandscapeState;
   audio?: RegionAudioState;
   markers: RegionMarker[];
-  gameplayPlacements: RegionGameplayPlacement[];
   /** Plan 069.8 — the baked navmesh artifact reference. NOT a player-save
    *  (`GameSavePayload`) slice, but it DOES persist in this region document
    *  (so deploy/reload restore it — see `RegionNavMeshArtifact`). Null/absent
@@ -768,7 +801,9 @@ export function createRegionBehaviorQuestBinding(
 }
 
 export function createRegionNPCBehaviorTask(
-  overrides: Partial<RegionNPCBehaviorTask> = {}
+  /** `targetAreaId` is the pre-marker spelling of `target`; the factory is
+   *  where it is read, so nothing downstream has to know it existed. */
+  overrides: Partial<RegionNPCBehaviorTask> & { targetAreaId?: unknown } = {}
 ): RegionNPCBehaviorTask {
   return {
     taskId: overrides.taskId ?? createRegionNPCBehaviorTaskId(),
@@ -778,11 +813,7 @@ export function createRegionNPCBehaviorTask(
       overrides.description.trim().length > 0
         ? overrides.description
         : null,
-    targetAreaId:
-      typeof overrides.targetAreaId === "string" &&
-      overrides.targetAreaId.trim().length > 0
-        ? overrides.targetAreaId.trim()
-        : null,
+    target: normalizeBehaviorTaskTarget(overrides),
     currentActivity:
       typeof overrides.currentActivity === "string" &&
       overrides.currentActivity.trim().length > 0
@@ -919,6 +950,44 @@ export function createItemPresenceId(): string {
 
 export function createInspectableBehaviorId(): string {
   return createUuid();
+}
+
+/**
+ * A task's destination, reading a pre-marker file's bare `targetAreaId`
+ * as the area shape it always meant.
+ */
+function normalizeBehaviorTaskTarget(
+  source: Partial<RegionNPCBehaviorTask> & { targetAreaId?: unknown }
+): RegionBehaviorTaskTarget | null {
+  const target = source.target;
+  if (target && target.kind === "marker") {
+    return target.markerId.trim().length > 0
+      ? { kind: "marker", markerId: target.markerId.trim() }
+      : null;
+  }
+  if (target && target.kind === "area") {
+    return target.areaId.trim().length > 0
+      ? { kind: "area", areaId: target.areaId.trim() }
+      : null;
+  }
+  const legacyAreaId = source.targetAreaId;
+  return typeof legacyAreaId === "string" && legacyAreaId.trim().length > 0
+    ? { kind: "area", areaId: legacyAreaId.trim() }
+    : null;
+}
+
+export function createRegionMarkerId(): string {
+  return createUuid();
+}
+
+export function createRegionMarker(
+  overrides: Partial<RegionMarker> = {}
+): RegionMarker {
+  return {
+    markerId: overrides.markerId ?? createRegionMarkerId(),
+    displayName: overrides.displayName ?? "Marker",
+    transform: createRegionSceneTransform(overrides.transform)
+  };
 }
 
 export function createRegionSoundEmitterId(): string {
@@ -1074,10 +1143,12 @@ export function createDefaultRegion(options: {
     areas: [],
     volumes: [],
     behaviors: [],
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null,
     landscape: createDefaultRegionLandscapeState(),
     audio: createRegionAudioState(),
     markers: [],
-    gameplayPlacements: [],
     navMesh: null
   };
 }

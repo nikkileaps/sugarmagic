@@ -168,20 +168,20 @@ export function reconcilePaintedMaskDefinitionsForSave(
   }
 
   for (const scene of scenes) {
-    for (const overlay of Object.values(scene.regionOverlays)) {
-      // Scene-contained instances' own overrides...
-      collectPaintedMaskTextureIdsFromInstances(
-        overlay.placedAssets,
-        referencedMaskTextureIds
-      );
-      // ...and per-Scene restyles of base placements (Plan 068.2).
-      for (const record of Object.values(overlay.assetAppearanceOverrides ?? {})) {
-        for (const slotOverride of record.surfaceSlotOverrides ?? []) {
-          collectPaintedMaskTextureIdsFromBinding(
-            slotOverride.surface,
-            referencedMaskTextureIds
-          );
-        }
+    // Scene-contained instances' own overrides...
+    collectPaintedMaskTextureIdsFromInstances(
+      scene.overlay.placedAssets,
+      referencedMaskTextureIds
+    );
+    // ...and per-Scene restyles of region placements (Plan 068.2).
+    for (const record of Object.values(
+      scene.overlay.assetAppearanceOverrides ?? {}
+    )) {
+      for (const slotOverride of record.surfaceSlotOverrides ?? []) {
+        collectPaintedMaskTextureIdsFromBinding(
+          slotOverride.surface,
+          referencedMaskTextureIds
+        );
       }
     }
   }

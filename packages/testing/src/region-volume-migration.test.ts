@@ -56,7 +56,9 @@ function legacyRegion(): RegionDocument {
     landscape: createDefaultRegionLandscapeState({}),
     audio: { emitters: [] },
     markers: [],
-    gameplayPlacements: []
+    npcPresences: [],
+    itemPresences: [],
+    playerPresence: null
     // no `volumes` — a pre-069.4 file
   };
 }

@@ -115,7 +115,7 @@ describe("EnvelopeClassifier", () => {
     });
     const learner = createLearnerProfile("A2");
     const sceneLexicon = {
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-1",
       chunks: [
         {
@@ -150,7 +150,7 @@ describe("EnvelopeClassifier", () => {
     expect(events[0]).toEqual(
       expect.objectContaining({
         kind: "chunk.hit-during-classification",
-        sceneId: "scene-1"
+        regionId: "scene-1"
       })
     );
   });
@@ -159,7 +159,7 @@ describe("EnvelopeClassifier", () => {
     const classifier = new EnvelopeClassifier();
     const learner = createLearnerProfile("A2");
     const sceneLexicon = {
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-shared",
       chunks: [
         {
@@ -250,7 +250,7 @@ describe("EnvelopeClassifier", () => {
     const classifier = new EnvelopeClassifier();
     const learner = createLearnerProfile("A2");
     const sceneLexicon = {
-      sceneId: "scene-1",
+      regionId: "scene-1",
       contentHash: "hash-cache-regression",
       chunks: [
         {

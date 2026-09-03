@@ -31,7 +31,9 @@ import type {
   SceneAssetAppearanceOverride,
   SurfaceBinding
 } from "@sugarmagic/domain";
-import { mergeAppearanceOverrideTiers } from "@sugarmagic/domain";
+import { mergeAppearanceOverrideTiers,
+  sceneOverlayForRegion
+} from "@sugarmagic/domain";
 import { ScopeChip } from "@sugarmagic/ui";
 import { ScopeBadge, type AppearanceProvenance } from "../ScopeBadge";
 import { useSurfaceAuthoring } from "../surfaces";
@@ -84,7 +86,7 @@ export function AssetAppearanceSection({
   const sceneRecord: SceneAssetAppearanceOverride | null = useMemo(() => {
     if (isSceneContained) return null;
     return (
-      activeScene?.regionOverlays[regionId]?.assetAppearanceOverrides[
+      sceneOverlayForRegion(activeScene, regionId)?.assetAppearanceOverrides[
         instance.instanceId
       ] ?? null
     );

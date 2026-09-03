@@ -2,7 +2,7 @@ import type {
   DialogueCondition,
   DialogueDefinition
 } from "../dialogue-definition";
-import { mapScenes } from "../episodes";
+import { getAllQuestDefinitionsInEpisodes, mapScenes } from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestActionDefinition,
@@ -29,6 +29,7 @@ export type WorldFlagReferenceTarget =
       stageId: string;
       nodeId: string;
     }
+  | { kind: "quest-start-condition"; questDefinitionId: string }
   | { kind: "dialogue-node"; dialogueDefinitionId: string; nodeId: string }
   | { kind: "spell"; spellDefinitionId: string }
   | {
@@ -40,7 +41,8 @@ export type WorldFlagReferenceTarget =
   | { kind: "volume"; regionId: string; volumeId: string }
   | {
       kind: "npc-placement";
-      sceneId: string;
+      /** Null when the region owns the placement rather than a Scene. */
+      sceneId: string | null;
       regionId: string;
       presenceId: string;
     };
@@ -151,9 +153,18 @@ export function mapWorldFlagReferences(
     };
   }
 
-  const questDefinitions: QuestDefinition[] = gameProject.questDefinitions.map(
-    (quest) => ({
+  const rewrittenQuests = new Map<string, QuestDefinition>(
+    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
+      quest.definitionId,
+      {
       ...quest,
+      startCondition: questCondition(quest.startCondition, {
+        where: `quest "${quest.displayName}" start condition`,
+        target: {
+          kind: "quest-start-condition" as const,
+          questDefinitionId: quest.definitionId
+        }
+      }),
       stageDefinitions: quest.stageDefinitions.map((stage) => ({
         ...stage,
         nodeDefinitions: stage.nodeDefinitions.map((node) => {
@@ -185,7 +196,8 @@ export function mapWorldFlagReferences(
           };
         })
       }))
-    })
+      }
+    ])
   );
 
   // A dialogue's conditions hang off each node's outgoing edges.
@@ -237,6 +249,26 @@ export function mapWorldFlagReferences(
   // rename follows them and a delete reports them.
   const mappedRegions: RegionDocument[] = regions.map((region) => ({
     ...region,
+    // A resident's spawn condition is a flag reference like any other. It
+    // reaches the walk here rather than through the Scene loop below,
+    // because the region owns it and no Scene needs to exist for it to
+    // matter.
+    npcPresences: region.npcPresences.map((presence) =>
+      presence.condition
+        ? {
+            ...presence,
+            condition: binding(presence.condition, {
+              where: `region "${region.displayName}" NPC placement`,
+              target: {
+                kind: "npc-placement",
+                sceneId: null,
+                regionId: region.identity.id,
+                presenceId: presence.presenceId
+              }
+            })
+          }
+        : presence
+    ),
     behaviors: region.behaviors.map((behavior) => ({
       ...behavior,
       tasks: behavior.tasks.map((task) => ({
@@ -274,43 +306,45 @@ export function mapWorldFlagReferences(
     })
   }));
 
-  // NPC presence conditions are Scene-scoped, not region-scoped: they live on
-  // Scene.regionOverlays, inside the Episode that owns the Scene.
+  // A Scene's own placements carry conditions too; they live on its
+  // overlay, inside the Episode that owns the Scene. The region's
+  // residents are walked above.
   const episodes = mapScenes(gameProject.episodes, (scene) => ({
     ...scene,
-    regionOverlays: Object.fromEntries(
-      Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
-        regionId,
-        {
-          ...overlay,
-          npcPresences: overlay.npcPresences.map((presence) =>
-            presence.condition
-              ? {
-                  ...presence,
-                  condition: binding(presence.condition, {
-                    where: `scene "${scene.displayName}" NPC placement in region "${regionId}"`,
-                    target: {
-                      kind: "npc-placement",
-                      sceneId: scene.sceneId,
-                      regionId,
-                      presenceId: presence.presenceId
-                    }
-                  })
+    overlay: {
+      ...scene.overlay,
+      npcPresences: scene.overlay.npcPresences.map((presence) =>
+        presence.condition
+          ? {
+              ...presence,
+              condition: binding(presence.condition, {
+                where: `scene "${scene.displayName}" NPC placement`,
+                target: {
+                  kind: "npc-placement",
+                  sceneId: scene.sceneId,
+                  regionId: scene.regionId,
+                  presenceId: presence.presenceId
                 }
-              : presence
-          )
-        }
-      ])
-    )
+              })
+            }
+          : presence
+      )
+    }
   }));
 
   return {
     gameProject: {
       ...gameProject,
-      questDefinitions,
       dialogueDefinitions,
       spellDefinitions,
-      episodes
+      // Quests go back into the Scenes that hold them: this walk rewrote
+      // them in place, and there is no flat list to write instead.
+      episodes: mapScenes(episodes, (scene) => ({
+        ...scene,
+        questDefinitions: scene.questDefinitions.map(
+          (quest) => rewrittenQuests.get(quest.definitionId) ?? quest
+        )
+      }))
     },
     regions: mappedRegions
   };

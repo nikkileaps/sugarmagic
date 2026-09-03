@@ -28,7 +28,8 @@ import {
   type RegionDocument,
   type Surface,
   type SurfaceBinding,
-  type AuthoringSession
+  type AuthoringSession,
+  sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import { shallowEqual, type SurfaceBrushSettings } from "@sugarmagic/shell";
 import {
@@ -50,7 +51,10 @@ function findInstance(
   region: RegionDocument,
   instanceId: string
 ): PlacedAssetInstance | null {
-  const overlay = getActiveScene(session)?.regionOverlays[region.identity.id] ?? null;
+  const overlay = sceneOverlayForRegion(
+    getActiveScene(session),
+    region.identity.id
+  );
   return (
     region.placedAssets.find((asset) => asset.instanceId === instanceId) ??
     overlay?.placedAssets.find((asset) => asset.instanceId === instanceId) ??

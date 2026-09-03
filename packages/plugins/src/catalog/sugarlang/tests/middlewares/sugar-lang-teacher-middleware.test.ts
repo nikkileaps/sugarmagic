@@ -222,7 +222,7 @@ describe("SugarLangTeacherMiddleware", () => {
         },
         sceneLexiconStore: {
           ensure: vi.fn().mockResolvedValue({
-            sceneId: "scene-1",
+            regionId: "scene-1",
             contentHash: "hash",
             pipelineVersion: "v1",
             atlasVersion: "v1",
@@ -320,7 +320,7 @@ describe("SugarLangTeacherMiddleware", () => {
         },
         sceneLexiconStore: {
           ensure: vi.fn().mockResolvedValue({
-            sceneId: "scene-1",
+            regionId: "scene-1",
             contentHash: "hash",
             pipelineVersion: "v1",
             atlasVersion: "v1",
@@ -404,7 +404,7 @@ function makeSchedule(
     // filter it out itself, because a competency id is not a search term.
     dueItemIds: ["exponent:que_tal", "comer", "hablar"],
     isColdStart: false,
-    sceneId: "scene-1",
+    regionId: "scene-1",
     conversationId: "conv-1",
     ...overrides
   };
@@ -440,7 +440,7 @@ function makeScheduleServices(invokeTeacher: ReturnType<typeof vi.fn>) {
       },
       sceneLexiconStore: {
         ensure: vi.fn().mockResolvedValue({
-          sceneId: "scene-1",
+          regionId: "scene-1",
           contentHash: "hash",
           pipelineVersion: "v1",
           atlasVersion: "v1",

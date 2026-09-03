@@ -217,7 +217,7 @@ export interface Concept {
  * teach about characters the player cannot see. 090.3 owns the composition.
  */
 export interface SceneContextModel {
-  sceneId: string;
+  regionId: string;
   /** Content hash of the sources this was derived from. */
   contentHash: string;
   /** Prompt version, so a prompt change invalidates deliberately. */

@@ -95,7 +95,7 @@ export interface EnvelopeClassifierCheckOptions {
   /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
   voiceInterjections?: Set<string>;
   lang?: string;
-  sceneLexicon?: Pick<SceneVocabularyModel, "sceneId" | "contentHash" | "chunks"> | null;
+  sceneLexicon?: Pick<SceneVocabularyModel, "regionId" | "contentHash" | "chunks"> | null;
   conversationId?: string;
   turnId?: string;
   sessionId?: string;
@@ -298,7 +298,7 @@ export class EnvelopeClassifier {
     };
 
     if (
-      options.sceneLexicon?.sceneId &&
+      options.sceneLexicon?.regionId &&
       profile.matchedChunkTokens.length > 0 &&
       options.conversationId &&
       options.turnId
@@ -310,7 +310,7 @@ export class EnvelopeClassifier {
           sessionId: options.sessionId,
           turnId: options.turnId,
           timestamp: Date.now(),
-          sceneId: options.sceneLexicon.sceneId,
+          regionId: options.sceneLexicon.regionId,
           matchedChunks: profile.matchedChunkTokens.map((match) => ({
             normalizedForm: match.normalizedForm,
             cefrBand: match.cefrBand,

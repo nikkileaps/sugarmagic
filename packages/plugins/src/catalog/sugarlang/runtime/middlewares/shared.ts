@@ -54,7 +54,7 @@ export interface StoredComprehensionCheck {
   targetLemmas: LemmaRef[];
   probeStyle: "recall" | "recognition" | "production";
   characterVoiceReminder: string;
-  sceneId: string | null;
+  regionId: string | null;
   npcId: string | null;
   npcDisplayName: string | null;
   promptedAtMs: number;
@@ -93,8 +93,8 @@ export const SUGARLANG_PLACEMENT_PHASE_STATE = "sugarlang.placementPhase";
 export const SUGARLANG_TURNS_SINCE_LAST_PROBE_STATE =
   "sugarlang.turnsSinceLastProbe";
 
-export function getSceneId(execution: ConversationExecutionContext): string | null {
-  return execution.runtimeContext?.here?.sceneId ?? null;
+export function getRegionId(execution: ConversationExecutionContext): string | null {
+  return execution.runtimeContext?.here?.regionId ?? null;
 }
 
 export function shouldRunSugarlangForExecution(
@@ -355,7 +355,7 @@ export function createObservationEvent(options: {
   context: {
     sessionId: string;
     turnId: string;
-    sceneId: string;
+    regionId: string;
     lang: string;
     conversationId: string;
   };
@@ -372,7 +372,7 @@ export function createObservationEvent(options: {
     context: {
       sessionId: getSugarAgentSessionId(options.execution),
       turnId,
-      sceneId: getSceneId(options.execution) ?? "unknown-scene",
+      regionId: getRegionId(options.execution) ?? "unknown-scene",
       lang: options.lemma.lang,
       conversationId:
         options.execution.selection.npcDefinitionId ??

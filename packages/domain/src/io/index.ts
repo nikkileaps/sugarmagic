@@ -273,8 +273,13 @@ export function normalizeRegionDocumentForLoad(
     : migrateRegionVolumesFromLegacy(normalizedAreas);
   const derivedAreas = deriveRegionAreasFromVolumes(regionVolumes);
 
+  // Pre-#226 files carry a reader-less `gameplayPlacements` field; stripped
+  // here so a save stops persisting it.
+  const { gameplayPlacements: _legacyGameplayPlacements, ...regionRest } =
+    region as RegionDocument & { gameplayPlacements?: unknown };
+
   return {
-    ...region,
+    ...regionRest,
     lorePageId:
       typeof region.lorePageId === "string" &&
       region.lorePageId.trim().length > 0
@@ -290,6 +295,18 @@ export function normalizeRegionDocumentForLoad(
       })
     ),
     folders: [...baseFolders],
+    // Epic #226 — the region's residents. Absent in files predating the
+    // fields; empty lists mean exactly the pre-#226 world until composition
+    // reads them.
+    npcPresences: (region.npcPresences ?? []).map((presence) =>
+      createRegionNPCPresence(presence)
+    ),
+    itemPresences: (region.itemPresences ?? []).map((presence) =>
+      createRegionItemPresence(presence)
+    ),
+    playerPresence: region.playerPresence
+      ? createRegionPlayerPresence(region.playerPresence)
+      : null,
     environmentBinding: {
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ??
@@ -329,11 +346,8 @@ export function normalizeRegionDocumentForLoad(
               task.currentGoal.trim().length > 0
                 ? task.currentGoal.trim()
                 : undefined,
-            targetAreaId:
-              typeof task.targetAreaId === "string" &&
-              task.targetAreaId.trim().length > 0
-                ? task.targetAreaId.trim()
-                : null
+            // `...task` above carries a pre-marker file's bare
+            // `targetAreaId` through to the factory, which reads it.
           })
         )
       })
@@ -390,9 +404,10 @@ export function normalizeScenesForLoad(
   contentLibrary: ContentLibrarySnapshot
 ): Scene[] {
   return scenes.map((scene) => {
-    const regionOverlays: Record<string, RegionSceneOverlay> = {};
-    for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
-      regionOverlays[regionId] = {
+    const overlay = scene.overlay;
+    return {
+      ...scene,
+      overlay: {
         itemPresences: overlay.itemPresences.map((presence) =>
           createRegionItemPresence({
             ...presence,
@@ -418,9 +433,10 @@ export function normalizeScenesForLoad(
           })
         ),
         folders: [...overlay.folders],
+        // Absent in files predating epic #226: nothing suppressed.
+        suppressedRegionIds: [...(overlay.suppressedRegionIds ?? [])],
         assetAppearanceOverrides: overlay.assetAppearanceOverrides ?? {}
-      };
-    }
-    return { ...scene, regionOverlays };
+      }
+    };
   });
 }
