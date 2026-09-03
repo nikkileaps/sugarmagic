@@ -35,6 +35,7 @@ import {
   type PlacedAssetInstance,
   type PlacedAssetSurfaceSlotOverride,
   type RegionItemPresence,
+  type RegionNavMeshArtifact,
   type RegionNPCPresence,
   type RegionPlayerPresence,
   type RegionSceneFolder
@@ -267,6 +268,19 @@ export interface Scene {
   questDefinitions: QuestDefinition[];
   environmentOverride: SceneEnvironmentOverride | null;
   audioOverride: SceneAudioOverride | null;
+  /**
+   * This Scene's own baked navmesh, when its overlay changes what blocks
+   * movement -- suppressing a wall, adding a crate.
+   *
+   * Null means "I do not change collision, use the region's". Absence is
+   * inherit, and it is the common case: most Scenes dress a region without
+   * touching what an NPC can walk through.
+   *
+   * REPLACES the region's at runtime rather than adding to it. A navmesh is
+   * one connected mesh; two overlaid meshes have no coherent polygon
+   * adjacency, so there is nothing sensible to merge.
+   */
+  navMesh: RegionNavMeshArtifact | null;
   transitionConfig: TransitionConfig | null;
 }
 
@@ -316,6 +330,7 @@ export function createDefaultScene(
       : createRegionSceneOverlay(),
     environmentOverride: overrides.environmentOverride ?? null,
     audioOverride: overrides.audioOverride ?? null,
+    navMesh: overrides.navMesh ?? null,
     transitionConfig: overrides.transitionConfig ?? null
   };
 }
@@ -356,6 +371,24 @@ function normalizeAudioOverride(input: unknown): SceneAudioOverride | null {
  * one normalizer, not a copy in each module. `episodes/` imports
  * it from here.
  */
+/** A stored artifact reference, or null. Anything missing a path is not a
+ *  usable reference, so it reads as absent rather than as a broken one. */
+function normalizeNavMeshArtifact(
+  record: unknown
+): RegionNavMeshArtifact | null {
+  if (!record || typeof record !== "object") return null;
+  const candidate = record as Partial<RegionNavMeshArtifact>;
+  if (typeof candidate.assetPath !== "string" || !candidate.assetPath) {
+    return null;
+  }
+  return {
+    assetPath: candidate.assetPath,
+    inputHash: typeof candidate.inputHash === "string" ? candidate.inputHash : "",
+    agentRadius:
+      typeof candidate.agentRadius === "number" ? candidate.agentRadius : 0
+  };
+}
+
 export function normalizeTransitionConfig(
   input: unknown
 ): TransitionConfig | null {
@@ -588,6 +621,9 @@ export function normalizeScene(input: unknown): Scene | null {
       record.environmentOverride
     ),
     audioOverride: normalizeAudioOverride(record.audioOverride),
+    // A file written before Scenes could own one has none, which reads as
+    // "inherit the region's" -- what it did then.
+    navMesh: normalizeNavMeshArtifact(record.navMesh),
     transitionConfig: normalizeTransitionConfig(record.transitionConfig)
   };
 }

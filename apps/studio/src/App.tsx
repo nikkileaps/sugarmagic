@@ -142,6 +142,7 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
+  type Scene,
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -2662,11 +2663,14 @@ export function App() {
     []
   );
 
-  // Bake the region navmesh from the collision geometry inside nav-bounds
-  // volumes, write the artifact and publish the in-memory blob to the
-  // asset-source store -- never read-after-write, because FSAccess
-  // intermittently returns null right after one -- then record the
-  // reference and its input hash (for staleness) on the region.
+  // Bake the navmeshes this region needs: its own, plus one for each Scene
+  // whose composition actually changes what blocks movement.
+  //
+  // [LAW:one-source-of-truth] A navmesh is DERIVED from a composition, so
+  // there is one artifact per composition that differs -- decided by the
+  // input hash, not by an author remembering which Scene they had open.
+  // Baking whatever Scene happened to be selected is what made a region's
+  // single artifact silently belong to the wrong Scene.
   const handleBakeNavMesh = useCallback(async () => {
     const { session, handle } = projectStore.getState();
     if (!session || !handle) {
@@ -2676,31 +2680,52 @@ export function App() {
     if (!region) {
       return;
     }
-    const input = buildRegionNavMeshInput({
+
+    const shared = {
       region,
       contentLibrary: session.contentLibrary,
       playerDefinition: getPlayerDefinition(session),
       itemDefinitions: getAllItemDefinitions(session),
-      npcDefinitions: getAllNPCDefinitions(session),
-      activeScene: getActiveScene(session)
-    });
-    const bytes = await bakeNavMesh(input);
-    if (!bytes) {
+      npcDefinitions: getAllNPCDefinitions(session)
+    };
+
+    /** Bake one composition and write its artifact, or null if there is
+     *  nothing walkable to bake. */
+    const bakeComposition = async (
+      activeScene: Scene | null,
+      assetPath: string
+    ) => {
+      const input = buildRegionNavMeshInput({ ...shared, activeScene });
+      const bytes = await bakeNavMesh(input);
+      if (!bytes) return null;
+      const blob = new Blob([new Uint8Array(bytes)], {
+        type: "application/octet-stream"
+      });
+      await writeBlobFile(handle, assetPath.split("/"), blob);
+      // Publish the in-memory blob so the runtime resolves it without a
+      // read-after-write (the known FSAccess flake).
+      assetSourceStore.getState().setSource(assetPath, blob);
+      return {
+        assetPath,
+        inputHash: computeNavMeshInputHash(input),
+        agentRadius: input.agentRadius
+      };
+    };
+
+    // The region first: baked with NO Scene, so it is the free-roam mesh
+    // and the default every Scene inherits.
+    // Under assets/ so the deploy workflow ships it (it copies only assets/)
+    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
+    const regionArtifact = await bakeComposition(
+      null,
+      `assets/navmesh/${region.identity.id}.navmesh.bin`
+    );
+    if (!regionArtifact) {
       window.alert(
         "Draw a nav-bounds volume over the walkable ground first, then bake."
       );
       return;
     }
-    // Under assets/ so the deploy workflow ships it (it copies only assets/)
-    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
-    const assetPath = `assets/navmesh/${region.identity.id}.navmesh.bin`;
-    const blob = new Blob([new Uint8Array(bytes)], {
-      type: "application/octet-stream"
-    });
-    await writeBlobFile(handle, assetPath.split("/"), blob);
-    // Publish the in-memory blob so the runtime resolves it without a
-    // read-after-write (the known FSAccess flake).
-    assetSourceStore.getState().setSource(assetPath, blob);
     dispatchCommand({
       kind: "SetRegionNavMesh",
       target: {
@@ -2711,16 +2736,38 @@ export function App() {
         subjectKind: "region-document",
         subjectId: region.identity.id
       },
-      payload: {
-        navMesh: {
-          assetPath,
-          inputHash: computeNavMeshInputHash(input),
-          agentRadius: input.agentRadius,
-          // Scene provenance — the bake composed THIS Scene's overlay.
-          sceneId: getActiveScene(session)?.sceneId ?? null
-        }
-      }
+      payload: { navMesh: regionArtifact }
     });
+
+    // Then every Scene that happens here. A Scene whose composed input
+    // hashes the same as the region's changes nothing about collision, so
+    // it owns no artifact and inherits -- and any it owned before is
+    // cleared, or it would keep pathing against a composition that no
+    // longer differs.
+    for (const scene of getAllScenes(session.gameProject.episodes)) {
+      if (scene.regionId !== region.identity.id) continue;
+      const sceneInput = buildRegionNavMeshInput({
+        ...shared,
+        activeScene: scene
+      });
+      const differs =
+        computeNavMeshInputHash(sceneInput) !== regionArtifact.inputHash;
+      const artifact = differs
+        ? await bakeComposition(
+            scene,
+            `assets/navmesh/${region.identity.id}.${scene.sceneId}.navmesh.bin`
+          )
+        : null;
+      dispatchCommand({
+        kind: "SetSceneNavMesh",
+        target: {
+          aggregateKind: "game-project",
+          aggregateId: session.gameProject.identity.id
+        },
+        subject: { subjectKind: "scene", subjectId: scene.sceneId },
+        payload: { sceneId: scene.sceneId, navMesh: artifact }
+      });
+    }
   }, []);
 
   // Idempotent paint-UV ensure: generate only when the asset

@@ -19,16 +19,19 @@ import {
 
 const BOOT = { hostKind: "web" } as never;
 
+/** A plugin that only records which lifecycle calls it received. */
 function recordingPlugin(pluginId: string, log: string[]): RuntimePluginInstance {
   return {
     pluginId,
+    displayName: pluginId,
+    contributions: [],
     init: () => {
       log.push(`${pluginId}:init`);
     },
     onRegionChanged: () => {
       log.push(`${pluginId}:rebind`);
     }
-  } as RuntimePluginInstance;
+  };
 }
 
 describe("telling plugins the region changed", () => {
@@ -72,10 +75,12 @@ describe("telling plugins the region changed", () => {
       plugins: [
         {
           pluginId: "thrower",
+          displayName: "thrower",
+          contributions: [],
           onRegionChanged: () => {
             throw new Error("nope");
           }
-        } as RuntimePluginInstance,
+        },
         recordingPlugin("b", log)
       ]
     });
@@ -88,7 +93,9 @@ describe("telling plugins the region changed", () => {
   it("ignores a plugin that does not care", async () => {
     const manager = createRuntimePluginManager({
       boot: BOOT,
-      plugins: [{ pluginId: "quiet" } as RuntimePluginInstance]
+      plugins: [
+        { pluginId: "quiet", displayName: "quiet", contributions: [] }
+      ]
     });
 
     await expect(manager.notifyRegionChanged({} as never)).resolves.toBeUndefined();

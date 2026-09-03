@@ -2665,6 +2665,33 @@ export function applyCommand(
     };
   }
 
+  if (command.kind === "SetSceneNavMesh") {
+    const { sceneId, navMesh } = command.payload;
+    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    if (!scene) return session;
+    // A bake that produced the same artifact is not an edit, so it does not
+    // push an undo step or dirty the project.
+    if (
+      scene.navMesh?.assetPath === navMesh?.assetPath &&
+      scene.navMesh?.inputHash === navMesh?.inputHash
+    ) {
+      return session;
+    }
+    const transaction = createTransactionForCommand(command, [sceneId]);
+    return {
+      ...withEpisodes(
+        session,
+        mapScenes(session.gameProject.episodes, (entry) =>
+          entry.sceneId === sceneId ? { ...entry, navMesh } : entry
+        )
+      ),
+      undoStack: [...session.undoStack, checkpointSession(session)],
+      redoStack: [],
+      history: pushTransaction(session.history, transaction),
+      isDirty: true
+    };
+  }
+
   if (command.kind === "MoveQuestToScene") {
     const moved = moveQuestToSceneInSession(
       session,

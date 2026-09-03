@@ -2425,8 +2425,13 @@ export function createWebRuntimeHost(
         collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
         // Plan 069.9 — resolve the navmesh artifact blob (published to the
         // asset-source store at bake) and load a pathfinder off the main path.
-        const navMeshUrl = region.navMesh
-          ? state.assetSources[region.navMesh.assetPath]
+        // The Scene's mesh REPLACES the region's rather than adding to it:
+        // a navmesh is one connected mesh, and two overlaid meshes have no
+        // coherent polygon adjacency. A Scene with none did not change what
+        // blocks movement, so it inherits.
+        const navMeshArtifact = activeScene?.navMesh ?? region.navMesh;
+        const navMeshUrl = navMeshArtifact
+          ? state.assetSources[navMeshArtifact.assetPath]
           : undefined;
         if (navMeshUrl) {
           void (async () => {

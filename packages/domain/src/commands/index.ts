@@ -197,6 +197,16 @@ export type SetRegionNavMeshCommand = SemanticCommandBase<
   }
 >;
 
+/** Set (or clear) a Scene's own baked navmesh. `null` means the Scene does
+ *  not change collision and inherits the region's. */
+export type SetSceneNavMeshCommand = SemanticCommandBase<
+  "SetSceneNavMesh",
+  {
+    sceneId: string;
+    navMesh: import("../region-authoring").RegionNavMeshArtifact | null;
+  }
+>;
+
 export type CreateRegionAreaCommand = SemanticCommandBase<
   "CreateRegionArea",
   {
@@ -1166,6 +1176,7 @@ export type SemanticCommand =
   | DeleteSceneFolderCommand
   | UpdateRegionMetadataCommand
   | SetRegionNavMeshCommand
+  | SetSceneNavMeshCommand
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand

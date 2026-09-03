@@ -413,18 +413,25 @@ export interface RegionNPCBehaviorDefinition {
  * it on save. Staleness is `inputHash` vs a freshly-derived hash of the
  * collider + nav-volume inputs.
  */
+/**
+ * A baked navmesh and the inputs it was baked from.
+ *
+ * One artifact per COMPOSITION that actually differs. A region's is baked
+ * from its resting state -- no Scene overlay -- and is both the free-roam
+ * mesh and the default every Scene inherits. A Scene that changes what
+ * blocks movement owns one of its own; a Scene that does not owns none,
+ * and absence means "use the region's".
+ *
+ * There is no `sceneId` here. It used to record which Scene the bake
+ * happened to compose, because the artifact was region-global and could
+ * silently belong to the wrong Scene. Nothing ever read it. Now the
+ * region's is baked with no Scene and a Scene's belongs to the Scene that
+ * holds it, so the question the field answered cannot be asked.
+ */
 export interface RegionNavMeshArtifact {
   assetPath: string;
   inputHash: string;
   agentRadius: number;
-  /** DEFERRED SEAM (069.10): the bake composes ONE Scene's overlay (scene
-   *  collider overrides / scene-contained placements), but the artifact is
-   *  region-global — playing a different Scene paths against this Scene's
-   *  obstacle set. Recorded so a future per-Scene bake (or a runtime
-   *  mismatch warning) has the provenance. Null/absent = base-only or
-   *  pre-069.10 bake. Revisit trigger: a Scene meaningfully changes
-   *  collision geometry (adds/removes walls) and NPCs path wrong there. */
-  sceneId?: string | null;
 }
 
 export interface RegionDocument {

@@ -31,6 +31,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   collectFileBackedAssetPaths,
+  getAllScenes,
   normalizeCreditsDefinition,
   getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
@@ -124,6 +125,9 @@ function resolveAssetSources(
       itemDefinitions: gameProject.itemDefinitions,
       documentDefinitions: gameProject.documentDefinitions,
       regions: snapshot.regions,
+      // A Scene that changes what blocks movement bakes its own navmesh.
+      // Without this the bundle ships the pointer and not the file.
+      scenes: getAllScenes(gameProject.episodes),
       // Plan 092.2 — a plugin's derived artifacts ship with the game.
       // Disabled plugins are skipped inside the collector, so turning
       // one off deploys a game without its files rather than a game
