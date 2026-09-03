@@ -5,12 +5,22 @@ export interface ProjectManagerDialogProps {
   opened: boolean;
   onOpen: () => void;
   onCreate: (input: { gameName: string; slug: string }) => void;
+  /**
+   * The last project opened, when the browser wants a click before handing
+   * access back. Null when there is nothing to reopen, or when access was
+   * already granted -- in that case it reopens on its own and this dialog
+   * never appears.
+   */
+  reopenProjectName?: string | null;
+  onReopen?: () => void;
 }
 
 export function ProjectManagerDialog({
   opened,
   onOpen,
-  onCreate
+  onCreate,
+  reopenProjectName = null,
+  onReopen
 }: ProjectManagerDialogProps) {
   const [step, setStep] = useState<"choose" | "create">("choose");
   const [gameName, setGameName] = useState("");
@@ -63,6 +73,17 @@ export function ProjectManagerDialog({
               Create a new game root or open an existing game to get started.
             </Text>
           </Stack>
+          {reopenProjectName && onReopen ? (
+            <Button
+              variant="filled"
+              size="md"
+              mt="md"
+              leftSection="↩"
+              onClick={onReopen}
+            >
+              Reopen {reopenProjectName}
+            </Button>
+          ) : null}
           <Group gap="md" mt="md" wrap="nowrap">
             <Button
               variant="filled"

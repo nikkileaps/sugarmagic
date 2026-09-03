@@ -156,6 +156,12 @@ import {
   checkDirectoryHasProject,
   createProjectInDirectory,
   openProject,
+  loadProjectFromHandle,
+  rememberLastOpenedProject,
+  recallLastOpenedProject,
+  forgetLastOpenedProject,
+  requestProjectDirectoryAccess,
+  type ActiveProject,
   pickDirectory,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
@@ -415,25 +421,34 @@ function activateDefaultEnvironment(environmentId: string | null | undefined) {
   shellStore.getState().setActiveEnvironmentId(environmentId ?? null);
 }
 
+/** Everything that has to happen once a project's files are loaded. Shared
+ *  by opening from the picker and reopening the remembered directory, so
+ *  the two cannot drift. */
+function activateLoadedProject(active: ActiveProject) {
+  const session = createAuthoringSession(
+    active.gameProject,
+    active.regions,
+    active.contentLibrary
+  );
+  // Drop the previous project's live painted-mask pixels on switch --
+  // the registry is module-scope in render-web, so stale masks would
+  // otherwise bleed into scatter sampling (068.13 mini-review).
+  clearLivePaintedMasks();
+  projectStore.getState().setActive(active.handle, active.descriptor, session);
+  activateRegion(active.regions[0]);
+  activateDefaultEnvironment(
+    session.contentLibrary.environmentDefinitions[0]?.definitionId
+  );
+  // The handle itself is already stored by `loadProjectFromHandle`; this
+  // only records WHICH of the stored ones was last open.
+  rememberLastOpenedProject(active.gameProject.identity.id);
+  return session;
+}
+
 async function handleOpenProject() {
   try {
     const active = await openProject();
-    const session = createAuthoringSession(
-      active.gameProject,
-      active.regions,
-      active.contentLibrary
-    );
-    // Drop the previous project's live painted-mask pixels on switch --
-    // the registry is module-scope in render-web, so stale masks would
-    // otherwise bleed into scatter sampling (068.13 mini-review).
-    clearLivePaintedMasks();
-    projectStore
-      .getState()
-      .setActive(active.handle, active.descriptor, session);
-    activateRegion(active.regions[0]);
-    activateDefaultEnvironment(
-      session.contentLibrary.environmentDefinitions[0]?.definitionId
-    );
+    activateLoadedProject(active);
     void seedAnimationLibraryIfNeeded(
       active.handle,
       active.descriptor,
@@ -441,6 +456,37 @@ async function handleOpenProject() {
     );
   } catch (e) {
     handleProjectError(e);
+  }
+}
+
+/**
+ * Open the directory Studio last had open, without a file picker.
+ *
+ * Returns false when there is nothing to reopen or the browser refused,
+ * which is when the welcome dialog earns its place.
+ */
+async function reopenRememberedProject(
+  handle: FileSystemDirectoryHandle
+): Promise<boolean> {
+  try {
+    const active = await loadProjectFromHandle(handle);
+    activateLoadedProject(active);
+    void seedAnimationLibraryIfNeeded(
+      active.handle,
+      active.descriptor,
+      active.gameProject.identity.id
+    );
+    return true;
+  } catch (error) {
+    // The folder moved, was renamed, or stopped being a game root. Forget
+    // it rather than offering a button that fails the same way every time,
+    // and say so -- a silently-empty welcome screen looks like a bug.
+    console.warn(
+      "[studio] could not reopen the last project; it has been forgotten.",
+      error
+    );
+    forgetLastOpenedProject();
+    return false;
   }
 }
 
@@ -1136,6 +1182,35 @@ export function App() {
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
   const previewWindow = useStore(previewStore, (s) => s.previewWindow);
+
+  // The project Studio last had open. When the browser still grants access
+  // it reopens on its own and the author never sees the welcome dialog --
+  // which is the common case after a reload. When the browser wants a
+  // gesture first, the dialog offers a one-click way back in.
+  const [reopenable, setReopenable] = useState<{
+    handle: FileSystemDirectoryHandle;
+    name: string;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const remembered = await recallLastOpenedProject();
+      if (cancelled || !remembered) return;
+      if (remembered.access === "granted") {
+        await reopenRememberedProject(remembered.handle);
+        return;
+      }
+      setReopenable({
+        handle: remembered.handle,
+        name: remembered.handle.name
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Boot only: reopening on every render would fight the author's own
+    // File > Open.
+  }, []);
 
   // Studio itself needs the open project's id, because some
   // author-facing panels read the PLAYER's storage directly (the SugarProfile
@@ -3808,6 +3883,20 @@ export function App() {
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
         onCreate={handleCreateProject}
+        reopenProjectName={reopenable?.name ?? null}
+        onReopen={() => {
+          void (async () => {
+            if (!reopenable) return;
+            // requestPermission only prompts inside a user gesture, which
+            // this click is.
+            const allowed = await requestProjectDirectoryAccess(
+              reopenable.handle
+            );
+            if (!allowed) return;
+            const opened = await reopenRememberedProject(reopenable.handle);
+            if (!opened) setReopenable(null);
+          })();
+        }}
       />
       <CreateRegionDialog
         opened={createRegionOpen}

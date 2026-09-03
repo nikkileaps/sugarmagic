@@ -1,10 +1,12 @@
 /**
  * File System Access API adapter for canonical game-root IO.
  *
- * Browser-first: uses showDirectoryPicker for project open/create,
- * FileSystemDirectoryHandle for read/write, and IndexedDB for
- * persisting handles across sessions.
+ * Browser-first: uses showDirectoryPicker for project open/create and
+ * FileSystemDirectoryHandle for read/write. Which directory was last
+ * open is remembered in IndexedDB -- see ./remembered-project.
  */
+
+export * from "./remembered-project";
 
 export interface FsAccessHandle {
   directoryHandle: FileSystemDirectoryHandle;

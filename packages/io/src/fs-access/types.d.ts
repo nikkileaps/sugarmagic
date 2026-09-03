@@ -14,9 +14,23 @@ interface OpenFilePickerOptions {
   types?: FilePickerAcceptType[];
 }
 
+type FileSystemPermissionState = "granted" | "denied" | "prompt";
+
+interface FileSystemHandlePermissionDescriptor {
+  mode?: "read" | "readwrite";
+}
+
 interface FileSystemDirectoryHandle {
   readonly kind: "directory";
   readonly name: string;
+  /** Neither call needs a user gesture to ASK; only `requestPermission`
+   *  needs one to PROMPT. */
+  queryPermission(
+    descriptor?: FileSystemHandlePermissionDescriptor
+  ): Promise<FileSystemPermissionState>;
+  requestPermission(
+    descriptor?: FileSystemHandlePermissionDescriptor
+  ): Promise<FileSystemPermissionState>;
   getDirectoryHandle(
     name: string,
     options?: { create?: boolean }
