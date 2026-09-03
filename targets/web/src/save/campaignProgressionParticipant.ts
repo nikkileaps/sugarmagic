@@ -29,8 +29,6 @@ export interface CampaignProgressionSlice {
   currentSceneId: string | null;
   /** Manual unlocks only — see header. */
   unlockedEpisodeIds: string[];
-  completedSceneIds: string[];
-  completedEpisodeIds: string[];
 }
 
 export interface CampaignProgressionDeps {
@@ -38,8 +36,6 @@ export interface CampaignProgressionDeps {
   getCurrentEpisodeId: () => string | null;
   getCurrentSceneId: () => string | null;
   getManuallyUnlockedEpisodeIds: () => readonly string[];
-  getCompletedSceneIds: () => readonly string[];
-  getCompletedEpisodeIds: () => readonly string[];
   /** Deserialize-time handoff to the host, Phase 1 (pre-spawn). */
   applyRestoredSlice: (data: CampaignProgressionSlice | null) => void;
 }
@@ -71,9 +67,7 @@ export function createCampaignProgressionParticipant(
       return {
         currentEpisodeId: deps.getCurrentEpisodeId(),
         currentSceneId: deps.getCurrentSceneId(),
-        unlockedEpisodeIds: [...deps.getManuallyUnlockedEpisodeIds()],
-        completedSceneIds: [...deps.getCompletedSceneIds()],
-        completedEpisodeIds: [...deps.getCompletedEpisodeIds()]
+        unlockedEpisodeIds: [...deps.getManuallyUnlockedEpisodeIds()]
       };
     },
     deserialize(slice: SaveSlice<CampaignProgressionSlice> | null): void {

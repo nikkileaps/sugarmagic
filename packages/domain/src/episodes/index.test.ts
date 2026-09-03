@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from "vitest";
 import { createDefaultScene } from "../scenes";
+import { createDefaultQuestDefinition } from "../quest-definition";
 import {
   DEFAULT_EPISODE_ID,
   createDefaultEpisode,
@@ -271,14 +272,70 @@ describe("resolveActiveEpisode", () => {
     ).toBe("e:2");
   });
 
-  it("boots the first Episode outright when every gate is shut", () => {
+  it("reports nothing active when every gate is shut", () => {
+    // Was: boot the first Episode anyway. That put the player inside
+    // content they had not unlocked, to avoid a black screen. Nothing
+    // open is a real position on the story timeline -- above the Episode
+    // tier, where the world is the region at rest -- so it is answered
+    // rather than papered over.
     expect(
       resolveActiveEpisode({
         episodes,
         unlockedEpisodeIds: new Set(),
         requestedEpisodeId: null
+      })
+    ).toBeNull();
+  });
+
+  it("reports nothing active when every unlocked Episode is finished", () => {
+    // The case story 14 exists for: the player finished what was open and
+    // the next gate has not released, so Continue leads to free roam
+    // instead of a screen with nothing to press.
+    expect(
+      resolveActiveEpisode({
+        episodes,
+        unlockedEpisodeIds: new Set(episodes.map((e) => e.episodeId)),
+        requestedEpisodeId: null,
+        isQuestCompleted: () => true
+      })
+    ).toBeNull();
+  });
+
+  it("stays in an Episode whose quests are unfinished", () => {
+    // The fixture above holds quest-less Scenes, which are complete
+    // vacuously -- so demonstrating "unfinished" needs a Scene with
+    // something in it to leave undone.
+    const withQuest = [
+      createDefaultEpisode({
+        episodeId: "e:work",
+        scenes: [
+          {
+            ...createDefaultScene({ sceneId: "s:work" }),
+            questDefinitions: [
+              createDefaultQuestDefinition({ definitionId: "q:open" })
+            ]
+          }
+        ]
+      })
+    ];
+
+    expect(
+      resolveActiveEpisode({
+        episodes: withQuest,
+        unlockedEpisodeIds: new Set(["e:work"]),
+        requestedEpisodeId: null,
+        isQuestCompleted: () => false
       })?.episodeId
-    ).toBe("e:1");
+    ).toBe("e:work");
+
+    expect(
+      resolveActiveEpisode({
+        episodes: withQuest,
+        unlockedEpisodeIds: new Set(["e:work"]),
+        requestedEpisodeId: null,
+        isQuestCompleted: (id) => id === "q:open"
+      })
+    ).toBeNull();
   });
 
   it("skips an Episode with no Scenes -- it cannot be entered", () => {

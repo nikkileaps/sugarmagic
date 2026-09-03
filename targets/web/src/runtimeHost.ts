@@ -63,6 +63,7 @@ import {
   normalizeEpisodes,
   resolveRegionVolumes,
   resolveActiveEpisode,
+  isEpisodeComplete,
   resolveActiveScene,
   resolveUnlockedEpisodeIds,
   type CreditsDefinition,
@@ -1181,8 +1182,6 @@ export function createWebRuntimeHost(
     const isEpisodeBoundary =
       !target || targetEpisode?.episodeId !== currentEpisode?.episodeId;
 
-    hostMarkSceneCompleted(activeSceneIdForSave);
-    if (isEpisodeBoundary) hostMarkEpisodeCompleted(activeEpisodeIdForSave);
     if (target && targetEpisode) {
       // Manual unlock so the advance survives gate re-evaluation
       // on every future boot.
@@ -1235,26 +1234,6 @@ export function createWebRuntimeHost(
       if (first) return first;
     }
     return null;
-  }
-
-  /**
-   * Plan 059 §059.3 — the single Scene-completion hook. When the
-   * sandbox replay mode lands (Plan 059 central tension), the
-   * per-Scene end-state snapshot capture inserts HERE — one
-   * place, not scattered across advance paths.
-   */
-  function hostMarkSceneCompleted(sceneId: string | null): void {
-    if (!sceneId) return;
-    if (!completedSceneIds.includes(sceneId)) {
-      completedSceneIds.push(sceneId);
-    }
-  }
-
-  function hostMarkEpisodeCompleted(episodeId: string | null): void {
-    if (!episodeId) return;
-    if (!completedEpisodeIds.includes(episodeId)) {
-      completedEpisodeIds.push(episodeId);
-    }
   }
 
   /**
@@ -1453,8 +1432,6 @@ export function createWebRuntimeHost(
   let activeSceneIdForSave: string | null = null;
   let activeEpisodeIdForSave: string | null = null;
   let manuallyUnlockedEpisodeIds: string[] = [];
-  let completedSceneIds: string[] = [];
-  let completedEpisodeIds: string[] = [];
   let campaignRestore: CampaignProgressionSlice | null = null;
   /** The campaign from the last start() — the advance action
    *  resolves "the next Scene, then the next Episode" against it. */
@@ -1484,8 +1461,6 @@ export function createWebRuntimeHost(
       getCurrentEpisodeId: () => activeEpisodeIdForSave,
       getCurrentSceneId: () => activeSceneIdForSave,
       getManuallyUnlockedEpisodeIds: () => manuallyUnlockedEpisodeIds,
-      getCompletedSceneIds: () => completedSceneIds,
-      getCompletedEpisodeIds: () => completedEpisodeIds,
       applyRestoredSlice: (data) => {
         campaignRestore = data;
       }
@@ -3437,10 +3412,14 @@ export function createWebRuntimeHost(
     manuallyUnlockedEpisodeIds = [
       ...(campaignRestore?.unlockedEpisodeIds ?? [])
     ];
-    completedSceneIds = [...(campaignRestore?.completedSceneIds ?? [])];
-    completedEpisodeIds = [...(campaignRestore?.completedEpisodeIds ?? [])];
     const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
       ?.data as { completedQuestIds?: string[] } | undefined;
+    // Quest completion is the one recorded fact on the story timeline;
+    // Scene and Episode completion are derived from it. The same reader
+    // answers the unlock gates below, so the two cannot disagree.
+    const completedQuestIds = new Set(questSliceData?.completedQuestIds ?? []);
+    const isQuestCompleted = (questDefinitionId: string) =>
+      completedQuestIds.has(questDefinitionId);
     const unlockedEpisodeIds = resolveUnlockedEpisodeIds({
       episodes: bootEpisodes,
       manuallyUnlockedEpisodeIds,
@@ -3454,6 +3433,7 @@ export function createWebRuntimeHost(
     const activeEpisode = resolveActiveEpisode({
       episodes: bootEpisodes,
       unlockedEpisodeIds,
+      isQuestCompleted,
       requestedEpisodeId:
         campaignRestore?.currentEpisodeId ??
         findEpisodeBySceneId(bootEpisodes, requestedSceneId)?.episodeId ??
@@ -3461,7 +3441,8 @@ export function createWebRuntimeHost(
     });
     const activeScene = resolveActiveScene({
       episode: activeEpisode,
-      requestedSceneId
+      requestedSceneId,
+      isQuestCompleted
     });
     activeEpisodeIdForSave = activeEpisode?.episodeId ?? null;
     activeSceneIdForSave = activeScene?.sceneId ?? null;
@@ -3482,7 +3463,7 @@ export function createWebRuntimeHost(
         // into a shut gate there was nowhere to move it to -- and reading
         // that as "current" would offer Continue back into a Scene they
         // already played.
-        status: completedEpisodeIds.includes(episode.episodeId)
+        status: isEpisodeComplete(episode, isQuestCompleted)
           ? ("completed" as const)
           : episode.episodeId === activeEpisodeIdForSave
             ? ("current" as const)
