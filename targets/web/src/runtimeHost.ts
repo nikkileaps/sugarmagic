@@ -51,6 +51,7 @@ import {
   type AudioMixerSettings,
   type UITheme,
   composeRegionContents,
+  navMeshForRegion,
   type ComposedRegionContents,
   createDefaultEpisode,
   DEFAULT_EPISODE_END_ROUTING,
@@ -1535,6 +1536,24 @@ export function createWebRuntimeHost(
   let runtimeActionRegistry: RuntimeActionRegistry | null = null;
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
+  /**
+   * Whether the frame loop should keep going. Separate from `animationId`
+   * because a frame already queued when teardown runs would otherwise
+   * re-arm itself from its own `finally` and outlive the runtime.
+   */
+  let frameLoopRunning = false;
+  /**
+   * A region change waiting for a frame boundary.
+   *
+   * [LAW:no-ambient-temporal-coupling] A swap frees the world and builds
+   * another. It is fired from a volume crossing, which runs inside
+   * `world.update()`, so doing it there would discard the world THIS frame
+   * is midway through reading. The request is parked here and taken at the
+   * top of the next frame, before anything touches the world -- the safe
+   * moment is stated rather than hoped for.
+   */
+  let pendingRegionChange: { regionId: string; markerId: string | null } | null =
+    null;
   let lastTime = 0;
   // Plan 069.10 / 070.1 perf probe (dev-only, gated by `window.__smperf`):
   // isolates the CPU update path from render, and (070.1) splits render into
@@ -1807,10 +1826,54 @@ export function createWebRuntimeHost(
    * `world` is replaced rather than emptied because `World` has no
    * `removeSystem`: discarding it is how a region's systems stop ticking.
    */
+  /**
+   * Point the mouse and the player's facing at the current camera.
+   *
+   * Must run for EVERY region, not once at boot: the input manager and the
+   * movement system are built per region, so after a swap the new ones have
+   * no handlers at all -- right-drag and scroll do nothing, and the player
+   * walks relative to a fixed compass direction instead of the camera.
+   */
+  function bindCameraControls(movementSystem: MovementSystem) {
+    if (!inputManager) return;
+    inputManager.onRightDrag = (dx, dy) => {
+      // Touching the camera by hand takes it back. Reachable during a move's
+      // RETURN, when the input lock has already been released -- and a move
+      // that kept animating through the player's own input would feel broken.
+      cameraMoveDirector.cancel();
+      if (cameraState) {
+        cameraState = applyCameraDrag(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          dx,
+          dy
+        );
+      }
+    };
+    inputManager.onScroll = (delta) => {
+      cameraMoveDirector.cancel();
+      if (cameraState) {
+        cameraState = applyCameraZoom(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          delta
+        );
+      }
+    };
+    movementSystem.setCameraYawProvider(
+      () => cameraState?.yaw ?? Math.PI * 1.25
+    );
+  }
+
   function disposeRegionRuntime() {
     inputManager?.detach();
     inputManager = null;
-    cameraState = null;
+    // `cameraState` is NOT freed here. It is page-scoped: the angle and zoom
+    // the player set are theirs, and walking through a doorway should not
+    // reset them. It is freed in `disposeRuntime` with the rest of the page.
+    // The bindings onto it ARE region-scoped, because the input manager and
+    // movement system they attach to are rebuilt per region -- see
+    // `bindCameraControls`.
     // The director is a const in this closure and outlives a reboot, so a move
     // still in flight at teardown would drive the NEXT session's camera from a
     // baseline belonging to the last one.
@@ -1819,7 +1882,12 @@ export function createWebRuntimeHost(
 
     playerVisualController?.dispose();
     playerVisualController = null;
-    void gameplayAssembly?.dispose();
+    // Built by `buildRegionWorld`, so freed here. Left to the page teardown
+    // it was, the meshes it owns stayed in the three.js scene after a swap
+    // and the region the player left was still drawn under the new one.
+    renderableReconciler?.dispose();
+    renderableReconciler = null;
+    gameplayAssembly?.dispose();
     gameplayAssembly = null;
     gameplaySession = null;
     // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
@@ -1834,11 +1902,16 @@ export function createWebRuntimeHost(
   }
 
   function disposeRuntime() {
+    frameLoopRunning = false;
     if (animationId !== null) {
       ownerWindow.cancelAnimationFrame(animationId);
       animationId = null;
     }
 
+    // The plugin manager spans the whole page, so it is freed HERE and not
+    // by the region teardown. Not awaited: this runs from `beforeunload`,
+    // where there is no later to wait for.
+    void activePluginManager?.dispose();
     activePluginManager = null;
     identityUnsubscribe?.();
     identityUnsubscribe = null;
@@ -1849,6 +1922,7 @@ export function createWebRuntimeHost(
     latestAutosaveStore.set(null);
 
     disposeRegionRuntime();
+    cameraState = null;
     debugHud?.dispose();
     debugHud = null;
     billboardRenderer?.dispose();
@@ -1884,8 +1958,7 @@ export function createWebRuntimeHost(
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
 
-    renderableReconciler?.dispose();
-    renderableReconciler = null;
+    // `renderableReconciler` is freed by `disposeRegionRuntime`, called above.
 
     if (scene) {
       disposeRenderableObject(scene);
@@ -1966,6 +2039,27 @@ export function createWebRuntimeHost(
   }
 
   function renderFrame(now: number) {
+    try {
+      renderFrameBody(now);
+    } finally {
+      // ALWAYS re-arm while the loop is meant to run. Every early return
+      // below -- a half-built world mid-swap, a throw -- used to end the
+      // loop silently, which is a frozen picture with nothing in the
+      // console to explain it.
+      if (frameLoopRunning) {
+        animationId = ownerWindow.requestAnimationFrame(renderFrame);
+      }
+    }
+  }
+
+  function renderFrameBody(now: number) {
+    // Taken here, between frames, for the reason on `pendingRegionChange`.
+    if (pendingRegionChange) {
+      const change = pendingRegionChange;
+      pendingRegionChange = null;
+      void swapRegion(change);
+      return;
+    }
     if (
       !world ||
       !cameraState ||
@@ -2229,8 +2323,6 @@ export function createWebRuntimeHost(
     debugHud?.update(delta);
 
     inputManager.endFrame();
-
-    animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
   /**
@@ -2404,7 +2496,7 @@ export function createWebRuntimeHost(
         // a navmesh is one connected mesh, and two overlaid meshes have no
         // coherent polygon adjacency. A Scene with none did not change what
         // blocks movement, so it inherits.
-        const navMeshArtifact = activeScene?.navMesh ?? region.navMesh;
+        const navMeshArtifact = navMeshForRegion(activeScene, region);
         const navMeshUrl = navMeshArtifact
           ? state.assetSources[navMeshArtifact.assetPath]
           : undefined;
@@ -2801,9 +2893,10 @@ export function createWebRuntimeHost(
         getPathfinder: () => navMeshPathfinder,
         onSceneAction: hostHandleSceneAction,
         onRegionChange: (change) => {
-          // Released, not awaited: the action handler runs inside the quest
-          // refresh loop, and the swap tears that loop's world down.
-          void swapRegion(change);
+          // Parked, not started: this runs inside `world.update()`, and the
+          // swap frees the world this frame is still reading. The frame
+          // loop takes it at the next boundary.
+          pendingRegionChange = change;
         },
         onPlayNpcAnimation: playNpcAnimation,
         // NO TRACK YET. The assembly is now built while the loading screen is
@@ -2966,6 +3059,7 @@ export function createWebRuntimeHost(
     gameplaySession = built.gameplaySession;
     world = built.world;
     inputManager = built.inputManager;
+    bindCameraControls(built.movementSystem);
     // The save records where the player is; after a swap that is here.
     // Without this the next autosave would still name the region they left.
     activeRegionIdForSave = input.regionId;
@@ -3846,33 +3940,7 @@ export function createWebRuntimeHost(
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;
-    inputManager.onRightDrag = (dx, dy) => {
-      // Touching the camera by hand takes it back. Reachable during a move's
-      // RETURN, when the input lock has already been released -- and a move
-      // that kept animating through the player's own input would feel broken.
-      cameraMoveDirector.cancel();
-      if (cameraState) {
-        cameraState = applyCameraDrag(
-          cameraState,
-          DEFAULT_CAMERA_CONFIG,
-          dx,
-          dy
-        );
-      }
-    };
-    inputManager.onScroll = (delta) => {
-      cameraMoveDirector.cancel();
-      if (cameraState) {
-        cameraState = applyCameraZoom(
-          cameraState,
-          DEFAULT_CAMERA_CONFIG,
-          delta
-        );
-      }
-    };
-    movementSystem.setCameraYawProvider(
-      () => cameraState?.yaw ?? Math.PI * 1.25
-    );
+    bindCameraControls(movementSystem);
 
     renderView.mount(root);
     uiLayerElement = ownerWindow.document.createElement("div");
@@ -3964,6 +4032,7 @@ export function createWebRuntimeHost(
       handleResize();
       lastTime = ownerWindow.performance.now();
       publishSmperfStats({ lastBootMs: Number((lastTime - bootStart).toFixed(1)) });
+      frameLoopRunning = true;
       animationId = ownerWindow.requestAnimationFrame(renderFrame);
     });
   }

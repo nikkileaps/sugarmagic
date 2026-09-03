@@ -459,7 +459,12 @@ export interface RuntimeGameplayAssembly {
    * it when that plugin happens to be first in the project's list.
    */
   readonly pluginsInitialized: Promise<void>;
-  dispose: () => Promise<void>;
+  /**
+   * Free what this assembly built, and only that. The plugin manager is
+   * the caller's and spans the whole page, so it is not touched here.
+   * Synchronous, so a region teardown finishes before the rebuild starts.
+   */
+  dispose: () => void;
 }
 
 /** Plan 069.3 — sentinel agent id for the player in NPC collision (can't
@@ -2977,9 +2982,15 @@ export function createRuntimeGameplayAssembly(
       if (!pluginManager || !pluginContext) return;
       await pluginManager.notifyRegionChanged(pluginContext);
     },
-    async dispose() {
+    /**
+     * Free what this assembly built. The plugin manager is NOT disposed:
+     * it arrives through `options`, so the caller owns it and outlives any
+     * one region. Disposing it here ran on every region change, and a
+     * plugin whose `disposed` flag is one-way -- sugarlang's conversation
+     * warmer -- never came back for the rest of the session.
+     */
+    dispose() {
       gameplaySession.dispose();
-      await pluginManager?.dispose();
     }
   };
 }

@@ -99,6 +99,7 @@ import type {
 } from "../shader-graph";
 import {
   createRegionSceneOverlay,
+  sceneDressesRegion,
   sceneOverlayForRegion,
   type RegionSceneOverlay,
   type Scene,
@@ -132,16 +133,30 @@ function nextTransactionId(): string {
 }
 
 /**
- * Mutate the Scene's overlay, but only when the Scene is the one dressing
- * this region. Editing another region while some Scene is active must not
- * write that Scene's overlay -- the Scene happens somewhere else.
+ * Mutate the Scene's overlay. The Scene must be the one dressing this
+ * region -- it happens in exactly one place, and writing its overlay
+ * while the author edits somewhere else would put the edit in the wrong
+ * region.
+ *
+ * Throws rather than passing the Scene through, because every caller here
+ * either checks first (the by-id maps, where the store simply may not hold
+ * the id) or is a CREATE whose entire effect is this write. Returning the
+ * Scene unchanged made a create place nothing, report success, and leave
+ * the author looking at a viewport that did not change.
  */
 function withOverlay(
   scene: Scene,
   regionId: string,
   mutate: (overlay: RegionSceneOverlay) => RegionSceneOverlay
 ): Scene {
-  if (scene.regionId !== regionId) return scene;
+  if (!sceneDressesRegion(scene, regionId)) {
+    throw new Error(
+      `[commands] Scene ${scene.sceneId} happens in region ${scene.regionId}, ` +
+        `so it cannot be edited while region ${regionId} is active. ` +
+        `Dispatch against the Scene that dresses this region, or use the ` +
+        `"base" scope to edit the region itself.`
+    );
+  }
   return { ...scene, overlay: mutate(scene.overlay) };
 }
 

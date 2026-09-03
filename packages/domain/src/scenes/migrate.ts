@@ -24,6 +24,7 @@
 import type {
   PlacedAssetInstance,
   RegionDocument,
+  RegionNavMeshArtifact,
   RegionItemPresence,
   RegionNPCPresence,
   RegionPlayerPresence,
@@ -53,18 +54,50 @@ export interface ComposedRegionContents {
 }
 
 /**
+ * Whether this Scene happens in this region.
+ *
+ * A Scene happens in exactly one region, so every caller holding a Scene
+ * and a region has to ask whether they match. This is the one place that
+ * answers it, for the overlay and for the Scene's own fields alike.
+ */
+export function sceneDressesRegion(
+  scene: Scene | null | undefined,
+  regionId: string
+): boolean {
+  // [LAW:single-enforcer] The one comparison.
+  return Boolean(scene && scene.regionId === regionId);
+}
+
+/**
  * The Scene's overlay when it dresses this region, otherwise nothing.
  *
- * A Scene happens in one region, so every caller that holds a Scene and a
- * region has to ask whether they match. This is the one place that answers
- * it -- Studio panels, the viewport brushes, and the command executor all
- * route through here rather than each comparing ids themselves.
+ * Studio panels, the viewport brushes, and the command executor all route
+ * through here rather than each comparing ids themselves.
  */
 export function sceneOverlayForRegion(
   scene: Scene | null | undefined,
   regionId: string
 ): RegionSceneOverlay | null {
-  return scene && scene.regionId === regionId ? scene.overlay : null;
+  return sceneDressesRegion(scene, regionId) ? scene!.overlay : null;
+}
+
+/**
+ * The navmesh to path against in this region: the Scene's when it dresses
+ * this region and baked one, otherwise the region's own.
+ *
+ * A Scene's navmesh is a Scene field rather than part of the overlay, so it
+ * needs the same region test the overlay gets. Without it, walking through
+ * a doorway pathed the new region against the navmesh baked for the Scene
+ * in the region just left.
+ */
+export function navMeshForRegion(
+  scene: Scene | null | undefined,
+  region: RegionDocument
+): RegionNavMeshArtifact | null {
+  const fromScene = sceneDressesRegion(scene, region.identity.id)
+    ? (scene?.navMesh ?? null)
+    : null;
+  return fromScene ?? region.navMesh ?? null;
 }
 
 /**
