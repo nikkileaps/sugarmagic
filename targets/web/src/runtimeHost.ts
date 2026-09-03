@@ -1817,6 +1817,44 @@ export function createWebRuntimeHost(
     }
   }
 
+  /**
+   * Tear down everything the two region builders made, and nothing else.
+   *
+   * [LAW:one-source-of-truth] This list mirrors what `buildRegionWorld` and
+   * `buildRegionGameplay` assign. If a builder starts creating something,
+   * it gets freed here; anything NOT created there is page-scoped and must
+   * survive -- the billboard renderers, the UI layer, the action registries
+   * and the identity/sync wiring all outlive a region change.
+   *
+   * `world` is replaced rather than emptied because `World` has no
+   * `removeSystem`: discarding it is how a region's systems stop ticking.
+   */
+  function disposeRegionRuntime() {
+    inputManager?.detach();
+    inputManager = null;
+    cameraState = null;
+    // The director is a const in this closure and outlives a reboot, so a move
+    // still in flight at teardown would drive the NEXT session's camera from a
+    // baseline belonging to the last one.
+    cameraMoveDirector.cancel();
+    world = null;
+
+    playerVisualController?.dispose();
+    playerVisualController = null;
+    void gameplayAssembly?.dispose();
+    gameplayAssembly = null;
+    gameplaySession = null;
+    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
+    // epoch so an in-flight load can't resurrect (and leak) after dispose.
+    navMeshLoadEpoch += 1;
+    navMeshPathfinder?.destroy();
+    navMeshPathfinder = null;
+    spellCastFeedbackHost?.dispose();
+    spellCastFeedbackHost = null;
+    pluginBannerHost?.dispose();
+    pluginBannerHost = null;
+  }
+
   function disposeRuntime() {
     if (animationId !== null) {
       ownerWindow.cancelAnimationFrame(animationId);
@@ -1832,37 +1870,15 @@ export function createWebRuntimeHost(
     userStore.set(null);
     latestAutosaveStore.set(null);
 
-    inputManager?.detach();
-    inputManager = null;
-    cameraState = null;
-    // The director is a const in this closure and outlives a reboot, so a move
-    // still in flight at teardown would drive the NEXT session's camera from a
-    // baseline belonging to the last one.
-    cameraMoveDirector.cancel();
-    world = null;
-
-    playerVisualController?.dispose();
-    playerVisualController = null;
+    disposeRegionRuntime();
     debugHud?.dispose();
     debugHud = null;
-    void gameplayAssembly?.dispose();
-    gameplayAssembly = null;
-    gameplaySession = null;
-    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
-    // epoch so an in-flight load can't resurrect (and leak) after dispose.
-    navMeshLoadEpoch += 1;
-    navMeshPathfinder?.destroy();
-    navMeshPathfinder = null;
     billboardRenderer?.dispose();
     billboardRenderer = null;
     textBillboardRenderer?.dispose();
     textBillboardRenderer = null;
     billboardAssetRegistry?.dispose();
     billboardAssetRegistry = null;
-    spellCastFeedbackHost?.dispose();
-    spellCastFeedbackHost = null;
-    pluginBannerHost?.dispose();
-    pluginBannerHost = null;
     uiLayerRoot?.unmount();
     uiLayerRoot = null;
     if (uiLayerElement?.parentElement === root) {
