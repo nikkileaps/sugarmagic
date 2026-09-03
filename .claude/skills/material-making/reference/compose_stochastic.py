@@ -53,6 +53,7 @@ def feather_alpha(h, w, f):
 def compose(cfg):
     panel = np.array(Image.open(SCRATCH / cfg["panel"]).convert("RGB"), np.float64)
     ph, pw, _ = panel.shape
+    panel_mean = panel.mean()   # for gain_normalize: the level patches aim at
     rng = np.random.default_rng(SEED)   # same seed: same quilt skeleton per map
     edges = np.linspace(0, TILE, GRID + 1).round().astype(int)
     acc = np.zeros((TILE, TILE, 3))
@@ -82,6 +83,12 @@ def compose(cfg):
             src[..., 0] += 128 - src[..., 0].mean()
             src[..., 1] += 128 - src[..., 1].mean()
             src = np.clip(src, 0, 255)
+        if cfg.get("gain_normalize"):
+            # a panel with a baked brightness gradient (painted sheen) makes
+            # patches from different regions differ in mean level, and the
+            # quilt shows it as a checkerboard; equalize each patch's mean
+            # with a uniform gain - hue and texture untouched
+            src = np.clip(src.astype(np.float64) * (panel_mean / max(src.mean(), 1e-6)), 0, 255)
         cell = np.array(Image.fromarray(src.astype(np.uint8)).resize((cw, chh), Image.LANCZOS), np.float64)
         if cfg["jitter"]:
             cell *= rng.uniform(1 - cfg["jitter"], 1 + cfg["jitter"])

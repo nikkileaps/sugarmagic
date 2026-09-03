@@ -7,8 +7,8 @@ description: Turn a ChatGPT-generated PBR spec sheet into a production seamless 
 
 You are turning one ChatGPT-generated spec sheet image into five production
 texture maps. Everything in this skill was verified in practice on the first
-four materials (red_brick, rough_wood, concrete, concrete_block,
-2026-09-02). The traps below are not
+five materials (red_brick, rough_wood, concrete, concrete_block,
+wood_board_painted, 2026-09-02). The traps below are not
 hypothetical; each one shipped a defect or nearly did. A defect you miss here
 does not stay hidden - it surfaces in nikki's Blender viewport under real
 light, and she is QA.
@@ -39,6 +39,8 @@ wearing a different disguise.
     FFT Poisson integration, AO derivation, lit preview.
   - `compose_wood.py` - the banded-material strip composer; imports from
     compose_wall.
+  - `compose_boards.py` - the discrete-board refinement of the banded
+    composer.
   - `compose_stochastic.py` - the patch-quilt composer for stochastic
     materials.
   - `compose_blocks.py` - the reconstruction composer for grid materials
@@ -59,16 +61,14 @@ This was discovered the hard way, so take it as settled:
   texture, and they are NOT tileable.
 - Consequence for what gets harvested: basecolor pixels come from the
   basecolor panel; the normal from the normal panel; roughness from the
-  roughness panel. For cell-harvested grid and banded materials the
-  height and AO panels are NOT harvested: height is computed by
-  integrating the composed normal,
-  and AO is derived from that height, so that normal, height, and AO
-  describe one consistent surface instead of three unrelated paintings.
-  The exception is any surface whose relief is stochastic mottle - the
-  stochastic family, and reconstructed grid materials whose block faces
-  are mottle - which harvest or quilt-reconstruct the height panel instead
-  (see step 6 for the mechanism). AO is still derived from height in every
-  family.
+  roughness panel. Where relief structure (joints, bands) dominates the
+  normal, the height and AO panels are NOT harvested: height is computed
+  by integrating the composed normal, and AO is derived from that height,
+  so that normal, height, and AO describe one consistent surface instead
+  of three unrelated paintings. Where mottle, strokes, or faces dominate -
+  the stochastic family, reconstructed block faces, painted boards - the
+  height panel is harvested and quilted instead (see step 6 for the rule
+  and the mechanism). AO is still derived from height in every family.
 - Cross-map registration happens at the shared layout grid level - brick
   boundaries align because the composed grid is shared - never at pixel
   level. Faces will not match blotch-for-blotch across maps, and that is
@@ -143,6 +143,25 @@ Banded materials (wood, `compose_wood.py`):
   direction integrates into a herringbone height weave - this also
   happened.
 
+Discrete-board materials (wood_board_painted: painted planks with explicit
+seam lines; `compose_boards.py`) refine the banded rules:
+
+- Rows are not arbitrary y-windows. Harvest complete boards seam-center to
+  seam-center, like brick cells - measure the seam positions per panel via
+  row-profile peaks.
+- One whole board per output row, and never the same board twice in a row.
+  Butt-joined rows reconstruct full seams, and the feather lands in the
+  seam.
+- All other banded rules hold unchanged: same source board per row so the
+  chip and band phase aligns at segment joints, shuffled x partition,
+  uniform horizontal flips per row, no vertical flips.
+- Known limitation, recorded and accepted by nikki: with only two complete
+  source boards in the panel, distinctive chip shapes visibly recur across
+  the wall. If a panel yields very few complete cells and their features
+  are distinctive, say so in the handoff and offer the options: more spec
+  generations for a bigger pool, or per-placement feature masking - which
+  crosses into pixel editing and is nikki's call.
+
 Stochastic materials (concrete-like: isotropic mottle, no grid, no bands;
 `compose_stochastic.py`):
 
@@ -214,9 +233,12 @@ so no complete cells exist; `compose_blocks.py`):
 
 ### 6. Height and AO
 
-For grid and banded materials, height = FFT Poisson integration of the
-composed normal on the periodic domain - never harvested. Convention
-(OpenGL, image rows increasing downward):
+Height comes one of two ways, and what dominates the composed normal
+decides which.
+
+When relief structure (joints, bands) dominates, height = FFT Poisson
+integration of the composed normal on the periodic domain - never
+harvested. Convention (OpenGL, image rows increasing downward):
 `dh/dx = -nx/nz`, `dh/dy_img = +ny/nz`.
 
 Exception, verified by side-by-side on concrete: for the stochastic
@@ -227,8 +249,7 @@ frequency - and no spectral shaping recovers the spec height's calm
 clouds, because the normal panel does not contain them. The
 integrate-from-normal rule exists to keep relief registered at feature
 edges; a stochastic material has no edges to misregister, so the rule's
-purpose survives the exception. Cell-harvested grid and banded materials
-keep integration.
+purpose survives the exception.
 
 The exception extends to reconstructed grid materials whose block faces
 are stochastic mottle (concrete_block): quilt-reconstruct the height from
@@ -238,10 +259,21 @@ DIAGNOSTIC only, never as the shipped height: it checks the red channel
 convention and must show every joint - including any rotated ones - as a
 valley.
 
-High-pass the result to kill the wall-scale drift the integration
-accumulates: sigma 60 (of 1024) for brick, sigma 30 for wood, then
-percentile-normalize. Wood also gets its contrast compressed (x0.55 around
-0.5) because spec wood is nearly flat.
+And it extends a third time: painted chip strokes are mottle too.
+Integrating the wood_board_painted normal churned exactly like concrete
+and blocks; its height is board-quilted from the height panel (same
+seam-snapped construction as step 4, with its own measured seams), and
+integration is kept only as the red-channel diagnostic. The running
+tally: integration has produced shipped height for red_brick and
+rough_wood only; every material since has quilted its height panel. The
+honest current rule: integrate when relief structure (joints, bands)
+dominates the normal; quilt the height panel when faces, strokes, or
+mottle dominate; when unsure, try the integration and look for churn.
+
+High-pass the integrated result to kill the wall-scale drift the
+integration accumulates: sigma 60 (of 1024) for brick, sigma 30 for wood,
+then percentile-normalize. Wood also gets its contrast compressed (x0.55
+around 0.5) because spec wood is nearly flat.
 
 AO = 1 - depth * positive part of (blurred height - height), blur sigma
 ~8-10, depth ~0.45-0.6.
@@ -253,14 +285,18 @@ Replicate clarity-upscaler (`philz1337x/clarity-upscaler`), resemblance
 harvested pixels, not generation - verify drift (mean abs diff vs a
 Lanczos-2x of the input) stays small, around 2-4.
 
-Creativity is set by family. 0.25 is safe only when strong structure pins
-the model (brick, wood). On a soft stochastic surface 0.25 reinterpreted
-the spec's cellular mottle as troweled plaster - drift 4.1 plus a visible
-character change, rejected; creativity 0.1 preserved the mottle and
-crisped it - drift 3.1, accepted. Rule: 0.25 for structured materials,
-0.1 for stochastic ones. And always eyeball a matched-crop before/after
-regardless of the drift number, because drift around 4 can hide a full
-character change.
+Creativity is set by what the surface's character lives in. 0.25 is safe
+only when strong structure pins the model (brick, wood). On a soft
+stochastic surface 0.25 reinterpreted the spec's cellular mottle as
+troweled plaster - drift 4.1 plus a visible character change, rejected;
+creativity 0.1 preserved the mottle and crisped it - drift 3.1, accepted.
+The risk applies to any distinctive soft shapes, not only mottle:
+wood_board_painted also took 0.1 because its chip shapes are load-bearing
+painted features - drift 2.0, faithful, approved. Rule: 0.25 where strong
+structure pins the model; 0.1 where the character lives in soft
+distinctive shapes (mottle, painted strokes). And always eyeball a
+matched-crop before/after regardless of the drift number, because drift
+around 4 can hide a full character change.
 
 Diffusion breaks wrap edges. So run it twice: once on the tile, once on a
 half-tile-rolled copy, then splice - the rolled run is un-rolled, and its
@@ -358,10 +394,9 @@ else at hour three:
 
 1. Five different paintings, not five views. Harvest basecolor, normal,
    roughness from their own panels; integrate height from the composed
-   normal only where faces are cell-harvested (grid, banded) - stochastic
-   surfaces, including reconstructed block faces, take height from the
-   height panel; derive AO from height; register at the layout level
-   only.
+   normal only where relief structure (joints, bands) dominates - where
+   mottle, strokes, or faces dominate, quilt the height panel instead;
+   derive AO from height; register at the layout level only.
 2. A panel-edge feature that looks complete is not complete. No structure
    line in the profile = no joint, whatever your eyes say.
 3. Flipped normal cells need their channel inverted; every cell's mean X/Y
@@ -371,7 +406,7 @@ else at hour three:
    all.
 5. Never diffusion on a normal map. Enhancement runs twice with a
    half-roll splice or the wrap seams break. Creativity 0.25 only where
-   structure pins the model; 0.1 for stochastic, and eyeball a matched
-   crop either way.
+   structure pins the model; 0.1 where the character lives in soft
+   distinctive shapes, and eyeball a matched crop either way.
 6. Look at every intermediate before proceeding, and name the mechanism
    before fixing anything.
