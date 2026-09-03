@@ -21,11 +21,14 @@
 
 import type { ReactNode } from "react";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
+import type { Episode } from "@sugarmagic/domain";
+import { EpisodeGraphView } from "./EpisodeGraphView";
 import { useDialogueWorkspaceView } from "../design/DialogueWorkspaceView";
 import { useQuestWorkspaceView } from "../design/QuestWorkspaceView";
 
 export const storyWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "structure", label: "Structure", icon: "🗂️" },
+  { id: "episode-graph", label: "Episode Graph", icon: "🕸️" },
   { id: "composer", label: "Composer", icon: "🎬" },
   { id: "quests", label: "Quests", icon: "📜" },
   { id: "dialogues", label: "Dialogues", icon: "💬" }
@@ -43,6 +46,9 @@ export interface StoryProductModeViewProps {
   /** The composer's side panel: Scene picker plus what the region owns.
    *  Rendered by the app for the same reason the structure panel is. */
   composerPanel: ReactNode;
+  /** The Episode whose quests the graph draws: the one holding the Scene
+   *  the author is working in. Null before a project is open. */
+  graphEpisode: Episode | null;
   quests: Parameters<typeof useQuestWorkspaceView>[0];
   dialogues: Parameters<typeof useDialogueWorkspaceView>[0];
 }
@@ -62,6 +68,7 @@ export function useStoryProductModeView(
     onSelectKind,
     structurePanel,
     composerPanel,
+    graphEpisode,
     quests,
     dialogues
   } = props;
@@ -106,8 +113,12 @@ export function useStoryProductModeView(
             ? // The composer stages the Scene in the shared viewport,
               // which App renders when no centerPanel claims the space.
               undefined
-            : // Structure is master-detail in one surface: the Episode
-              // and Scene lists and the editor for whichever is selected.
-              structurePanel
+            : activeStoryKind === "episode-graph"
+              ? // Read-only: how this Episode's quests connect, drawn from
+                // their start conditions. Quests are edited in Quests.
+                <EpisodeGraphView episode={graphEpisode} />
+              : // Structure is master-detail in one surface: the Episode
+                // and Scene lists and the editor for whichever is selected.
+                structurePanel
   };
 }

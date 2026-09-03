@@ -52,6 +52,7 @@ export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
 // Design, which keeps the definitions that exist independent of a story.
 export type CoreStoryWorkspaceKind =
   | "structure"
+  | "episode-graph"
   | "composer"
   | "quests"
   | "dialogues";
@@ -78,6 +79,7 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
 
 export const CORE_STORY_WORKSPACE_KINDS: CoreStoryWorkspaceKind[] = [
   "structure",
+  "episode-graph",
   "composer",
   "quests",
   "dialogues"

@@ -3507,6 +3507,17 @@ export function App() {
     activeStoryKind,
     onSelectKind: (kind) =>
       shellStore.getState().setActiveStoryWorkspaceKind(kind),
+    // The Episode holding the Scene being worked in -- the graph draws the
+    // chapter the author is actually inside, not whichever came first.
+    graphEpisode: session
+      ? (session.gameProject.episodes.find((episode) =>
+          episode.scenes.some(
+            (scene) => scene.sceneId === session.activeSceneId
+          )
+        ) ??
+        session.gameProject.episodes[0] ??
+        null)
+      : null,
     structurePanel: session ? (
       <StoryStructureView
         episodes={session.gameProject.episodes}

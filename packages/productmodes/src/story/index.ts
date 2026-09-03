@@ -12,7 +12,13 @@ export const storyProductMode: ProductModeDescriptor = {
   id: "story",
   label: "Story",
   summary: "Author episodes, scenes, the quests in them, and their dialogue.",
-  workspaceKinds: ["structure", "composer", "quests", "dialogues"],
+  workspaceKinds: [
+    "structure",
+    "episode-graph",
+    "composer",
+    "quests",
+    "dialogues"
+  ],
   commandSurfaceId: "story-command-surface",
   panelLayoutId: "story-panel-layout"
 };

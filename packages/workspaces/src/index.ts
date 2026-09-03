@@ -6,5 +6,7 @@ export * from "./publish";
 export * from "./render";
 export * from "./story";
 export * from "./design/npcInteractionOptions";
+export * from "./design/episode-graph";
+export * from "./story/EpisodeGraphView";
 export * from "./viewport";
 export * from "./workspace-view";

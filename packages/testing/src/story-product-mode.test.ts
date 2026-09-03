@@ -29,19 +29,18 @@ describe("Story product mode", () => {
     expect(getProductModeDescriptor("story")).toBe(storyProductMode);
   });
 
-  it("owns structure, the composer, quests, and dialogues", () => {
-    expect(CORE_STORY_WORKSPACE_KINDS).toEqual([
+  it("owns structure, the episode graph, the composer, quests, and dialogues", () => {
+    const kinds = [
       "structure",
+      "episode-graph",
       "composer",
       "quests",
       "dialogues"
-    ]);
-    expect(storyProductMode.workspaceKinds).toEqual([
-      "structure",
-      "composer",
-      "quests",
-      "dialogues"
-    ]);
+    ];
+    expect(CORE_STORY_WORKSPACE_KINDS).toEqual(kinds);
+    // The mode's own list has to match, or a tab renders in the sub-nav
+    // and the mode refuses to show it.
+    expect(storyProductMode.workspaceKinds).toEqual(kinds);
   });
 
   it("Design no longer owns quests or dialogue", () => {
