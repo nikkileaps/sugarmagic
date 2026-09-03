@@ -35,6 +35,13 @@ const PORT = Number(args.port ?? 9223);
 const STUDIO = args.studio ?? "http://localhost:5173/";
 const WD = Number(args.wd ?? 60000);
 const KEEP = args.keep === "true";
+// --smoke: boot the game and stop. A green run means Studio loaded, Preview
+// opened, and the host reached a live scene -- the end-to-end boot check
+// there is otherwise no automated coverage for.
+const SMOKE = args.smoke === "true";
+// --fresh: close any open preview first, so the run exercises a real boot
+// rather than reporting on one that already happened.
+const FRESH = args.fresh === "true";
 const PROFILE = join(homedir(), ".sugarmagic-perf-chrome");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
@@ -92,7 +99,37 @@ async function main() {
     studio = await ctx.newPage();
     await studio.goto(STUDIO, { waitUntil: "domcontentloaded" });
   }
-  await studio.waitForTimeout(1500);
+  // Wait for Studio to have a PROJECT loaded, not just a painted page. The
+  // Preview button renders before the project does, so a fixed sleep here
+  // clicks a button that is present but not yet wired -- the click lands and
+  // nothing happens. Wait for the condition instead of guessing a duration.
+  let studioReady = false;
+  for (let i = 0; i < 60; i += 1) {
+    studioReady = await studio.evaluate(() =>
+      [...document.querySelectorAll("button,[role=button]")].some((b) =>
+        /Preview/.test(b.textContent || "")
+      ) &&
+      [...document.querySelectorAll("button,[role=button]")].some((b) =>
+        /^\uD83D\uDCC1/.test((b.textContent || "").trim())
+      )
+    );
+    if (studioReady) break;
+    await sleep(500);
+  }
+  if (!studioReady) {
+    throw new Error(
+      "Studio never finished loading a project (no project button after 30s)"
+    );
+  }
+
+  if (FRESH) {
+    const open = findPreview();
+    if (open) {
+      log("closing the open preview so this run boots from cold ...");
+      await open.close().catch(() => {});
+      await sleep(1000);
+    }
+  }
 
   // Start Preview if not already running (button reads "Preview" -> "Stop Preview").
   if (!findPreview()) {
@@ -155,6 +192,21 @@ async function main() {
   }
   if (!ready) throw new Error("__smperfRun never appeared (host didn't boot; sign-in may be blocking — set SM_TEST_EMAIL/SM_TEST_PASSWORD)");
   await preview.waitForTimeout(1500); // let it settle
+
+  if (SMOKE) {
+    clearTimeout(watchdog);
+    const bootMs = await preview.evaluate(
+      () => globalThis.__smperfStats?.lastBootMs ?? null
+    );
+    console.log(`\n[capture] BOOT OK — scene is live (lastBootMs: ${bootMs})`);
+    if (launchedByUs && !KEEP) {
+      for (const p of ctx.pages()) await p.close().catch(() => {});
+      await browser.close().catch(() => {});
+    } else {
+      await browser.close().catch(() => {});
+    }
+    return;
+  }
 
   log("running A/B matrix (~20s) ...");
   const res = await preview.evaluate(async () => globalThis.__smperfRun());
