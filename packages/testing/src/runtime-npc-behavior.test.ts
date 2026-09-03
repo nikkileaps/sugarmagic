@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createRegionVolumeDefinition, type RegionDocument } from "@sugarmagic/domain";
+import {
+  createRegionMarker,
+  createRegionVolumeDefinition,
+  type RegionDocument
+} from "@sugarmagic/domain";
 import { World, Position } from "@sugarmagic/runtime-core";
 import {
   buildCollisionWorld,
@@ -66,7 +70,7 @@ function makeRegion(): RegionDocument {
             taskId: "task:delivery",
             displayName: "Collect Delivery",
             description: "Rick is gathering the fresh morning cheese shipment at the dock.",
-            targetAreaId: "dock",
+            target: { kind: "area", areaId: "dock" },
             currentActivity: "collecting_delivery",
             currentGoal: "collect_delivery",
             activation: {
@@ -83,7 +87,7 @@ function makeRegion(): RegionDocument {
             taskId: "task:shop",
             displayName: "Run Shop",
             description: "Rick is back inside the cheese shop serving customers.",
-            targetAreaId: "shop",
+            target: { kind: "area", areaId: "shop" },
             currentActivity: "running_shop",
             currentGoal: "serve_customers",
             activation: {
@@ -96,7 +100,7 @@ function makeRegion(): RegionDocument {
             taskId: "task:idle",
             displayName: "Wait for Delivery",
             description: "Rick is waiting around the station before the delivery arrives.",
-            targetAreaId: null,
+            target: null,
             currentActivity: "waiting",
             currentGoal: "wait_for_delivery",
             activation: {
@@ -502,6 +506,125 @@ describe("runtime NPC behavior system", () => {
     expect(world.getComponent(entity, Position)?.x).toBeGreaterThan(0);
   });
 
+  it("walks to a marker's exact spot rather than a sampled point", () => {
+    // The reason markers exist. An area target samples a hash-chosen point
+    // across the whole box, so a big area lands the NPC anywhere in it,
+    // including hard against the edge. A marker is the one spot.
+    const region = makeRegion();
+    region.markers = [
+      createRegionMarker({
+        markerId: "marker:counter",
+        displayName: "Behind Counter",
+        transform: {
+          position: [6, 0, -3],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      })
+    ];
+    region.behaviors[0] = {
+      ...region.behaviors[0]!,
+      tasks: [
+        {
+          taskId: "task:counter",
+          displayName: "Tend the counter",
+          description: null,
+          target: { kind: "marker", markerId: "marker:counter" },
+          currentActivity: "working",
+          currentGoal: "work",
+          activation: {
+            questDefinitionId: "quest:find-suitcase",
+            questStageId: "stage:a",
+            worldFlagEquals: null
+          }
+        }
+      ]
+    };
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [
+        {
+          presenceId: "presence:rick-roll",
+          npcDefinitionId: "npc:rick-roll",
+          entity
+        }
+      ]
+    });
+
+    for (let index = 0; index < 40; index += 1) {
+      system.sync({
+        deltaSeconds: 1,
+        activeQuests: [
+          { questDefinitionId: "quest:find-suitcase", stageId: "stage:a" }
+        ]
+      });
+    }
+
+    const position = world.getComponent(entity, Position)!;
+    expect(position.x).toBeCloseTo(6, 1);
+    expect(position.z).toBeCloseTo(-3, 1);
+  });
+
+  it("blocks rather than idles when a task names a marker that is gone", () => {
+    // Same contract a missing area already had: the author asked for
+    // something the region cannot answer, and that is not the same as
+    // having nothing to do.
+    const region = makeRegion();
+    region.markers = [];
+    region.behaviors[0] = {
+      ...region.behaviors[0]!,
+      tasks: [
+        {
+          taskId: "task:counter",
+          displayName: "Tend the counter",
+          description: null,
+          target: { kind: "marker", markerId: "marker:deleted" },
+          currentActivity: "working",
+          currentGoal: "work",
+          activation: {
+            questDefinitionId: "quest:find-suitcase",
+            questStageId: "stage:a",
+            worldFlagEquals: null
+          }
+        }
+      ]
+    };
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [
+        {
+          presenceId: "presence:rick-roll",
+          npcDefinitionId: "npc:rick-roll",
+          entity
+        }
+      ]
+    });
+    system.sync({
+      deltaSeconds: 1,
+      activeQuests: [
+        { questDefinitionId: "quest:find-suitcase", stageId: "stage:a" }
+      ]
+    });
+
+    expect(getEntityMovement(blackboard, "npc:rick-roll")).toMatchObject({
+      status: "blocked"
+    });
+  });
+
   it("assigns different target points for different tasks in the same area", () => {
     const region = makeRegion();
     region.behaviors[0] = {
@@ -511,7 +634,7 @@ describe("runtime NPC behavior system", () => {
           taskId: "task:shop-a",
           displayName: "Sweep Shop",
           description: null,
-          targetAreaId: "shop",
+          target: { kind: "area", areaId: "shop" },
           currentActivity: "working",
           currentGoal: "work",
           activation: {
@@ -524,7 +647,7 @@ describe("runtime NPC behavior system", () => {
           taskId: "task:shop-b",
           displayName: "Stock Shelves",
           description: null,
-          targetAreaId: "shop",
+          target: { kind: "area", areaId: "shop" },
           currentActivity: "working",
           currentGoal: "work",
           activation: {
@@ -918,7 +1041,7 @@ describe("time-window task gating (074.4)", () => {
               taskId: "task:morning-work",
               displayName: "Morning Work",
               description: null,
-              targetAreaId: "dock",
+              target: { kind: "area", areaId: "dock" },
               currentActivity: "working",
               currentGoal: "work",
               activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null },
@@ -928,7 +1051,7 @@ describe("time-window task gating (074.4)", () => {
               taskId: "task:evening-rest",
               displayName: "Evening Rest",
               description: null,
-              targetAreaId: "shop",
+              target: { kind: "area", areaId: "shop" },
               currentActivity: "idle",
               currentGoal: "idle",
               activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null },
@@ -1026,7 +1149,7 @@ describe("time-window task gating (074.4)", () => {
         taskId: "task:always",
         displayName: "Always On",
         description: null,
-        targetAreaId: "dock",
+        target: { kind: "area", areaId: "dock" },
         currentActivity: "idle",
         currentGoal: "idle",
         activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null }
@@ -1100,7 +1223,7 @@ describe("time-window task gating (074.4)", () => {
       taskId: "task:after-node",
       displayName: "Hold At Dock",
       description: "Waits at the dock once the suitcase node is done.",
-      targetAreaId: "dock",
+      target: { kind: "area", areaId: "dock" },
       currentActivity: "waiting",
       currentGoal: "wait_for_delivery",
       activation: {
@@ -1154,7 +1277,7 @@ describe("time-window task gating (074.4)", () => {
       taskId: "task:after-node",
       displayName: "Hold At Dock",
       description: null,
-      targetAreaId: "dock",
+      target: { kind: "area", areaId: "dock" },
       currentActivity: "waiting",
       currentGoal: "wait_for_delivery",
       activation: {

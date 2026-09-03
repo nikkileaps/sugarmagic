@@ -346,11 +346,8 @@ export function normalizeRegionDocumentForLoad(
               task.currentGoal.trim().length > 0
                 ? task.currentGoal.trim()
                 : undefined,
-            targetAreaId:
-              typeof task.targetAreaId === "string" &&
-              task.targetAreaId.trim().length > 0
-                ? task.targetAreaId.trim()
-                : null
+            // `...task` above carries a pre-marker file's bare
+            // `targetAreaId` through to the factory, which reads it.
           })
         )
       })

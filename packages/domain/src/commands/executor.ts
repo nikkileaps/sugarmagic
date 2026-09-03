@@ -7,6 +7,7 @@
 
 import {
   createRegionAreaDefinition,
+  createRegionMarker,
   createRegionVolumeDefinition,
   resolveRegionVolumes,
   withDerivedRegionAliases,
@@ -44,6 +45,9 @@ import type {
   CreateRegionAreaCommand,
   UpdateRegionAreaCommand,
   DeleteRegionAreaCommand,
+  CreateRegionMarkerCommand,
+  UpdateRegionMarkerCommand,
+  DeleteRegionMarkerCommand,
   CreateRegionVolumeCommand,
   UpdateRegionVolumeCommand,
   DeleteRegionVolumeCommand,
@@ -1422,6 +1426,45 @@ function applyDeleteRegionArea(
 // Plan 069.7 — direct Volume authoring. Operate on the canonical volumes
 // and re-derive the `@deprecated` area/ambience aliases (commands don't
 // re-normalize).
+function applyCreateRegionMarker(
+  region: RegionDocument,
+  command: CreateRegionMarkerCommand
+): RegionDocument {
+  return {
+    ...region,
+    markers: [
+      ...(region.markers ?? []),
+      createRegionMarker(command.payload.marker)
+    ]
+  };
+}
+
+function applyUpdateRegionMarker(
+  region: RegionDocument,
+  command: UpdateRegionMarkerCommand
+): RegionDocument {
+  return {
+    ...region,
+    markers: (region.markers ?? []).map((marker) =>
+      marker.markerId === command.payload.markerId
+        ? createRegionMarker({ ...marker, ...command.payload.patch })
+        : marker
+    )
+  };
+}
+
+function applyDeleteRegionMarker(
+  region: RegionDocument,
+  command: DeleteRegionMarkerCommand
+): RegionDocument {
+  return {
+    ...region,
+    markers: (region.markers ?? []).filter(
+      (marker) => marker.markerId !== command.payload.markerId
+    )
+  };
+}
+
 function applyCreateRegionVolume(
   region: RegionDocument,
   command: CreateRegionVolumeCommand
@@ -1782,6 +1825,15 @@ export function executeCommand(
       break;
     case "DeleteRegionArea":
       updatedRegion = applyDeleteRegionArea(region, command);
+      break;
+    case "CreateRegionMarker":
+      updatedRegion = applyCreateRegionMarker(region, command);
+      break;
+    case "UpdateRegionMarker":
+      updatedRegion = applyUpdateRegionMarker(region, command);
+      break;
+    case "DeleteRegionMarker":
+      updatedRegion = applyDeleteRegionMarker(region, command);
       break;
     case "CreateRegionVolume":
       updatedRegion = applyCreateRegionVolume(region, command);

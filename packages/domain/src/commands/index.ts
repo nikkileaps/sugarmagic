@@ -256,6 +256,30 @@ export type DeleteRegionVolumeCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateRegionMarkerCommand = SemanticCommandBase<
+  "CreateRegionMarker",
+  {
+    marker: import("../region-authoring").RegionMarker;
+  }
+>;
+
+export type UpdateRegionMarkerCommand = SemanticCommandBase<
+  "UpdateRegionMarker",
+  {
+    markerId: string;
+    patch: Partial<
+      Omit<import("../region-authoring").RegionMarker, "markerId">
+    >;
+  }
+>;
+
+export type DeleteRegionMarkerCommand = SemanticCommandBase<
+  "DeleteRegionMarker",
+  {
+    markerId: string;
+  }
+>;
+
 export type CreateRegionNPCBehaviorCommand = SemanticCommandBase<
   "CreateRegionNPCBehavior",
   {
@@ -1148,6 +1172,9 @@ export type SemanticCommand =
   | CreateRegionVolumeCommand
   | UpdateRegionVolumeCommand
   | DeleteRegionVolumeCommand
+  | CreateRegionMarkerCommand
+  | UpdateRegionMarkerCommand
+  | DeleteRegionMarkerCommand
   | CreateRegionNPCBehaviorCommand
   | UpdateRegionNPCBehaviorCommand
   | DeleteRegionNPCBehaviorCommand

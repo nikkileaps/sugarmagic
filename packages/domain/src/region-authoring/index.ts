@@ -143,10 +143,24 @@ export interface RegionLandscapeState {
   paintPayload: RegionLandscapePaintPayload | null;
 }
 
+/**
+ * A named point in a region: where a door puts the player down and which
+ * way they face, or the exact spot an NPC stands rather than somewhere
+ * inside a box.
+ *
+ * [LAW:one-type-per-behavior] There is no `kind` tag. A marker is a named
+ * place; what it MEANS comes from whoever references it, so tagging one
+ * "arrival" and another "npc-spot" would be a mode with no behaviour
+ * behind it.
+ *
+ * Carries a full transform rather than a bare position because facing is
+ * half the point in both cases -- arriving through a door pointed at a
+ * wall, or standing behind a counter looking away from it.
+ */
 export interface RegionMarker {
   markerId: string;
-  kind: string;
-  position: [number, number, number];
+  displayName: string;
+  transform: RegionSceneTransform;
 }
 
 export type RegionAudioTrigger =
@@ -311,11 +325,24 @@ export interface RegionVolumeDefinition {
   color: string | null;
 }
 
+/**
+ * Where a task sends the NPC.
+ *
+ * [LAW:types-are-the-program] One field with two shapes rather than an
+ * areaId and a markerId that can both be set and disagree. An area
+ * scatters the NPC to a hash-chosen point inside it, which is right for
+ * "wander the market"; a marker is the one exact spot, which is right for
+ * "stand behind the counter".
+ */
+export type RegionBehaviorTaskTarget =
+  | { kind: "area"; areaId: string }
+  | { kind: "marker"; markerId: string };
+
 export interface RegionNPCBehaviorTask {
   taskId: string;
   displayName: string;
   description: string | null;
-  targetAreaId: string | null;
+  target: RegionBehaviorTaskTarget | null;
   currentActivity: string;
   currentGoal: string;
   activation: RegionBehaviorQuestBinding;
@@ -767,7 +794,9 @@ export function createRegionBehaviorQuestBinding(
 }
 
 export function createRegionNPCBehaviorTask(
-  overrides: Partial<RegionNPCBehaviorTask> = {}
+  /** `targetAreaId` is the pre-marker spelling of `target`; the factory is
+   *  where it is read, so nothing downstream has to know it existed. */
+  overrides: Partial<RegionNPCBehaviorTask> & { targetAreaId?: unknown } = {}
 ): RegionNPCBehaviorTask {
   return {
     taskId: overrides.taskId ?? createRegionNPCBehaviorTaskId(),
@@ -777,11 +806,7 @@ export function createRegionNPCBehaviorTask(
       overrides.description.trim().length > 0
         ? overrides.description
         : null,
-    targetAreaId:
-      typeof overrides.targetAreaId === "string" &&
-      overrides.targetAreaId.trim().length > 0
-        ? overrides.targetAreaId.trim()
-        : null,
+    target: normalizeBehaviorTaskTarget(overrides),
     currentActivity:
       typeof overrides.currentActivity === "string" &&
       overrides.currentActivity.trim().length > 0
@@ -918,6 +943,44 @@ export function createItemPresenceId(): string {
 
 export function createInspectableBehaviorId(): string {
   return createUuid();
+}
+
+/**
+ * A task's destination, reading a pre-marker file's bare `targetAreaId`
+ * as the area shape it always meant.
+ */
+function normalizeBehaviorTaskTarget(
+  source: Partial<RegionNPCBehaviorTask> & { targetAreaId?: unknown }
+): RegionBehaviorTaskTarget | null {
+  const target = source.target;
+  if (target && target.kind === "marker") {
+    return target.markerId.trim().length > 0
+      ? { kind: "marker", markerId: target.markerId.trim() }
+      : null;
+  }
+  if (target && target.kind === "area") {
+    return target.areaId.trim().length > 0
+      ? { kind: "area", areaId: target.areaId.trim() }
+      : null;
+  }
+  const legacyAreaId = source.targetAreaId;
+  return typeof legacyAreaId === "string" && legacyAreaId.trim().length > 0
+    ? { kind: "area", areaId: legacyAreaId.trim() }
+    : null;
+}
+
+export function createRegionMarkerId(): string {
+  return createUuid();
+}
+
+export function createRegionMarker(
+  overrides: Partial<RegionMarker> = {}
+): RegionMarker {
+  return {
+    markerId: overrides.markerId ?? createRegionMarkerId(),
+    displayName: overrides.displayName ?? "Marker",
+    transform: createRegionSceneTransform(overrides.transform)
+  };
 }
 
 export function createRegionSoundEmitterId(): string {

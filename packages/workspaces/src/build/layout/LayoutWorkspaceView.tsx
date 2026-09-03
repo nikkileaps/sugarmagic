@@ -286,6 +286,16 @@ function buildSceneTree(
     return [...childFolders, ...childAssets];
   };
 
+  const markerNodes = (region.markers ?? []).map((marker) => ({
+    type: "entity" as const,
+    instanceId: marker.markerId,
+    displayName: marker.displayName,
+    entityKind: "marker" as const,
+    assetKind: "marker",
+    assetDefinitionId: null,
+    visible: true
+  }));
+
   const playerNode = regionContents.playerPresence
     ? [
         {
@@ -346,6 +356,7 @@ function buildSceneTree(
       children: [
         landscapeNode,
         ...playerNode,
+        ...markerNodes,
         ...npcNodes,
         ...itemNodes,
         ...buildChildren(null)
@@ -715,7 +726,12 @@ export function useLayoutWorkspaceView(
         currentContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
-      const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
+      const marker =
+        (currentRegion.markers ?? []).find(
+          (candidate) => candidate.markerId === instanceId
+        ) ?? null;
+      const source =
+        asset ?? playerPresence ?? npcPresence ?? itemPresence ?? marker;
       if (!source) return;
 
       const nextPosition: [number, number, number] = [
@@ -743,6 +759,28 @@ export function useLayoutWorkspaceView(
             position: nextPosition,
             rotation: nextRotation,
             scale: nextScale
+          }
+        });
+        return;
+      }
+
+      if (marker) {
+        onCommand({
+          kind: "UpdateRegionMarker",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "region-marker", subjectId: instanceId },
+          payload: {
+            markerId: instanceId,
+            patch: {
+              transform: {
+                position: nextPosition,
+                rotation: nextRotation,
+                scale: nextScale
+              }
+            }
           }
         });
         return;

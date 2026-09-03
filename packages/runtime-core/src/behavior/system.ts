@@ -212,6 +212,51 @@ function sampleNormalizedOffset(hash: number): number {
   return ((hash % 1000) / 999) * 2 - 1;
 }
 
+/**
+ * Where a task actually sends the NPC, whichever shape it names.
+ *
+ * [LAW:dataflow-not-control-flow] An area and a marker both resolve to one
+ * destination value, so everything downstream runs the same operations on
+ * it. The difference is the point: an area scatters, a marker does not.
+ */
+function resolveTaskDestination(
+  region: RegionDocument,
+  task: RegionNPCBehaviorTask | null,
+  npcDefinitionId: string,
+  arrivalThresholdMeters: number
+): { id: string; displayName: string; x: number; z: number } | null {
+  const target = task?.target ?? null;
+  if (!target) return null;
+
+  if (target.kind === "marker") {
+    const marker = (region.markers ?? []).find(
+      (candidate) => candidate.markerId === target.markerId
+    );
+    if (!marker) return null;
+    return {
+      id: marker.markerId,
+      displayName: marker.displayName,
+      x: marker.transform.position[0],
+      z: marker.transform.position[2]
+    };
+  }
+
+  const area = findRegionAreaById(region, target.areaId);
+  if (!area) return null;
+  const point = resolveTaskTargetPoint(
+    area,
+    npcDefinitionId,
+    task?.taskId ?? null,
+    arrivalThresholdMeters
+  );
+  return {
+    id: area.areaId,
+    displayName: area.displayName,
+    x: point.x,
+    z: point.z
+  };
+}
+
 function resolveTaskTargetPoint(
   area: RegionDocument["areas"][number],
   npcDefinitionId: string,
@@ -643,22 +688,19 @@ export function createRuntimeNpcBehaviorSystem(
       getTimeOfDayBand(blackboard),
       questProgress
     );
-    const targetArea = task ? findRegionAreaById(region, task.targetAreaId) : null;
-    const directiveTargetPoint = targetArea
-      ? resolveTaskTargetPoint(
-          targetArea,
-          npc.npcDefinitionId,
-          task?.taskId ?? null,
-          arrivalThresholdMeters
-        )
-      : null;
+    const destination = resolveTaskDestination(
+      region,
+      task,
+      npc.npcDefinitionId,
+      arrivalThresholdMeters
+    );
     const directive: MovementDirective = {
-      targetAreaId: targetArea?.areaId ?? null,
-      targetAreaDisplayName: targetArea?.displayName ?? null,
+      targetAreaId: destination?.id ?? null,
+      targetAreaDisplayName: destination?.displayName ?? null,
       targetTaskId: task?.taskId ?? null,
       targetTaskDisplayName: task?.displayName ?? null,
-      targetX: directiveTargetPoint?.x ?? null,
-      targetZ: directiveTargetPoint?.z ?? null
+      targetX: destination?.x ?? null,
+      targetZ: destination?.z ?? null
     };
     let state =
       movementStateByNpcId.get(npc.npcDefinitionId) ??
@@ -692,14 +734,16 @@ export function createRuntimeNpcBehaviorSystem(
     let distanceToTargetMeters: number | null = null;
     let failureReason: "stuck" | "missing-target-area" | null = null;
 
-    if (!task || !targetArea) {
-      state.status =
-        task?.targetAreaId && !targetArea ? "blocked" : "idle";
-      state.blockedAtMs = task?.targetAreaId && !targetArea ? now() : null;
-      failureReason = task?.targetAreaId && !targetArea ? "missing-target-area" : null;
+    if (!task || !destination) {
+      // A task naming a place that no longer exists is blocked, not idle:
+      // the author asked for something the region cannot answer.
+      const namedAMissingPlace = Boolean(task?.target) && !destination;
+      state.status = namedAMissingPlace ? "blocked" : "idle";
+      state.blockedAtMs = namedAMissingPlace ? now() : null;
+      failureReason = namedAMissingPlace ? "missing-target-area" : null;
     } else {
-      const targetX = state.targetX ?? targetArea.bounds.center[0];
-      const targetZ = state.targetZ ?? targetArea.bounds.center[2];
+      const targetX = state.targetX ?? destination.x;
+      const targetZ = state.targetZ ?? destination.z;
       const targetPoint = { x: targetX, z: targetZ };
 
       const movedSinceLastProgress =
