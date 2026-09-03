@@ -7,7 +7,8 @@ description: Turn a ChatGPT-generated PBR spec sheet into a production seamless 
 
 You are turning one ChatGPT-generated spec sheet image into five production
 texture maps. Everything in this skill was verified in practice on the first
-two materials (red_brick and rough_wood, 2026-09-02). The traps below are not
+four materials (red_brick, rough_wood, concrete, concrete_block,
+2026-09-02). The traps below are not
 hypothetical; each one shipped a defect or nearly did. A defect you miss here
 does not stay hidden - it surfaces in nikki's Blender viewport under real
 light, and she is QA.
@@ -30,7 +31,7 @@ wearing a different disguise.
   roughness are single-channel grayscale.
 - Blender color space: basecolor is sRGB; everything else is Non-Color; the
   normal map goes through a Normal Map node.
-- Reference scripts (working code from the first two materials; adapt paths
+- Reference scripts (working code from the shipped materials; adapt paths
   and cells per material): `.claude/skills/material-making/reference/`
   - `harvest_panels.py` - detects per-panel structure grids and draws debug
     overlays.
@@ -58,8 +59,9 @@ This was discovered the hard way, so take it as settled:
   texture, and they are NOT tileable.
 - Consequence for what gets harvested: basecolor pixels come from the
   basecolor panel; the normal from the normal panel; roughness from the
-  roughness panel. For grid and banded materials the height and AO panels
-  are NOT harvested: height is computed by integrating the composed normal,
+  roughness panel. For cell-harvested grid and banded materials the
+  height and AO panels are NOT harvested: height is computed by
+  integrating the composed normal,
   and AO is derived from that height, so that normal, height, and AO
   describe one consistent surface instead of three unrelated paintings.
   The exception is any surface whose relief is stochastic mottle - the
@@ -279,10 +281,14 @@ of a cent (esrgan) to about 10 cents (clarity).
 
 ### 8. Verify BEFORE nikki sees it, every round
 
-Every defect that has ever been found in this pipeline (brick fragments,
-height speckle, dark-band false gouges, chevron mirrors, herringbone weave,
-the red-channel mirror) was visible in an intermediate image that had not
-yet shipped. The verification pass is where you catch them instead of her.
+Every composition defect caught so far (brick fragments, height speckle,
+dark-band false gouges, chevron mirrors, herringbone weave, the
+red-channel mirror, floating-scratch verticals, absent joint boundaries,
+stray joint dashes) was visible in an intermediate image that had not yet
+shipped. The verification pass is where you catch them instead of her. The
+one report that came back from Blender anyway - concrete_block reading a
+little noisy in-engine - is recorded as a known limitation in step 4 with
+its revisit trigger.
 
 - Seam metrics: mean abs diff of opposite edge rows/columns vs an interior
   adjacent-column baseline; the wrap must be at or below the baseline. Do a

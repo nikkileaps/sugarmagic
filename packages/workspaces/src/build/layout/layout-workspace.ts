@@ -140,74 +140,75 @@ export function createLayoutWorkspace(
         const sceneObject = getSceneObject(instanceId);
         if (!sceneObject) return;
 
-        if (sceneObject.kind === "asset") {
-          config.onCommand({
-            kind: "TransformPlacedAsset",
-            target: {
-              aggregateKind: "region-document",
-              aggregateId: region.identity.id
-            },
-            subject: { subjectKind: "placed-asset", subjectId: instanceId },
-            payload: {
-              instanceId,
-              position: values.position,
-              rotation: values.rotation,
-              scale: values.scale
-            }
-          });
-          return;
-        }
+        const target = {
+          aggregateKind: "region-document" as const,
+          aggregateId: region.identity.id
+        };
+        const { position, rotation, scale } = values;
 
-        if (sceneObject.kind === "player") {
-          config.onCommand({
-            kind: "TransformPlayerPresence",
-            target: {
-              aggregateKind: "region-document",
-              aggregateId: region.identity.id
-            },
-            subject: { subjectKind: "player-presence", subjectId: instanceId },
-            payload: {
-              presenceId: instanceId,
-              position: values.position,
-              rotation: values.rotation,
-              scale: values.scale
-            }
-          });
-          return;
-        }
+        // [LAW:types-are-the-program] Exhaustive over the kind, with the
+        // `never` check below. This used to end in an unguarded "anything
+        // else is an NPC", which silently fired a presence command for a
+        // marker: no NPC had that id, nothing changed, and the gizmo
+        // snapped back to the authored position with no error anywhere.
+        switch (sceneObject.kind) {
+          case "asset":
+            config.onCommand({
+              kind: "TransformPlacedAsset",
+              target,
+              subject: { subjectKind: "placed-asset", subjectId: instanceId },
+              payload: { instanceId, position, rotation, scale }
+            });
+            return;
 
-        if (sceneObject.kind === "item") {
-          config.onCommand({
-            kind: "TransformItemPresence",
-            target: {
-              aggregateKind: "region-document",
-              aggregateId: region.identity.id
-            },
-            subject: { subjectKind: "item-presence", subjectId: instanceId },
-            payload: {
-              presenceId: instanceId,
-              position: values.position,
-              rotation: values.rotation,
-              scale: values.scale
-            }
-          });
-          return;
-        }
+          case "player":
+            config.onCommand({
+              kind: "TransformPlayerPresence",
+              target,
+              subject: { subjectKind: "player-presence", subjectId: instanceId },
+              payload: { presenceId: instanceId, position, rotation, scale }
+            });
+            return;
 
-        config.onCommand({
-          kind: "TransformNPCPresence",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: region.identity.id
-          },
-          subject: { subjectKind: "npc-presence", subjectId: instanceId },
-          payload: {
-            presenceId: instanceId,
-            position: values.position,
-            rotation: values.rotation,
-            scale: values.scale
+          case "item":
+            config.onCommand({
+              kind: "TransformItemPresence",
+              target,
+              subject: { subjectKind: "item-presence", subjectId: instanceId },
+              payload: { presenceId: instanceId, position, rotation, scale }
+            });
+            return;
+
+          case "npc":
+            config.onCommand({
+              kind: "TransformNPCPresence",
+              target,
+              subject: { subjectKind: "npc-presence", subjectId: instanceId },
+              payload: { presenceId: instanceId, position, rotation, scale }
+            });
+            return;
+
+          case "marker":
+            config.onCommand({
+              kind: "UpdateRegionMarker",
+              target,
+              subject: { subjectKind: "region-marker", subjectId: instanceId },
+              payload: {
+                markerId: instanceId,
+                patch: { transform: { position, rotation, scale } }
+              }
+            });
+            return;
+
+          default: {
+            const unhandled: never = sceneObject.kind;
+            console.warn(
+              "[layout-workspace] no transform command for scene object kind",
+              unhandled,
+              instanceId
+            );
           }
-        });
+        }
       },
       onCancel(instanceId, values) {
         gizmo.setPosition(values.position);

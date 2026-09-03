@@ -832,20 +832,32 @@ export function useLayoutWorkspaceView(
         return;
       }
 
-      onCommand({
-        kind: "TransformNPCPresence",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: currentRegion.identity.id
-        },
-        subject: { subjectKind: "npc-presence", subjectId: instanceId },
-        payload: {
-          presenceId: instanceId,
-          position: nextPosition,
-          rotation: nextRotation,
-          scale: nextScale
-        }
-      });
+      if (npcPresence) {
+        onCommand({
+          kind: "TransformNPCPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "npc-presence", subjectId: instanceId },
+          payload: {
+            presenceId: instanceId,
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        });
+        return;
+      }
+
+      // Every branch above is explicit so nothing reaches here by falling
+      // through. This used to be an unguarded NPC command, which is how a
+      // marker drag quietly fired a presence transform for an id no
+      // presence had.
+      console.warn(
+        "[layout] no transform command for this selection",
+        instanceId
+      );
     },
     [getRegion, getRegionContents, onCommand]
   );
