@@ -222,6 +222,7 @@ import {
 } from "./assetPreload";
 import { WebAudioAdapter } from "./audio";
 import { FRESH_START_SESSION_STORAGE_KEY } from "./save/freshStart";
+import { createSerialRunner } from "./serialRunner";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -2237,7 +2238,31 @@ export function createWebRuntimeHost(
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
-  async function start(state: WebRuntimeStartState): Promise<void> {
+  /**
+   * Boots run one after another, never alongside each other.
+   *
+   * [LAW:no-ambient-temporal-coupling] A boot is a long await chain that
+   * reassigns host-wide state as it goes -- the action registry, the world,
+   * the assembly. Two overlapping boots interleave those writes, and which
+   * one wins depends on how far each got: the registry a later boot created
+   * receives an earlier boot's registrations, and the duplicate throws.
+   *
+   * [LAW:single-enforcer] Nothing on the calling side prevents the overlap.
+   * The preview fires `void host.start(...)` per boot message and Studio
+   * answers every READY for the window's lifetime, so the rule lives here,
+   * where the hazard is, rather than in every caller's memory.
+   *
+   * Sequential boots already work -- `runStart` disposes the previous
+   * runtime before building the next -- so this makes every boot
+   * sequential and nothing else changes.
+   */
+  const boots = createSerialRunner();
+
+  function start(state: WebRuntimeStartState): Promise<void> {
+    return boots.run(() => runStart(state));
+  }
+
+  async function runStart(state: WebRuntimeStartState): Promise<void> {
     // Plan 070.1 — wall-clock the whole boot (the PREVIEW_BOOT reboot cost).
     const bootStart = ownerWindow.performance.now();
     if (!started) {
