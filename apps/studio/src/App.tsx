@@ -4172,6 +4172,23 @@ export function App() {
                       }
                     }}
                   >
+                    {/* Studio reopens the last project on its own now, so
+                        the welcome dialog no longer appears -- this is the
+                        way to switch to a different one. */}
+                    <Menu.Item
+                      onClick={handleOpenProject}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      📁 Open Game
+                    </Menu.Item>
+                    <Menu.Divider />
                     <Menu.Item
                       onClick={handleSave}
                       // Always available: not every mutation flips the
