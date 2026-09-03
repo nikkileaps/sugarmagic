@@ -40,6 +40,8 @@ wearing a different disguise.
     compose_wall.
   - `compose_stochastic.py` - the patch-quilt composer for stochastic
     materials.
+  - `compose_blocks.py` - the reconstruction composer for grid materials
+    whose features are larger than the panels.
   - `enhance_clarity.py` - the Replicate enhancement with seam splice.
 - Work in the session scratchpad, never in packages/apps. Only the final
   PNGs go to the material's `textures/` directory.
@@ -60,9 +62,11 @@ This was discovered the hard way, so take it as settled:
   are NOT harvested: height is computed by integrating the composed normal,
   and AO is derived from that height, so that normal, height, and AO
   describe one consistent surface instead of three unrelated paintings.
-  Stochastic materials are the one exception - they harvest the height
-  panel (see step 6 for the mechanism); AO is still derived from height in
-  every family.
+  The exception is any surface whose relief is stochastic mottle - the
+  stochastic family, and reconstructed grid materials whose block faces
+  are mottle - which harvest or quilt-reconstruct the height panel instead
+  (see step 6 for the mechanism). AO is still derived from height in every
+  family.
 - Cross-map registration happens at the shared layout grid level - brick
   boundaries align because the composed grid is shared - never at pixel
   level. Faces will not match blotch-for-blotch across maps, and that is
@@ -107,6 +111,12 @@ bricks in the composed output. If the column profile shows no structure
 line, there is no joint there, whatever your eyes say. The profile is the
 authority; eyes lose this argument.
 
+And sometimes there is nothing to harvest at all: a grid material whose
+features are LARGER than the panels (concrete_block - blocks bigger than
+the panel) has ZERO complete joint-bounded cells anywhere. Do not shave
+partial cells to fake completeness. Reconstruct the wall instead - see the
+oversized-grid composer in step 4.
+
 ### 4. Compose a 1024 tile on a seeded layout
 
 Paste with modulo (wrap-around) coordinates so the tile is seamless BY
@@ -141,11 +151,52 @@ Stochastic materials (concrete-like: isotropic mottle, no grid, no bands;
   herringbone risk. But the normal channel inversion math in step 5 still
   applies to every flip, whatever the family.
 
+Oversized-grid materials (concrete_block: features larger than the panel,
+so no complete cells exist; `compose_blocks.py`):
+
+- The wall is RECONSTRUCTED instead of cell-harvested, still entirely from
+  spec pixels.
+- Faces are stochastic mottle: fill the whole canvas with a patch quilt
+  drawn from measured face-interior rects, plus subtle per-block tone
+  jitter feathered inside grid cells.
+- Joints are harvested as strips - a band of ~14 px half-width around each
+  measured joint line, worn edges included - and stamped along a
+  running-bond grid. The order is load-bearing: vertical joints FIRST at
+  full row height, then continuous horizontal beds stamped OVER their
+  ends, so every junction reads as a clean T - the way a real block wall
+  runs continuous beds with the verticals tucked between. Verticals inset
+  from the beds with faded ends read as floating scratches - this
+  happened.
+- Joint strength varies along the source line. Stamp the most pronounced
+  of three candidate segments per boundary, or some boundaries read as
+  absent - this happened.
+- When the panel's own vertical joint is too faint to read as a boundary,
+  reuse the strong horizontal strips rotated 90 degrees for the verticals.
+  The rotation math for normal vectors is in step 5. Validate with the
+  integration diagnostic in step 6: all joints must integrate as valleys -
+  they did on concrete_block.
+- THE PARTIAL-ROW TRAP, it bit: the panel's partial rows (top and bottom,
+  cut by the panel border) contain vertical joints of their own. A face
+  rect that spans a partial row's full width quilts those joint fragments
+  into block faces as stray dashes. Measure column profiles inside each
+  partial row and split the face rects around any joint found - every
+  panel of concrete_block had one at x ~112-122.
+- Known limitation, recorded from nikki's Blender check: the
+  concrete_block set reads "a little noisy" in-engine - accepted for now.
+  Candidate causes: anisotropic stretch in face-quilt windows (clamped
+  rects) and enhancement specks. Revisit trigger: if a reconstructed
+  material's faces read noisy in-engine, coarsen the face quilt lattice
+  and re-eyeball before touching anything else.
+
 ### 5. Normal map math (exact, not optional)
 
 - Horizontal flip of a normal cell = mirror + invert the red channel.
   Vertical flip = mirror + invert the green channel. A flip without the
   channel inversion is a wrong normal, silently.
+- Rotation is the same law: rotating a normal map rotates its vectors. 90
+  degrees clockwise maps (nx, ny) to (ny, -nx), i.e. R' = G and G' =
+  255 - R. Used when block verticals reuse rotated horizontal joint strips
+  (step 4); validated on concrete_block by the integration diagnostic.
 - Neutralize each cell's mean X/Y to 128 before pasting. A whole cell
   averages facing straight out; skip this and the wall patchworks with tint
   and the height integration is corrupted.
@@ -174,8 +225,16 @@ frequency - and no spectral shaping recovers the spec height's calm
 clouds, because the normal panel does not contain them. The
 integrate-from-normal rule exists to keep relief registered at feature
 edges; a stochastic material has no edges to misregister, so the rule's
-purpose survives the exception. Grid and banded materials keep
-integration.
+purpose survives the exception. Cell-harvested grid and banded materials
+keep integration.
+
+The exception extends to reconstructed grid materials whose block faces
+are stochastic mottle (concrete_block): quilt-reconstruct the height from
+the height panel, for the same reason - mottled faces integrate into
+churn. For those materials, integrating the composed normal is kept as a
+DIAGNOSTIC only, never as the shipped height: it checks the red channel
+convention and must show every joint - including any rotated ones - as a
+valley.
 
 High-pass the result to kill the wall-scale drift the integration
 accumulates: sigma 60 (of 1024) for brick, sigma 30 for wood, then
@@ -228,6 +287,16 @@ yet shipped. The verification pass is where you catch them instead of her.
 - Seam metrics: mean abs diff of opposite edge rows/columns vs an interior
   adjacent-column baseline; the wrap must be at or below the baseline. Do a
   roll-by-half visual check too.
+  THE BASELINE TRAP, learned on concrete_block: when the composed layout
+  puts a wrap line THROUGH structure - a joint bed lying on the tile edge,
+  a joint column at x=0 - the flat-interior baseline false-alarms: the
+  wrap diff equals the interior's own joint-line gradient, not a seam.
+  Verify by comparing the wrap against the SAME structure in the interior
+  (adjacent-row diff at an interior bed line). `enhance_clarity.py` now
+  uses the fair baseline automatically: each wrap edge vs the 99.9th
+  percentile of like-oriented interior adjacent-diffs, threshold 1.2x. A
+  visual wrap strip (bottom 64 rows stacked over top 64) settles any
+  doubt.
 - Proof sheet of all five maps plus a 2x2 tiling of the basecolor.
 - Lit preview: lambert-shade the basecolor with the composed normal under a
   raking light (light ~ [-0.45, 0.55, 0.7]); compare against the spec
@@ -283,8 +352,9 @@ else at hour three:
 
 1. Five different paintings, not five views. Harvest basecolor, normal,
    roughness from their own panels; integrate height from the composed
-   normal for grid and banded materials (stochastic harvests its height
-   panel instead); derive AO from height; register at the layout level
+   normal only where faces are cell-harvested (grid, banded) - stochastic
+   surfaces, including reconstructed block faces, take height from the
+   height panel; derive AO from height; register at the layout level
    only.
 2. A panel-edge feature that looks complete is not complete. No structure
    line in the profile = no joint, whatever your eyes say.
