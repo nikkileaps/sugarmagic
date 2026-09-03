@@ -541,7 +541,9 @@ export function createAuthoringViewport(
       npcDefinitions,
       // Compose the ambient Scene's overlay exactly like the game does --
       // Scene-scoped placements must render in the viewport too.
-      activeScene: projection.activeScene
+      activeScene: projection.activeScene,
+      // Studio only: an author has to see a marker to grab it.
+      includeMarkers: true
     });
     const currentObjects = resolvedObjects.map((object) =>
       applyTransformOverride(

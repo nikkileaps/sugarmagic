@@ -13,6 +13,7 @@ import {
   type RegionItemPresence,
   type PlacedAssetInstance,
   type RegionNPCPresence,
+  type RegionMarker,
   type RegionPlayerPresence,
   type Scene,
   type SceneAssetAppearanceOverride,
@@ -59,7 +60,7 @@ export interface SceneObjectCapsuleSpec {
   color: number;
 }
 
-export type SceneObjectKind = "asset" | "player" | "npc" | "item";
+export type SceneObjectKind = "asset" | "player" | "npc" | "item" | "marker";
 
 export interface SceneObject {
   instanceId: string;
@@ -100,6 +101,12 @@ export interface SceneResolutionOptions {
   npcDefinitions?: NPCDefinition[];
   includePlayerPresence?: boolean;
   /**
+   * Draw the region's markers. Studio passes true so an author can select
+   * and move them; the game leaves it false because a marker is an
+   * authoring aid, not something a player should ever see.
+   */
+  includeMarkers?: boolean;
+  /**
    * Plan 058 §058.1 — the active narrative Scene whose overlay
    * composes onto the region base (Pattern 1: Base + Overlay).
    * Null/omitted composes base-only: placed assets from the
@@ -118,6 +125,7 @@ export function resolveSceneObjects(
     itemDefinitions = [],
     npcDefinitions = [],
     includePlayerPresence = true,
+    includeMarkers = false,
     activeScene = null
   } = options;
   const contents = composeRegionContents(region, activeScene);
@@ -138,6 +146,15 @@ export function resolveSceneObjects(
     sceneObjects.push(
       createPlayerSceneObject(contents.playerPresence, playerDefinition, contentLibrary)
     );
+  }
+
+  // Markers belong to the region, not to a Scene overlay, so they are read
+  // straight off the document rather than out of the composed contents.
+  // They draw so the author can see and grab them; the game never shows one.
+  if (includeMarkers) {
+    for (const marker of region.markers ?? []) {
+      sceneObjects.push(createMarkerSceneObject(marker));
+    }
   }
 
   for (const presence of contents.npcPresences) {
@@ -380,6 +397,35 @@ export function computeNpcAgentDimensions(
   const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
   const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
   return { height, radius };
+}
+
+/**
+ * A marker has no model and never will -- it is a named place. It draws as
+ * a small capsule so there is something to see and something for the
+ * transform gizmo to attach to.
+ */
+function createMarkerSceneObject(marker: RegionMarker): SceneObject {
+  return {
+    instanceId: marker.markerId,
+    kind: "marker",
+    displayName: marker.displayName,
+    assetDefinitionId: null,
+    assetKind: null,
+    modelSourcePath: null,
+    targetModelHeight: null,
+    effectiveShaders: { surface: null, deform: null, effect: null },
+    effectiveMaterialSlots: [],
+    effectiveShader: null,
+    transform: {
+      position: marker.transform.position,
+      rotation: marker.transform.rotation,
+      scale: marker.transform.scale
+    },
+    representationKey: "marker",
+    capsule: { height: 1.6, radius: 0.25, color: 0xf9e2af },
+    // Nothing collides with a marker; it is a place, not a body.
+    collider: null
+  };
 }
 
 function createPlayerSceneObject(

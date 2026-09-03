@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 import {
   applyCommand,
   createAuthoringSession,
@@ -151,5 +152,55 @@ describe("a behavior task's destination", () => {
   it("treats a blank legacy target as no target", () => {
     expect(createRegionNPCBehaviorTask({ targetAreaId: "  " }).target).toBeNull();
     expect(createRegionNPCBehaviorTask({}).target).toBeNull();
+  });
+});
+
+describe("a marker in the viewport", () => {
+  const withMarker = () => {
+    const region = createDefaultRegion({
+      regionId: REGION_ID,
+      displayName: "Hollow"
+    });
+    region.markers = [
+      createRegionMarker({
+        markerId: "marker:counter",
+        displayName: "Behind Counter",
+        transform: {
+          position: [3, 0, -1],
+          rotation: [0, 45, 0],
+          scale: [1, 1, 1]
+        }
+      })
+    ];
+    return region;
+  };
+
+  it("draws for Studio, so there is something to see and grab", () => {
+    // Without a scene object there is no gizmo: the transform controller
+    // attaches to a drawn object, so a marker that does not render cannot
+    // be moved.
+    const objects = resolveSceneObjects(withMarker(), { includeMarkers: true });
+    const marker = objects.find((o) => o.instanceId === "marker:counter");
+
+    expect(marker).toBeDefined();
+    expect(marker!.kind).toBe("marker");
+    expect(marker!.displayName).toBe("Behind Counter");
+    expect(marker!.transform.position).toEqual([3, 0, -1]);
+    // No model, so it needs the capsule the renderer falls back to.
+    expect(marker!.capsule).not.toBeNull();
+  });
+
+  it("does not draw by default, so the player never sees one", () => {
+    // The game and the navmesh bake both take the default. A marker is an
+    // authoring aid; a capsule standing in the world would be a bug.
+    const objects = resolveSceneObjects(withMarker());
+
+    expect(objects.some((o) => o.kind === "marker")).toBe(false);
+  });
+
+  it("carries no collider, because a place is not a body", () => {
+    const objects = resolveSceneObjects(withMarker(), { includeMarkers: true });
+
+    expect(objects.find((o) => o.kind === "marker")!.collider).toBeNull();
   });
 });

@@ -107,7 +107,10 @@ export function createLayoutWorkspace(
     const region = config.getRegion();
     if (!region) return null;
     const objects = resolveSceneObjects(region, {
-      activeScene: config.getActiveScene()
+      activeScene: config.getActiveScene(),
+      // The gizmo asks this for the object it is attaching to, so markers
+      // have to be in the answer or selecting one finds nothing.
+      includeMarkers: true
     });
     return objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null;
   }
