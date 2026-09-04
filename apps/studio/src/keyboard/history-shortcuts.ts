@@ -1,32 +1,38 @@
 /**
- * The application-wide undo keystroke.
+ * The application-wide undo and redo keystrokes.
  *
- * Pure decisions only -- whether a keystroke asks for undo, and whether the
- * author is somewhere that owns its own undo. The listener that acts on them
- * lives with the rest of the app's wiring.
+ * Pure decisions only -- which history action a keystroke asks for, and whether
+ * the author is somewhere that owns its own undo. The listener that acts on
+ * them lives with the rest of the app's wiring.
  */
 
+/** Which way through the session's history a keystroke asks to go. */
+export type HistoryAction = "undo" | "redo";
+
 /**
- * Whether this keystroke is the undo shortcut: Cmd+Z on a Mac, Ctrl+Z
- * elsewhere.
+ * The history action this keystroke asks for, or null if it asks for neither.
  *
- * Shift is excluded rather than ignored, so Cmd+Shift+Z stays free to mean
- * redo. Reading it as undo would make redo impossible to add without changing
- * what undo means.
+ * One function answers for both so the two can never claim the same chord: a
+ * pair of separate predicates would only stay apart for as long as they went on
+ * agreeing about Shift.
+ *
+ * Undo is Cmd+Z, or Ctrl+Z away from a Mac. Redo is the same chord with Shift,
+ * and Ctrl+Y as well, which is what Windows authors reach for.
  */
-export function isUndoShortcut(event: {
+export function historyShortcut(event: {
   key: string;
   metaKey: boolean;
   ctrlKey: boolean;
   shiftKey: boolean;
   altKey: boolean;
-}): boolean {
-  return (
-    (event.metaKey || event.ctrlKey) &&
-    !event.shiftKey &&
-    !event.altKey &&
-    event.key.toLowerCase() === "z"
-  );
+}): HistoryAction | null {
+  const commandHeld = event.metaKey || event.ctrlKey;
+  if (!commandHeld || event.altKey) return null;
+  const key = event.key.toLowerCase();
+  if (key === "z") return event.shiftKey ? "redo" : "undo";
+  // Ctrl+Y is a redo on Windows. Cmd+Y is taken on a Mac, so it stays Ctrl.
+  if (key === "y" && event.ctrlKey && !event.shiftKey) return "redo";
+  return null;
 }
 
 /**

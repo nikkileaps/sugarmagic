@@ -53,6 +53,7 @@ import {
   type Surface,
   createAuthoringSession,
   applyCommand,
+  redoSession,
   undoSession,
   markSessionClean,
   switchActiveRegion,
@@ -244,7 +245,7 @@ import {
 } from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
-import { isTypingTarget, isUndoShortcut } from "./keyboard/undo-shortcut";
+import { historyShortcut, isTypingTarget } from "./keyboard/history-shortcuts";
 import {
   clearLivePaintedMasks,
   computeAssetColliderBounds,
@@ -1248,6 +1249,7 @@ export function App() {
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
+  const redoCount = session?.redoStack.length ?? 0;
   // Flips false->true once when a project loads; the only session-derived
   // trigger for the preview boot, so edits don't re-fire it.
   const hasSession = session != null;
@@ -3944,18 +3946,26 @@ export function App() {
     projectStore.getState().updateSession(undoSession(s));
   }, []);
 
-  // Cmd+Z / Ctrl+Z anywhere in Studio. The File menu has advertised this
-  // shortcut next to Undo for a while with nothing bound to it.
+  const handleRedo = useCallback(() => {
+    const { session: s } = projectStore.getState();
+    if (!s) return;
+    projectStore.getState().updateSession(redoSession(s));
+  }, []);
+
+  // Undo and redo from the keyboard, anywhere in Studio.
   useEffect(() => {
-    const handleUndoShortcut = (event: KeyboardEvent) => {
-      if (!isUndoShortcut(event) || isTypingTarget(event.target)) return;
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const action = historyShortcut(event);
+      if (!action) return;
       // The browser would otherwise run its own undo over the top of ours.
       event.preventDefault();
-      handleUndo();
+      if (action === "undo") handleUndo();
+      else handleRedo();
     };
-    window.addEventListener("keydown", handleUndoShortcut);
-    return () => window.removeEventListener("keydown", handleUndoShortcut);
-  }, [handleUndo]);
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [handleUndo, handleRedo]);
 
   const statusMessage = useMemo(() => {
     if (phase === "no-project") return "No project open";
@@ -4389,6 +4399,28 @@ export function App() {
                         }}
                       >
                         ↩ Undo
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={handleRedo}
+                        disabled={redoCount === 0}
+                        rightSection={
+                          <Text size="xs" c="var(--sm-color-overlay0)">
+                            ⇧⌘Z
+                          </Text>
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" },
+                            "&[data-disabled]": {
+                              color: "var(--sm-color-overlay0)"
+                            }
+                          }
+                        }}
+                      >
+                        ↪ Redo
                       </Menu.Item>
                       <Menu.Divider
                         styles={{

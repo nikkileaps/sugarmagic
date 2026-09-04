@@ -9,7 +9,11 @@
 export { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 export { createSurfacePreviewGeometry } from "./viewport/surface-preview-samplers";
 export { shouldShowSharedViewport } from "./viewport/viewportVisibility";
-export { isTypingTarget, isUndoShortcut } from "./keyboard/undo-shortcut";
+export {
+  historyShortcut,
+  isTypingTarget,
+  type HistoryAction
+} from "./keyboard/history-shortcuts";
 export {
   isSceneComposer,
   isSelectableHere,
