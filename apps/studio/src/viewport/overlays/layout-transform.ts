@@ -4,10 +4,10 @@
  * Mounts the shared layout interaction controller into the viewport-owned
  * scene roots and connects its state/command edges to shell stores.
  *
- * Gated on `activeBuildWorkspaceKind === "layout"`: the gizmo, pointer
- * handlers, and selection hit-test attach only while the author is in the
- * Layout workspace and detach otherwise, so clicks in the Landscape or
- * Spatial workspaces can't accidentally drag placed assets.
+ * The gizmo, pointer handlers and selection hit-test attach only where
+ * `transformOverlayAttaches` says they belong -- Build > Layout and the Scene
+ * Composer -- and detach otherwise, so clicks in the Landscape or Spatial
+ * workspaces can't accidentally drag placed assets.
  */
 
 import {
@@ -19,9 +19,14 @@ import {
 import { shallowEqual } from "@sugarmagic/shell";
 import {
   createLayoutWorkspace,
-  setLayoutWorkspaceForViewport
+  setLayoutWorkspaceForViewport,
+  type SelectionIntent
 } from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "../overlay-context";
+import {
+  isSelectableHere,
+  transformOverlayAttaches
+} from "./transform-overlay-gates";
 
 export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
   const layout = createLayoutWorkspace({
@@ -30,8 +35,25 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       if (!session) return;
       context.stateAccess.updateSession(applyCommand(session, command));
     },
-    onSelect(entityIds: string[]) {
-      context.stateAccess.setSelection(entityIds);
+    onSelect(intent: SelectionIntent) {
+      switch (intent.kind) {
+        case "replace":
+          context.stateAccess.setSelection([intent.instanceId]);
+          return;
+        case "toggle":
+          context.stateAccess.toggleSelection(intent.instanceId);
+          return;
+        case "clear":
+          context.stateAccess.clearSelection();
+          return;
+        default: {
+          const unhandled: never = intent;
+          console.warn(
+            "[layout-transform] unhandled selection intent",
+            unhandled
+          );
+        }
+      }
     },
     onPreviewTransform(
       instanceId: string,
@@ -45,8 +67,16 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
         scale
       });
     },
-    getSelectedId() {
-      return context.stateAccess.getSelectionIds()[0] ?? null;
+    onClearPreviewTransforms(instanceIds: string[]) {
+      for (const instanceId of instanceIds) {
+        context.stateAccess.clearTransformDraft(instanceId);
+      }
+    },
+    getSelectedIds() {
+      return context.stateAccess.getSelectionIds();
+    },
+    getActiveId() {
+      return context.stateAccess.getActiveSelectionId();
     },
     getRegion() {
       return context.stateAccess.getActiveRegion();
@@ -55,26 +85,12 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       const session = context.stateAccess.getSession();
       return session ? getActiveScene(session) : null;
     },
-    /**
-     * In the scene composer the region is shown but not edited: an
-     * author sees where the station is while placing what this Scene
-     * adds to it (epic #226). Everywhere else -- Build -- every drawn
-     * object is editable, which is what returning true means.
-     */
     isSelectable(instanceId: string) {
-      const shell = context.stateAccess.getShellState?.();
-      const inComposer =
-        shell?.activeProductMode === "story" &&
-        shell?.activeStoryWorkspaceKind === "composer";
-      if (!inComposer) return true;
-      const region = context.stateAccess.getActiveRegion();
-      if (!region) return true;
-      const regionOwned =
-        region.placedAssets.some((asset) => asset.instanceId === instanceId) ||
-        region.npcPresences.some((p) => p.presenceId === instanceId) ||
-        region.itemPresences.some((p) => p.presenceId === instanceId) ||
-        region.playerPresence?.presenceId === instanceId;
-      return !regionOwned;
+      return isSelectableHere(
+        context.stateAccess.getShellState(),
+        context.stateAccess.getActiveRegion(),
+        instanceId
+      );
     }
   });
 
@@ -111,21 +127,33 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     }
   });
 
+  // A reload detaches a selected object and attaches its replacement later,
+  // which drops the outline drawn around it. Nothing in the authored documents
+  // changes to say so, so the outlines are rebuilt when the scene settles.
+  const unsubscribeSettled = context.subscribeRenderablesSettled(() => {
+    if (attached) {
+      layout.syncOverlays();
+    }
+  });
+
   const unsubscribeProjection = context.subscribeToProjection(
     ({ project, shell, viewport }) => ({
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
-      regionId: project.session
-        ? getActiveRegion(project.session)?.identity.id ?? null
-        : null,
+      activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
+      // The region document itself, not just its id: the overlays read
+      // transforms out of it, so an edit or an undo that changes a rotation
+      // without changing what is selected still has to redraw them.
+      region: project.session ? getActiveRegion(project.session) : null,
       selectionIds: shell.selection.entityIds,
+      // The active object is outlined differently from the rest, so a change
+      // in which one is active has to redraw even when the same set stays
+      // selected.
+      activeSelectionId: shell.selection.activeEntityId,
       activeTool: viewport.activeTransformTool
     }),
     (slice) => {
-      const isActive =
-        slice.activeProductMode === "build" &&
-        slice.activeBuildWorkspaceKind === "layout";
-      if (!isActive) {
+      if (!transformOverlayAttaches(slice)) {
         detachWorkspace();
         return;
       }
@@ -139,6 +167,7 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
 
   return () => {
     unsubscribeFrame();
+    unsubscribeSettled();
     unsubscribeProjection();
     detachWorkspace();
     layout.dispose();

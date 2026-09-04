@@ -44,15 +44,11 @@ export function asAuthoredViewportRoot(
   return group as AuthoredViewportRoot;
 }
 
-export function asOverlayViewportRoot(
-  group: THREE.Group
-): OverlayViewportRoot {
+export function asOverlayViewportRoot(group: THREE.Group): OverlayViewportRoot {
   return group as OverlayViewportRoot;
 }
 
-export function asSurfaceViewportRoot(
-  group: THREE.Group
-): SurfaceViewportRoot {
+export function asSurfaceViewportRoot(group: THREE.Group): SurfaceViewportRoot {
   return group as SurfaceViewportRoot;
 }
 
@@ -65,8 +61,16 @@ export interface ViewportOverlayStateAccess {
    *  here rather than each holding its own store reference. */
   getShellState(): ShellState;
   getSelectionIds(): string[];
+  /** The selected object the author touched last, drawn as the active one. */
+  getActiveSelectionId(): string | null;
   setSelection(entityIds: string[]): void;
+  /** Shift-click: the object joins the selection, or leaves it if already in. */
+  toggleSelection(entityId: string): void;
+  /** Deselect everything without leaving the workspace. */
+  clearSelection(): void;
   setTransformDraft(instanceId: string, transform: TransformDraft): void;
+  /** Forget one object's draft so the authored transform is drawn again. */
+  clearTransformDraft(instanceId: string): void;
   getLandscapeDraft(): RegionLandscapeState | null;
   setLandscapeDraft(landscape: RegionLandscapeState | null): void;
   paintLandscape(
@@ -85,9 +89,7 @@ export interface ViewportOverlayStateAccess {
     instanceId?: string;
     assetDefinitionId?: string;
   }): void;
-  setCameraQuaternion(
-    quaternion: [number, number, number, number]
-  ): void;
+  setCameraQuaternion(quaternion: [number, number, number, number]): void;
 }
 
 export interface ViewportOverlayContext {
@@ -115,6 +117,13 @@ export interface ViewportOverlayContext {
     opts?: { equalityFn?: (left: T, right: T) => boolean }
   ): () => void;
   subscribeFrame(listener: () => void): () => void;
+  /**
+   * Fires when the drawn scene has finished settling after a load or a rebuild.
+   * Overlays that hold references to drawn objects re-resolve here: a reload
+   * detaches the old object and attaches a replacement later, and nothing in
+   * the authored documents changes to say so.
+   */
+  subscribeRenderablesSettled(listener: () => void): () => void;
 }
 
 export type ViewportOverlayFactory = (

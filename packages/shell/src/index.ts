@@ -9,6 +9,13 @@ import type { AppFrameModel } from "./app-frame";
 import type { CommandSurfaceRegistration } from "./commands";
 import type { InspectorHostModel } from "./inspector-host";
 import type { NavigationModel } from "./navigation";
+import {
+  clearSelection,
+  emptySelection,
+  replaceSelection,
+  toggleSelection,
+  type ShellSelectionState
+} from "./selection";
 import type { StatusSurfaceModel } from "./status";
 import type { ViewportHostModel } from "./viewport-host";
 import type { WorkspaceHostModel } from "./workspace-host";
@@ -22,6 +29,7 @@ export * from "./navigation";
 export * from "./preview";
 export * from "./projection";
 export * from "./project";
+export * from "./selection";
 export * from "./status";
 export * from "./surface-editing";
 export * from "./viewport";
@@ -100,11 +108,6 @@ export function designWorkspaceRequiresViewport(
   );
 }
 
-export interface ShellSelectionState {
-  workspaceId: string | null;
-  entityIds: string[];
-}
-
 /**
  * Library popover kinds. Project-scoped reusable file-backed and graph-backed
  * content lives here. Surfaces are NOT a library kind — they're the composition
@@ -168,6 +171,10 @@ export interface ShellActions {
   setActiveEnvironmentId: (environmentId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   setSelection: (entityIds: string[]) => void;
+  /** Shift-click: in if it was out, out if it was in. Either way it is active. */
+  toggleSelection: (entityId: string) => void;
+  /** Deselect everything in this workspace, keeping the active member. */
+  clearSelection: () => void;
   setToolSession: (toolId: string | null, isActive: boolean) => void;
   togglePanel: (panel: keyof ShellPanelState) => void;
   setActiveLibrary: (library: LibraryKind | null) => void;
@@ -294,10 +301,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
       inspector: true,
       status: true
     },
-    selection: {
-      workspaceId: null,
-      entityIds: []
-    },
+    selection: emptySelection(null),
     toolSession: {
       workspaceId: null,
       toolId: null,
@@ -316,7 +320,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
             activeProductMode: productModeId,
             activeWorkspaceId: workspaceId
           },
-          selection: { workspaceId, entityIds: [] },
+          selection: emptySelection(workspaceId),
           toolSession: { workspaceId, toolId: null, isActive: false }
         };
       }),
@@ -339,7 +343,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           current.activeProductMode === "build"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : current.selection,
         toolSession:
           current.activeProductMode === "build"
@@ -364,7 +368,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           state.activeProductMode === "design"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : state.selection,
         toolSession:
           state.activeProductMode === "design"
@@ -389,7 +393,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           state.activeProductMode === "story"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : state.selection,
         toolSession:
           state.activeProductMode === "story"
@@ -414,7 +418,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           state.activeProductMode === "render"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : state.selection,
         toolSession:
           state.activeProductMode === "render"
@@ -439,7 +443,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           state.activeProductMode === "publish"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : state.selection,
         toolSession:
           state.activeProductMode === "publish"
@@ -466,7 +470,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
           state.activeProductMode !== "build" ||
           state.activeBuildWorkspaceKind === "environment"
             ? current.selection
-            : { workspaceId, entityIds: [] },
+            : emptySelection(workspaceId),
         toolSession:
           state.activeProductMode !== "build" ||
           state.activeBuildWorkspaceKind === "environment"
@@ -490,7 +494,7 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
         },
         selection:
           state.activeBuildWorkspaceKind === "environment"
-            ? { workspaceId, entityIds: [] }
+            ? emptySelection(workspaceId)
             : current.selection,
         toolSession:
           state.activeBuildWorkspaceKind === "environment"
@@ -516,11 +520,14 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
       })),
     setSelection: (entityIds) =>
       set((state) => ({
-        selection: {
-          ...state.selection,
-          entityIds
-        }
+        selection: replaceSelection(state.selection, entityIds)
       })),
+    toggleSelection: (entityId) =>
+      set((state) => ({
+        selection: toggleSelection(state.selection, entityId)
+      })),
+    clearSelection: () =>
+      set((state) => ({ selection: clearSelection(state.selection) })),
     setToolSession: (toolId, isActive) =>
       set((state) => ({
         toolSession: {

@@ -50,26 +50,28 @@ function createMoveHandle(axis: Axis, color: number): THREE.Group {
   group.name = gizmoHandleName("move", axis);
 
   const direction =
-    axis === "x" ? new THREE.Vector3(1, 0, 0)
-    : axis === "y" ? new THREE.Vector3(0, 1, 0)
-    : new THREE.Vector3(0, 0, 1);
+    axis === "x"
+      ? new THREE.Vector3(1, 0, 0)
+      : axis === "y"
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3(0, 0, 1);
 
   const mat = new THREE.MeshBasicMaterial({ color, depthTest: false });
 
-  const shaft = configureOverlayMesh(new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04, 0.04, 1.5, 8),
-    mat
-  ), 999);
+  const shaft = configureOverlayMesh(
+    new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.5, 8), mat),
+    999
+  );
   shaft.position.copy(direction.clone().multiplyScalar(0.75));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
   shaft.name = gizmoHandleName("move", axis);
   group.add(shaft);
 
-  const cone = configureOverlayMesh(new THREE.Mesh(
-    new THREE.ConeGeometry(0.1, 0.25, 12),
-    mat
-  ), 999);
+  const cone = configureOverlayMesh(
+    new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 12), mat),
+    999
+  );
   cone.position.copy(direction.clone().multiplyScalar(1.625));
   if (axis === "x") cone.rotation.z = -Math.PI / 2;
   if (axis === "z") cone.rotation.x = Math.PI / 2;
@@ -91,10 +93,10 @@ function createRotateHandle(axis: Axis, color: number): THREE.Group {
     side: THREE.DoubleSide
   });
 
-  const ring = configureOverlayMesh(new THREE.Mesh(
-    new THREE.TorusGeometry(1.2, 0.03, 8, 48),
-    mat
-  ), 999);
+  const ring = configureOverlayMesh(
+    new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.03, 8, 48), mat),
+    999
+  );
   ring.name = gizmoHandleName("rotate", axis);
 
   // A torus's rotation axis is its local Z. Orient each ring so its
@@ -118,26 +120,28 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
   group.name = gizmoHandleName("scale", axis);
 
   const direction =
-    axis === "x" ? new THREE.Vector3(1, 0, 0)
-    : axis === "y" ? new THREE.Vector3(0, 1, 0)
-    : new THREE.Vector3(0, 0, 1);
+    axis === "x"
+      ? new THREE.Vector3(1, 0, 0)
+      : axis === "y"
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3(0, 0, 1);
 
   const mat = new THREE.MeshBasicMaterial({ color, depthTest: false });
 
-  const shaft = configureOverlayMesh(new THREE.Mesh(
-    new THREE.CylinderGeometry(0.03, 0.03, 1.2, 8),
-    mat
-  ), 999);
+  const shaft = configureOverlayMesh(
+    new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 8), mat),
+    999
+  );
   shaft.position.copy(direction.clone().multiplyScalar(0.6));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
   shaft.name = gizmoHandleName("scale", axis);
   group.add(shaft);
 
-  const cube = configureOverlayMesh(new THREE.Mesh(
-    new THREE.BoxGeometry(0.15, 0.15, 0.15),
-    mat
-  ), 999);
+  const cube = configureOverlayMesh(
+    new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), mat),
+    999
+  );
   cube.position.copy(direction.clone().multiplyScalar(1.3));
   cube.name = gizmoHandleName("scale", axis);
   group.add(cube);
@@ -200,6 +204,12 @@ export interface LayoutGizmo {
   setScale: (scale: number) => void;
   setVisible: (visible: boolean) => void;
   setActiveTool: (tool: TransformTool) => void;
+  /**
+   * Grey the per-axis scale handles out when the selection cannot be scaled
+   * along one axis without shearing. The centre handle, which scales
+   * uniformly, is unaffected.
+   */
+  setAxisScaleAvailable: (available: boolean) => void;
   /** Brighten the handle under the cursor (null = clear). */
   setHoveredHandle: (handleName: string | null) => void;
   dispose: () => void;
@@ -216,19 +226,22 @@ export function createLayoutGizmo(): LayoutGizmo {
 
   const moveGroup = new THREE.Group();
   moveGroup.name = "gizmo-move";
-  for (const axis of AXES) moveGroup.add(createMoveHandle(axis, AXIS_COLORS[axis]));
+  for (const axis of AXES)
+    moveGroup.add(createMoveHandle(axis, AXIS_COLORS[axis]));
   moveGroup.add(createMoveCenter());
   root.add(moveGroup);
 
   const rotateGroup = new THREE.Group();
   rotateGroup.name = "gizmo-rotate";
-  for (const axis of AXES) rotateGroup.add(createRotateHandle(axis, AXIS_COLORS[axis]));
+  for (const axis of AXES)
+    rotateGroup.add(createRotateHandle(axis, AXIS_COLORS[axis]));
   rotateGroup.add(createRotateCenter());
   root.add(rotateGroup);
 
   const scaleGroup = new THREE.Group();
   scaleGroup.name = "gizmo-scale";
-  for (const axis of AXES) scaleGroup.add(createScaleHandle(axis, AXIS_COLORS[axis]));
+  for (const axis of AXES)
+    scaleGroup.add(createScaleHandle(axis, AXIS_COLORS[axis]));
   scaleGroup.add(createScaleCenter());
   root.add(scaleGroup);
 
@@ -258,6 +271,29 @@ export function createLayoutGizmo(): LayoutGizmo {
     handleMaterials.set(object.name, entries);
   });
   let hoveredHandle: string | null = null;
+  let axisScaleEnabled = true;
+
+  const AXIS_SCALE_HANDLES = AXES.map((axis) => gizmoHandleName("scale", axis));
+  const HOVER_TINT = new THREE.Color(0xffffff);
+  const UNAVAILABLE_TINT = new THREE.Color(0x6c7086);
+
+  /**
+   * One place decides what colour a handle is, from its own colour and the two
+   * things that change it: the cursor being over it, and it being unavailable.
+   * An unavailable handle does not brighten under the cursor.
+   */
+  function paintHandle(handleName: string): void {
+    const unavailable =
+      !axisScaleEnabled && AXIS_SCALE_HANDLES.includes(handleName);
+    for (const entry of handleMaterials.get(handleName) ?? []) {
+      entry.material.color.copy(entry.baseColor);
+      if (unavailable) {
+        entry.material.color.lerp(UNAVAILABLE_TINT, 0.75);
+      } else if (handleName === hoveredHandle) {
+        entry.material.color.lerp(HOVER_TINT, 0.45);
+      }
+    }
+  }
 
   return {
     root,
@@ -273,21 +309,17 @@ export function createLayoutGizmo(): LayoutGizmo {
     setActiveTool(tool) {
       showOnly(tool);
     },
+    setAxisScaleAvailable(available) {
+      if (available === axisScaleEnabled) return;
+      axisScaleEnabled = available;
+      for (const handleName of AXIS_SCALE_HANDLES) paintHandle(handleName);
+    },
     setHoveredHandle(handleName) {
       if (handleName === hoveredHandle) return;
-      if (hoveredHandle) {
-        for (const entry of handleMaterials.get(hoveredHandle) ?? []) {
-          entry.material.color.copy(entry.baseColor);
-        }
-      }
+      const previous = hoveredHandle;
       hoveredHandle = handleName;
-      if (handleName) {
-        for (const entry of handleMaterials.get(handleName) ?? []) {
-          entry.material.color
-            .copy(entry.baseColor)
-            .lerp(new THREE.Color(0xffffff), 0.45);
-        }
-      }
+      if (previous) paintHandle(previous);
+      if (handleName) paintHandle(handleName);
     },
     dispose() {
       root.traverse((object) => {
@@ -319,7 +351,10 @@ export function createOriginMarker(): OriginMarker {
   root.name = "origin-marker";
   root.renderOrder = 998;
 
-  const mat = new THREE.MeshBasicMaterial({ color: 0xfab387, depthTest: false });
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xfab387,
+    depthTest: false
+  });
   root.add(
     configureOverlayMesh(
       new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), mat),
@@ -330,9 +365,15 @@ export function createOriginMarker(): OriginMarker {
 
   return {
     root,
-    setPosition(pos) { root.position.set(...pos); },
-    setVisible(visible) { root.visible = visible; },
-    dispose() { disposeOverlayGroup(root); }
+    setPosition(pos) {
+      root.position.set(...pos);
+    },
+    setVisible(visible) {
+      root.visible = visible;
+    },
+    dispose() {
+      disposeOverlayGroup(root);
+    }
   };
 }
 
@@ -351,7 +392,9 @@ export function createWorldCursor(): WorldCursor {
   root.renderOrder = 997;
 
   const ringMat = new THREE.MeshBasicMaterial({
-    color: 0xcba6f7, side: THREE.DoubleSide, depthTest: false
+    color: 0xcba6f7,
+    side: THREE.DoubleSide,
+    depthTest: false
   });
   const ring = configureOverlayMesh(
     new THREE.Mesh(new THREE.RingGeometry(0.2, 0.25, 32), ringMat),
@@ -360,7 +403,10 @@ export function createWorldCursor(): WorldCursor {
   ring.rotation.x = -Math.PI / 2;
   root.add(ring);
 
-  const dotMat = new THREE.MeshBasicMaterial({ color: 0xcba6f7, depthTest: false });
+  const dotMat = new THREE.MeshBasicMaterial({
+    color: 0xcba6f7,
+    depthTest: false
+  });
   root.add(
     configureOverlayMesh(
       new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), dotMat),
@@ -372,112 +418,176 @@ export function createWorldCursor(): WorldCursor {
 
   return {
     root,
-    setPosition(pos) { root.position.set(...pos); },
-    setVisible(visible) { root.visible = visible; },
-    dispose() { disposeOverlayGroup(root); }
+    setPosition(pos) {
+      root.position.set(...pos);
+    },
+    setVisible(visible) {
+      root.visible = visible;
+    },
+    dispose() {
+      disposeOverlayGroup(root);
+    }
   };
 }
 
-// --- Selection hover hull ---
+// --- Object hulls ---
 
-export interface SelectionHoverHull {
+/** The colour of the outline drawn around the object under the cursor. */
+export const HOVER_HULL_COLOR = 0xfab387;
+/** The colour of the outline drawn around a selected object. */
+export const SELECTED_HULL_COLOR = 0xf9e2af;
+/**
+ * The active object is the same hue as the merely selected ones, lightened --
+ * Blender draws it brighter for the same reason, and the axis handles here
+ * already signal "this one" with the same lift.
+ */
+export const ACTIVE_HULL_COLOR = new THREE.Color(SELECTED_HULL_COLOR)
+  .lerp(new THREE.Color(0xffffff), 0.45)
+  .getHex();
+
+/** One object to outline, and the colour to outline it in. */
+export interface HullTarget {
+  object: THREE.Object3D;
+  color: number;
+}
+
+export interface ObjectHulls {
   root: THREE.Group;
-  /** Rebuild the hull around a scene object (null clears it). */
-  setTarget: (target: THREE.Object3D | null) => void;
-  /** Per-frame: follow the target's current world transform. */
+  /** Outline exactly these objects, dropping any previously outlined. */
+  setTargets: (targets: readonly HullTarget[]) => void;
+  /** Per-frame: follow each target's current world transform. */
   syncTransform: () => void;
   dispose: () => void;
 }
 
+const HULL_SCALE = 1.035;
+/** Held rather than rebuilt: the sync below runs per outline per frame. */
+const HULL_SCALE_VECTOR = new THREE.Vector3(HULL_SCALE, HULL_SCALE, HULL_SCALE);
+
 /**
- * Hover affordance: an enlarged back-face shell in selection orange
- * around the object under the cursor -- the standard editor "this is
- * selectable" outline, done as geometry (no post-process pass).
- * Hull meshes SHARE the target's geometries; only the one hull
- * material is owned here.
+ * Outlines around scene objects: an enlarged back-face shell, done as geometry
+ * rather than a post-process pass. Hover and selection are both drawn with
+ * this -- they differ only in colour and in how many objects they outline at
+ * once, so they are one mechanism used twice.
+ *
+ * Hull meshes SHARE the target's geometries. Only the materials, one per
+ * colour asked for, are owned here.
  */
-export function createSelectionHoverHull(): SelectionHoverHull {
+export function createObjectHulls(name: string): ObjectHulls {
   const root = new THREE.Group();
-  root.name = "selection-hover-hull";
-  root.visible = false;
+  root.name = name;
   root.matrixAutoUpdate = false;
 
-  const material = new THREE.MeshBasicMaterial({
-    color: 0xfab387,
-    side: THREE.BackSide,
-    toneMapped: false,
-    depthWrite: false
-  });
-
-  const HULL_SCALE = 1.035;
-  let target: THREE.Object3D | null = null;
+  const materials = new Map<number, THREE.MeshBasicMaterial>();
+  /** The shell built for each outlined object, and the colour it was built in. */
+  const hulls = new Map<
+    THREE.Object3D,
+    { group: THREE.Group; color: number }
+  >();
   const inverseTarget = new THREE.Matrix4();
   const relative = new THREE.Matrix4();
 
-  function rebuild() {
-    root.clear();
-    if (!target) return;
-    // Plan 070.6 — an instanced group root batches ALL its members into one
-    // InstancedMesh, so cloning its geometry would hull the whole batch at
-    // the group origin. Skip the hover outline for instanced selections (the
-    // gizmo still attaches at the member's transform). A proper per-member
-    // hull (clone the geometry at the selected instance's matrix) is a
-    // deferred refinement.
+  function materialFor(color: number): THREE.MeshBasicMaterial {
+    const existing = materials.get(color);
+    if (existing) return existing;
+    const created = new THREE.MeshBasicMaterial({
+      color,
+      side: THREE.BackSide,
+      toneMapped: false,
+      depthWrite: false
+    });
+    materials.set(color, created);
+    return created;
+  }
+
+  function buildHull(target: THREE.Object3D, color: number): THREE.Group {
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    // An instanced group root batches ALL its members into one InstancedMesh,
+    // so cloning its geometry would hull the whole batch at the group origin.
+    // Instanced members get no outline; the gizmo still attaches at the
+    // member's transform. A per-member hull is a deferred refinement.
     const marker = target.userData?.[SCENE_OBJECT_MARKER_KEY] as
       | SceneObjectMarker
       | undefined;
-    if (marker?.instanced) {
-      return;
-    }
+    if (marker?.instanced) return group;
+
     target.updateWorldMatrix(true, true);
     inverseTarget.copy(target.matrixWorld).invert();
+    const material = materialFor(color);
     target.traverse((object) => {
-      // Skinned meshes deform on the GPU; a static hull clone would
-      // show the bind pose. Placed props are the audience here.
-      if (!(object instanceof THREE.Mesh) || (object as THREE.SkinnedMesh).isSkinnedMesh) {
+      // Skinned meshes deform on the GPU; a static hull clone would show the
+      // bind pose. Placed props are the audience here.
+      if (
+        !(object instanceof THREE.Mesh) ||
+        (object as THREE.SkinnedMesh).isSkinnedMesh
+      ) {
         return;
       }
       const hull = new THREE.Mesh(object.geometry, material);
-      // Visual-only: the hull shares the overlay root with the gizmo
-      // and would otherwise intercept its hit-test rays.
+      // Visual-only: the hull shares the overlay root with the gizmo and would
+      // otherwise intercept its hit-test rays.
       hull.raycast = () => {};
       hull.matrixAutoUpdate = false;
       relative.multiplyMatrices(inverseTarget, object.matrixWorld);
       hull.matrix.copy(relative);
       hull.renderOrder = 1;
-      root.add(hull);
+      group.add(hull);
     });
+    return group;
+  }
+
+  function dropHull(target: THREE.Object3D): void {
+    const existing = hulls.get(target);
+    if (!existing) return;
+    root.remove(existing.group);
+    existing.group.clear();
+    hulls.delete(target);
   }
 
   return {
     root,
-    setTarget(next) {
-      if (next === target) return;
-      target = next;
-      root.visible = Boolean(next);
-      rebuild();
+    setTargets(targets) {
+      const wanted = new Map(targets.map((t) => [t.object, t.color]));
+      for (const [target, existing] of [...hulls]) {
+        // A target that changed colour is rebuilt rather than recoloured,
+        // because the colour decides which shared material its meshes use.
+        const stillWanted = wanted.get(target) === existing.color;
+        if (!stillWanted) dropHull(target);
+      }
+      for (const { object, color } of targets) {
+        if (hulls.has(object)) continue;
+        const group = buildHull(object, color);
+        hulls.set(object, { group, color });
+        root.add(group);
+      }
       this.syncTransform();
     },
     syncTransform() {
-      if (!target) return;
-      // Target removed from the scene without a pointermove to re-aim
-      // the hull (delete key, undo, representation swap): clear it,
-      // or a ghost outline follows a detached root with disposed
-      // geometries until the cursor next moves.
-      if (!target.parent) {
-        target = null;
-        root.visible = false;
-        root.clear();
-        return;
+      // This runs every frame per outlined object, so it collects the targets
+      // to drop rather than copying the whole map to iterate it safely.
+      let detached: THREE.Object3D[] | null = null;
+      for (const [target, { group }] of hulls) {
+        // A target can leave the scene with no pointer move to re-aim the
+        // outline (delete key, undo, representation swap). Drop it, or a ghost
+        // outline follows a detached root with disposed geometries.
+        if (!target.parent) {
+          (detached ??= []).push(target);
+          continue;
+        }
+        target.updateWorldMatrix(true, false);
+        group.matrix.copy(target.matrixWorld).scale(HULL_SCALE_VECTOR);
+        // The group keeps its own matrix, so three.js has to be told the world
+        // matrix derived from it is stale.
+        group.matrixWorldNeedsUpdate = true;
       }
-      target.updateWorldMatrix(true, false);
-      root.matrix
-        .copy(target.matrixWorld)
-        .scale(new THREE.Vector3(HULL_SCALE, HULL_SCALE, HULL_SCALE));
+      if (detached) for (const target of detached) dropHull(target);
     },
     dispose() {
       root.clear();
-      material.dispose();
+      hulls.clear();
+      for (const material of materials.values()) material.dispose();
+      materials.clear();
     }
   };
 }

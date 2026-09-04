@@ -40,6 +40,12 @@ export interface InputRouter {
   detach: () => void;
   pushController: (controller: InteractionController) => void;
   popController: (id: string) => void;
+  /**
+   * Abandon the gesture in progress, if any, and say whether there was one.
+   * A command that changes the document out from under a live drag has to end
+   * the drag first, or the drag commits values it read before the change.
+   */
+  cancelActiveGesture: () => boolean;
   activeControllerId: () => string | null;
 }
 
@@ -67,9 +73,7 @@ export function createInputRouter(): InputRouter {
   let activeController: InteractionController | null = null;
 
   function getTopController(): InteractionController | null {
-    return controllers.length > 0
-      ? controllers[controllers.length - 1]
-      : null;
+    return controllers.length > 0 ? controllers[controllers.length - 1] : null;
   }
 
   function handlePointerDown(event: PointerEvent) {
@@ -110,11 +114,17 @@ export function createInputRouter(): InputRouter {
     element.releasePointerCapture(event.pointerId);
   }
 
+  /** Abandon the gesture in progress, if any. Says whether there was one. */
+  function cancelActiveGesture(): boolean {
+    if (!activeController) return false;
+    const cancelling = activeController;
+    activeController = null;
+    cancelling.onCancel?.();
+    return true;
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Escape" && activeController) {
-      activeController.onCancel?.();
-      activeController = null;
-    }
+    if (event.key === "Escape") cancelActiveGesture();
   }
 
   return {
@@ -128,6 +138,10 @@ export function createInputRouter(): InputRouter {
     },
 
     detach() {
+      // Detaching mid-gesture ends that gesture. Dropping the reference
+      // without cancelling would leave the controller believing its drag is
+      // still running, and whatever it had put on screen would stay there.
+      cancelActiveGesture();
       if (element) {
         element.removeEventListener("pointerdown", handlePointerDown);
         element.removeEventListener("pointermove", handlePointerMove);
@@ -136,7 +150,6 @@ export function createInputRouter(): InputRouter {
       }
       window.removeEventListener("keydown", handleKeyDown);
       element = null;
-      activeController = null;
     },
 
     pushController(controller: InteractionController) {
@@ -146,13 +159,12 @@ export function createInputRouter(): InputRouter {
     popController(id: string) {
       const idx = controllers.findIndex((c) => c.id === id);
       if (idx !== -1) {
-        if (activeController?.id === id) {
-          activeController.onCancel?.();
-          activeController = null;
-        }
+        if (activeController?.id === id) cancelActiveGesture();
         controllers.splice(idx, 1);
       }
     },
+
+    cancelActiveGesture,
 
     activeControllerId() {
       return activeController?.id ?? null;

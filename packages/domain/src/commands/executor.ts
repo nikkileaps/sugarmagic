@@ -33,6 +33,7 @@ import type {
   SemanticCommand,
   MovePlacedAssetCommand,
   TransformPlacedAssetCommand,
+  TransformSceneObjectsCommand,
   PlaceAssetInstanceCommand,
   BrushPlaceAssetsCommand,
   BrushEraseAssetsCommand,
@@ -312,6 +313,63 @@ function applyTransformPlacedAsset(
   );
 }
 
+/**
+ * Move every object a gizmo drag covered.
+ *
+ * Each subject goes through the same function its own single-object transform
+ * command uses, so a batch and a lone drag can never write an object
+ * differently. Each step reads the result of the one before it, which is what
+ * lets several subjects land in one region.
+ */
+function applyTransformSceneObjects(
+  context: CommandExecutionContext,
+  command: TransformSceneObjectsCommand
+): { region: RegionDocument; scene: Scene } {
+  return command.payload.subjects.reduce<CommandExecutionContext>(
+    (current, subject) => {
+      const { subjectId, position, rotation, scale } = subject;
+      const target = command.target;
+      switch (subject.subjectKind) {
+        case "placed-asset":
+          return applyTransformPlacedAsset(current, {
+            kind: "TransformPlacedAsset",
+            target,
+            subject: { subjectKind: "placed-asset", subjectId },
+            payload: { instanceId: subjectId, position, rotation, scale }
+          });
+        case "player-presence":
+          return applyTransformPlayerPresence(current, {
+            kind: "TransformPlayerPresence",
+            target,
+            subject: { subjectKind: "player-presence", subjectId },
+            payload: { presenceId: subjectId, position, rotation, scale }
+          });
+        case "npc-presence":
+          return applyTransformNPCPresence(current, {
+            kind: "TransformNPCPresence",
+            target,
+            subject: { subjectKind: "npc-presence", subjectId },
+            payload: { presenceId: subjectId, position, rotation, scale }
+          });
+        case "item-presence":
+          return applyTransformItemPresence(current, {
+            kind: "TransformItemPresence",
+            target,
+            subject: { subjectKind: "item-presence", subjectId },
+            payload: { presenceId: subjectId, position, rotation, scale }
+          });
+        default: {
+          const unhandled: never = subject.subjectKind;
+          throw new Error(
+            `[command-executor] TransformSceneObjects cannot move a ${unhandled}; give it a kind that commits through a transform command.`
+          );
+        }
+      }
+    },
+    context
+  );
+}
+
 function createPlacedAssetFromCommand(
   command: PlaceAssetInstanceCommand
 ): PlacedAssetInstance {
@@ -439,7 +497,8 @@ function applyBrushPlaceAssets(
       (folder) => folder.folderId === folderSpec.folderId
     );
     const existsInOverlay = (
-      sceneOverlayForRegion(context.scene, context.region.identity.id)?.folders ?? []
+      sceneOverlayForRegion(context.scene, context.region.identity.id)
+        ?.folders ?? []
     ).some((folder) => folder.folderId === folderSpec.folderId);
     if (!existsInBase && !existsInOverlay) {
       const folder = {
@@ -661,7 +720,10 @@ function mapPlayerPresenceEverywhere(
   transform: (presence: RegionPlayerPresence) => RegionPlayerPresence | null
 ): { region: RegionDocument; scene: Scene } {
   const regionId = context.region.identity.id;
-  const inOverlay = sceneOverlayForRegion(context.scene, regionId)?.playerPresence;
+  const inOverlay = sceneOverlayForRegion(
+    context.scene,
+    regionId
+  )?.playerPresence;
   if (inOverlay?.presenceId === presenceId) {
     return {
       region: context.region,
@@ -788,7 +850,10 @@ function isSceneContainedInstance(
   context: CommandExecutionContext,
   instanceId: string
 ): boolean {
-  const overlay = sceneOverlayForRegion(context.scene, context.region.identity.id);
+  const overlay = sceneOverlayForRegion(
+    context.scene,
+    context.region.identity.id
+  );
   return Boolean(
     overlay?.placedAssets.some((asset) => asset.instanceId === instanceId)
   );
@@ -1046,14 +1111,13 @@ function applyClearNPCPresenceShaderParameterOverride(
       presence.presenceId === command.payload.presenceId
         ? {
             ...presence,
-            shaderParameterOverrides:
-              presence.shaderParameterOverrides.filter(
-                (override) =>
-                  !(
-                    override.parameterId === command.payload.parameterId &&
-                    override.slot === command.payload.slot
-                  )
-              )
+            shaderParameterOverrides: presence.shaderParameterOverrides.filter(
+              (override) =>
+                !(
+                  override.parameterId === command.payload.parameterId &&
+                  override.slot === command.payload.slot
+                )
+            )
           }
         : presence
     )
@@ -1114,14 +1178,13 @@ function applyClearItemPresenceShaderParameterOverride(
       presence.presenceId === command.payload.presenceId
         ? {
             ...presence,
-            shaderParameterOverrides:
-              presence.shaderParameterOverrides.filter(
-                (override) =>
-                  !(
-                    override.parameterId === command.payload.parameterId &&
-                    override.slot === command.payload.slot
-                  )
-              )
+            shaderParameterOverrides: presence.shaderParameterOverrides.filter(
+              (override) =>
+                !(
+                  override.parameterId === command.payload.parameterId &&
+                  override.slot === command.payload.slot
+                )
+            )
           }
         : presence
     )
@@ -1196,7 +1259,10 @@ function applyCreateItemPresence(
   context: CommandExecutionContext,
   command: CreateItemPresenceCommand
 ): Scene {
-  return addOverlayItemPresence(context, createItemPresenceFromCommand(command));
+  return addOverlayItemPresence(
+    context,
+    createItemPresenceFromCommand(command)
+  );
 }
 
 function applyTransformItemPresence(
@@ -1323,24 +1389,23 @@ function applyDeleteSceneFolder(
 
   // Reparent children (folders + assets) onto the deleted
   // folder's parent, in whichever store they live.
-  const withReparentedFolders = mapFoldersEverywhere(
-    context,
-    (folders) =>
-      folders
-        .filter(
-          (candidate) => candidate.folderId !== command.payload.folderId
-        )
-        .map((candidate) =>
-          candidate.parentFolderId === command.payload.folderId
-            ? {
-                ...candidate,
-                parentFolderId: folder.parentFolderId
-              }
-            : candidate
-        )
+  const withReparentedFolders = mapFoldersEverywhere(context, (folders) =>
+    folders
+      .filter((candidate) => candidate.folderId !== command.payload.folderId)
+      .map((candidate) =>
+        candidate.parentFolderId === command.payload.folderId
+          ? {
+              ...candidate,
+              parentFolderId: folder.parentFolderId
+            }
+          : candidate
+      )
   );
   return mapPlacedAssetsEverywhere(
-    { region: withReparentedFolders.region, scene: withReparentedFolders.scene },
+    {
+      region: withReparentedFolders.region,
+      scene: withReparentedFolders.scene
+    },
     (assets) =>
       assets.map((asset) =>
         asset.parentFolderId === command.payload.folderId
@@ -1747,16 +1812,24 @@ export function executeCommand(
 
   switch (command.kind) {
     case "MovePlacedAsset":
-      ({ region: updatedRegion, scene: updatedScene } =
-        applyMovePlacedAsset(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyMovePlacedAsset(
+        context,
+        command
+      ));
       break;
     case "TransformPlacedAsset":
       ({ region: updatedRegion, scene: updatedScene } =
         applyTransformPlacedAsset(context, command));
       break;
-    case "PlaceAssetInstance":
+    case "TransformSceneObjects":
       ({ region: updatedRegion, scene: updatedScene } =
-        applyPlaceAssetInstance(context, command));
+        applyTransformSceneObjects(context, command));
+      break;
+    case "PlaceAssetInstance":
+      ({ region: updatedRegion, scene: updatedScene } = applyPlaceAssetInstance(
+        context,
+        command
+      ));
       break;
     case "BrushPlaceAssets": {
       const result = applyBrushPlaceAssets(context, command);
@@ -1775,8 +1848,10 @@ export function executeCommand(
         applyDuplicatePlacedAsset(context, command));
       break;
     case "RemovePlacedAsset":
-      ({ region: updatedRegion, scene: updatedScene } =
-        applyRemovePlacedAsset(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyRemovePlacedAsset(
+        context,
+        command
+      ));
       break;
     case "MovePlacedAssetToFolder":
       ({ region: updatedRegion, scene: updatedScene } =
@@ -1815,16 +1890,22 @@ export function executeCommand(
         applyClearPlacedAssetShaderParameterOverride(context, command));
       break;
     case "CreateSceneFolder":
-      ({ region: updatedRegion, scene: updatedScene } =
-        applyCreateSceneFolder(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyCreateSceneFolder(
+        context,
+        command
+      ));
       break;
     case "RenameSceneFolder":
-      ({ region: updatedRegion, scene: updatedScene } =
-        applyRenameSceneFolder(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyRenameSceneFolder(
+        context,
+        command
+      ));
       break;
     case "DeleteSceneFolder":
-      ({ region: updatedRegion, scene: updatedScene } =
-        applyDeleteSceneFolder(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyDeleteSceneFolder(
+        context,
+        command
+      ));
       break;
     case "UpdateRegionMetadata":
       updatedRegion = applyUpdateRegionMetadata(region, command);
@@ -1899,67 +1980,76 @@ export function executeCommand(
       updatedScene = applyCreatePlayerPresence(context, command);
       break;
     case "TransformPlayerPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyTransformPlayerPresence(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformPlayerPresence(context, command));
       break;
     case "RemovePlayerPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyRemovePlayerPresence(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyRemovePlayerPresence(context, command));
       break;
     case "CreateNPCPresence":
       updatedScene = applyCreateNPCPresence(context, command);
       break;
     case "TransformNPCPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyTransformNPCPresence(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformNPCPresence(context, command));
       break;
     case "SetNPCPresenceShaderOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceShaderOverride(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetNPCPresenceShaderOverride(context, command));
       break;
     case "SetNPCPresenceShaderParameterOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceShaderParameterOverride(
-        context,
-        command
-      ));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetNPCPresenceShaderParameterOverride(context, command));
       break;
     case "ClearNPCPresenceShaderParameterOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applyClearNPCPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyClearNPCPresenceShaderParameterOverride(context, command));
+      break;
+    case "SetNPCPresenceCondition":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetNPCPresenceCondition(context, command));
+      break;
+    case "SetNPCPresenceLabel":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetNPCPresenceLabel(context, command));
+      break;
+    case "RemoveNPCPresence":
+      ({ region: updatedRegion, scene: updatedScene } = applyRemoveNPCPresence(
         context,
         command
       ));
-      break;
-    case "SetNPCPresenceCondition":
-      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceCondition(context, command));
-      break;
-    case "SetNPCPresenceLabel":
-      ({ region: updatedRegion, scene: updatedScene } = applySetNPCPresenceLabel(context, command));
-      break;
-    case "RemoveNPCPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyRemoveNPCPresence(context, command));
       break;
     case "CreateItemPresence":
       updatedScene = applyCreateItemPresence(context, command);
       break;
     case "TransformItemPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyTransformItemPresence(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformItemPresence(context, command));
       break;
     case "UpdateItemPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyUpdateItemPresence(context, command));
+      ({ region: updatedRegion, scene: updatedScene } = applyUpdateItemPresence(
+        context,
+        command
+      ));
       break;
     case "SetItemPresenceShaderOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applySetItemPresenceShaderOverride(context, command));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetItemPresenceShaderOverride(context, command));
       break;
     case "SetItemPresenceShaderParameterOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applySetItemPresenceShaderParameterOverride(
-        context,
-        command
-      ));
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetItemPresenceShaderParameterOverride(context, command));
       break;
     case "ClearItemPresenceShaderParameterOverride":
-      ({ region: updatedRegion, scene: updatedScene } = applyClearItemPresenceShaderParameterOverride(
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyClearItemPresenceShaderParameterOverride(context, command));
+      break;
+    case "RemoveItemPresence":
+      ({ region: updatedRegion, scene: updatedScene } = applyRemoveItemPresence(
         context,
         command
       ));
-      break;
-    case "RemoveItemPresence":
-      ({ region: updatedRegion, scene: updatedScene } = applyRemoveItemPresence(context, command));
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

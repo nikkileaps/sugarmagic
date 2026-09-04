@@ -26,6 +26,13 @@ import {
   pointerRayFromCamera
 } from "./transform-math";
 import {
+  applyDelta,
+  medianPivot,
+  MIN_SCALE,
+  type SelectionDelta,
+  type Vector3Tuple
+} from "./selection-transform";
+import {
   gizmoWorldScaleForCamera,
   parseGizmoHandleName,
   TRACKBALL_RADIUS_GIZMO_UNITS,
@@ -60,14 +67,40 @@ interface DragAnchor {
   screenDiagonal: THREE.Vector3 | null;
 }
 
-export interface TransformSession {
+/** One dragged object and the transform being reported for it. */
+export interface DraggedSubject {
   instanceId: string;
-  mode: TransformTool;
-  axis: DragAxis;
+  values: TransformValues;
+}
+
+/** One object taking part in a drag: where it began and where it is now. */
+export interface TransformSubjectSession {
+  instanceId: string;
   start: TransformValues;
   current: TransformValues;
+}
+
+export interface TransformSession {
+  /**
+   * Every object the drag moves, in selection order. The drag produces one
+   * delta and each subject works out its own result from it, so no object is
+   * more the subject of the drag than any other.
+   */
+  subjects: TransformSubjectSession[];
+  mode: TransformTool;
+  axis: DragAxis;
   anchor: DragAnchor;
 }
+
+/**
+ * What a click means for the selection. The object and the intent travel
+ * together, so a clear cannot arrive carrying an object and a toggle cannot
+ * arrive without one.
+ */
+export type SelectionIntent =
+  | { kind: "replace"; instanceId: string }
+  | { kind: "toggle"; instanceId: string }
+  | { kind: "clear" };
 
 export interface TransformControllerConfig {
   hitTestService: HitTestService;
@@ -75,10 +108,26 @@ export interface TransformControllerConfig {
    *  (perspective <-> orthographic top) while the controller lives. */
   getCamera: () => THREE.Camera;
   getActiveTool: () => TransformTool;
-  onPreview: (instanceId: string, values: TransformValues) => void;
-  onCommit: (instanceId: string, values: TransformValues) => void;
-  onCancel: (instanceId: string, values: TransformValues) => void;
-  onSelect: (instanceId: string | null) => void;
+  /**
+   * The state of every dragged object, reported together. The gizmo sits at
+   * the pivot of the whole selection, so a caller that saw one object at a
+   * time could not work out where to draw it.
+   */
+  onPreview: (subjects: readonly DraggedSubject[]) => void;
+  /**
+   * Every object the drag moved. A drag is one act, so it commits as one
+   * command -- otherwise undo steps back through it one object at a time.
+   */
+  onCommit: (subjects: readonly DraggedSubject[]) => void;
+  /** Every dragged object, back at the transform it started the drag with. */
+  onCancel: (subjects: readonly DraggedSubject[]) => void;
+  /**
+   * The drag is over for these objects, however it ended. Whatever the preview
+   * put on screen has to be dropped here: a preview left behind outranks the
+   * authored transform, pinning the object where the drag left it.
+   */
+  onPreviewEnded: (instanceIds: readonly string[]) => void;
+  onSelect: (intent: SelectionIntent) => void;
   /**
    * Whether a scene object may be selected or dragged (epic #226). The
    * scene composer draws the region's own content so the author can see
@@ -92,7 +141,16 @@ export interface TransformControllerConfig {
   /** The selectable scene object under the cursor (outline cue),
    *  or null to clear it. */
   onHoverTarget: (object: THREE.Object3D | null) => void;
-  getSelectedId: () => string | null;
+  /** Everything selected, in selection order. A drag moves all of it. */
+  getSelectedIds: () => string[];
+  /**
+   * Whether the axis scale handles may be dragged. They are unavailable for a
+   * selection whose objects point in different directions, because scaling
+   * that along one axis about a shared pivot shears, and a
+   * position/rotation/scale triple cannot hold a sheared matrix. Omitted means
+   * available.
+   */
+  isAxisScaleAvailable?: () => boolean;
   getTransform: (instanceId: string) => TransformValues | null;
 }
 
@@ -102,7 +160,15 @@ const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
   z: new THREE.Vector3(0, 0, 1)
 };
 
-const MIN_SCALE = 0.01;
+/** A drag holds its own copy: the values it starts from must not move under it. */
+function copyTransform(values: TransformValues): TransformValues {
+  return {
+    position: [...values.position],
+    rotation: [...values.rotation],
+    scale: [...values.scale]
+  };
+}
+
 /** Axis-scale grab points closer to the center than this can't drive
  *  a stable ratio (the axis handles sit ~1.3 gizmo units out, so only
  *  degenerate shaft grabs near the origin are affected). */
@@ -136,9 +202,7 @@ export function createTransformController(
       const normal = new THREE.Vector3();
       camera.getWorldDirection(normal);
       const hit = planePointForRay(ray, center, normal);
-      const worldQuaternion = camera.getWorldQuaternion(
-        new THREE.Quaternion()
-      );
+      const worldQuaternion = camera.getWorldQuaternion(new THREE.Quaternion());
       const screenDiagonal = new THREE.Vector3(1, 0, 0)
         .applyQuaternion(worldQuaternion)
         .add(new THREE.Vector3(0, 1, 0).applyQuaternion(worldQuaternion))
@@ -173,27 +237,19 @@ export function createTransformController(
     };
   }
 
-  function applyCenterDrag(
+  function centerDelta(
     activeSession: TransformSession,
     ray: ReturnType<typeof pointerRayFromCamera>
-  ): void {
+  ): SelectionDelta | null {
     const { cameraPlaneNormal, cameraPlanePoint, center } =
       activeSession.anchor;
-    if (!cameraPlaneNormal || !cameraPlanePoint) return;
+    if (!cameraPlaneNormal || !cameraPlanePoint) return null;
     const hit = planePointForRay(ray, center, cameraPlaneNormal);
-    if (!hit) return;
+    if (!hit) return null;
 
     if (activeSession.mode === "move") {
-      const delta = hit.clone().sub(cameraPlanePoint);
-      activeSession.current = {
-        ...activeSession.current,
-        position: [
-          activeSession.start.position[0] + delta.x,
-          activeSession.start.position[1] + delta.y,
-          activeSession.start.position[2] + delta.z
-        ]
-      };
-      return;
+      const moved = hit.clone().sub(cameraPlanePoint);
+      return { mode: "move", translation: [moved.x, moved.y, moved.z] };
     }
 
     if (activeSession.mode === "scale") {
@@ -206,19 +262,11 @@ export function createTransformController(
       // few pixels of shrink and the object grows again. Exponential
       // so one gizmo-width of drag doubles or halves symmetrically.
       const { screenDiagonal } = activeSession.anchor;
-      if (!screenDiagonal) return;
+      if (!screenDiagonal) return null;
       const gizmoScale = gizmoWorldScaleForCamera(config.getCamera(), center);
       const signedDrag = hit.clone().sub(cameraPlanePoint).dot(screenDiagonal);
       const factor = Math.pow(2, signedDrag / gizmoScale);
-      activeSession.current = {
-        ...activeSession.current,
-        scale: [
-          Math.max(MIN_SCALE, activeSession.start.scale[0] * factor),
-          Math.max(MIN_SCALE, activeSession.start.scale[1] * factor),
-          Math.max(MIN_SCALE, activeSession.start.scale[2] * factor)
-        ]
-      };
-      return;
+      return { mode: "scale", factor: [factor, factor, factor] };
     }
 
     // Free rotate (trackball): drag direction in the camera plane
@@ -229,29 +277,94 @@ export function createTransformController(
     // 2026-07-12 branch review; direction is pinned by a test now).
     const drag = hit.clone().sub(cameraPlanePoint);
     const dragLength = drag.length();
-    if (dragLength < 1e-6) return;
+    if (dragLength < 1e-6) return null;
     const rotationAxis = new THREE.Vector3()
       .crossVectors(drag, cameraPlaneNormal)
       .normalize();
     const trackballRadius =
       gizmoWorldScaleForCamera(config.getCamera(), center) *
       TRACKBALL_RADIUS_GIZMO_UNITS;
-    const angle = dragLength / trackballRadius;
-    const startQuaternion = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(...activeSession.start.rotation, "XYZ")
-    );
-    const deltaQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      rotationAxis,
-      angle
-    );
-    const nextEuler = new THREE.Euler().setFromQuaternion(
-      deltaQuaternion.multiply(startQuaternion),
-      "XYZ"
-    );
-    activeSession.current = {
-      ...activeSession.current,
-      rotation: [nextEuler.x, nextEuler.y, nextEuler.z]
+    return {
+      mode: "rotate",
+      axis: [rotationAxis.x, rotationAxis.y, rotationAxis.z],
+      angle: dragLength / trackballRadius
     };
+  }
+
+  function axisDelta(
+    activeSession: TransformSession,
+    ray: ReturnType<typeof pointerRayFromCamera>
+  ): SelectionDelta | null {
+    const axis = activeSession.axis;
+    if (axis === "center") return null;
+    const axisVector = AXIS_VECTORS[axis];
+    const ai = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+    const { anchor } = activeSession;
+
+    if (activeSession.mode === "move") {
+      if (anchor.axisParameter === null) return null;
+      const parameter = axisParameterForRay(ray, anchor.center, axisVector);
+      if (parameter === null) return null;
+      const translation: Vector3Tuple = [0, 0, 0];
+      translation[ai] = parameter - anchor.axisParameter;
+      return { mode: "move", translation };
+    }
+
+    if (activeSession.mode === "rotate") {
+      if (!anchor.planeVector) return null;
+      const hit = planePointForRay(ray, anchor.center, axisVector);
+      if (!hit) return null;
+      return {
+        mode: "rotate",
+        axis: [axisVector.x, axisVector.y, axisVector.z],
+        angle: angleAroundAxis(
+          anchor.planeVector,
+          hit.sub(anchor.center),
+          axisVector
+        )
+      };
+    }
+
+    const anchorParameter = anchor.axisParameter;
+    if (
+      anchorParameter === null ||
+      Math.abs(anchorParameter) < MIN_SCALE_ANCHOR
+    ) {
+      return null;
+    }
+    const parameter = axisParameterForRay(ray, anchor.center, axisVector);
+    if (parameter === null) return null;
+    // Drag outward from center to grow, inward to shrink -- the ratio of the
+    // grab point's distance along the axis.
+    const factor: Vector3Tuple = [1, 1, 1];
+    factor[ai] = Math.max(MIN_SCALE, parameter / anchorParameter);
+    return { mode: "scale", factor };
+  }
+
+  /**
+   * The one way a drag ends.
+   *
+   * Every exit runs `finish` and then reports the previews to drop, so a drag
+   * cannot leave a preview behind whatever it ends by: committing, cancelling,
+   * or moving nothing at all. The session is cleared first, because `finish`
+   * writes to stores and those writes can re-enter and end the drag again.
+   */
+  function endSession(finish: (ended: TransformSession) => void): void {
+    if (!session) return;
+    const ended = session;
+    session = null;
+    finish(ended);
+    config.onPreviewEnded(ended.subjects.map((subject) => subject.instanceId));
+  }
+
+  /** Push the current state of every subject into the live preview. */
+  function previewAll(activeSession: TransformSession): void {
+    config.onPreview(
+      activeSession.subjects.map((subject) => ({
+        instanceId: subject.instanceId,
+        values: subject.current
+      }))
+    );
   }
 
   return {
@@ -268,26 +381,50 @@ export function createTransformController(
       if (gizmoHit) {
         const parsed = parseGizmoHandleName(gizmoHit.objectName);
         if (parsed) {
-          const selectedId = config.getSelectedId();
-          if (!selectedId) return false;
+          // Greyed handles must also refuse the drag, or "unavailable" is only
+          // a colour.
+          const axisScaleRefused =
+            parsed.mode === "scale" &&
+            parsed.axis !== "center" &&
+            config.isAxisScaleAvailable?.() === false;
+          if (axisScaleRefused) return false;
+
           // Also here, not only at selection: a locked object must stay
           // undraggable however it came to be selected.
-          if (!isSelectable(selectedId)) return false;
+          const subjects = config
+            .getSelectedIds()
+            .filter(isSelectable)
+            .flatMap((instanceId) => {
+              const transform = config.getTransform(instanceId);
+              return transform
+                ? [
+                    {
+                      instanceId,
+                      start: copyTransform(transform),
+                      current: copyTransform(transform)
+                    }
+                  ]
+                : [];
+            });
+          if (subjects.length === 0) return false;
 
-          const transform = config.getTransform(selectedId);
-          if (!transform) return false;
+          // The author grabbed the gizmo, so the drag anchors where the gizmo
+          // is: the pivot of the whole selection. With one object selected
+          // that is its own origin, which is where it anchored before.
+          const pivot = medianPivot(
+            subjects.map((subject) => subject.start.position)
+          );
+          if (!pivot) return false;
 
           session = {
-            instanceId: selectedId,
+            subjects,
             mode: parsed.mode,
             axis: parsed.axis,
-            start: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
-            current: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
             anchor: anchorForPointer(
               event,
               parsed.mode,
               parsed.axis,
-              new THREE.Vector3(...transform.position)
+              new THREE.Vector3(...pivot)
             )
           };
           return true;
@@ -301,10 +438,16 @@ export function createTransformController(
       // A locked object is not a miss that falls through to something
       // behind it -- clicking the station selects nothing, which is what
       // "you cannot edit this here" looks like.
-      config.onSelect(
+      const picked =
         selectHit && isSelectable(selectHit.objectName)
           ? selectHit.objectName
-          : null
+          : null;
+      // Shift extends: an object outside the selection joins it, one already
+      // in it leaves. A plain click starts over from the object clicked.
+      config.onSelect(
+        picked === null
+          ? { kind: "clear" }
+          : { kind: event.shiftKey ? "toggle" : "replace", instanceId: picked }
       );
       return false;
     },
@@ -318,61 +461,25 @@ export function createTransformController(
         config.getCamera()
       );
 
-      if (session.axis === "center") {
-        applyCenterDrag(session, ray);
-        config.onPreview(session.instanceId, session.current);
-        return;
+      const delta =
+        session.axis === "center"
+          ? centerDelta(session, ray)
+          : axisDelta(session, ray);
+      // A degenerate drag -- an axis viewed edge-on, a grab point too close to
+      // the centre -- yields no delta, and the selection stays where it is.
+      if (!delta) return;
+
+      // The same pivot goes to every object. That is what makes this one
+      // shared-pivot mode rather than a rule per object.
+      const pivot: Vector3Tuple = [
+        session.anchor.center.x,
+        session.anchor.center.y,
+        session.anchor.center.z
+      ];
+      for (const subject of session.subjects) {
+        subject.current = applyDelta(subject.start, pivot, delta);
       }
-
-      const axisVector = AXIS_VECTORS[session.axis];
-      const ai = session.axis === "x" ? 0 : session.axis === "y" ? 1 : 2;
-
-      if (session.mode === "move") {
-        if (session.anchor.axisParameter === null) return;
-        const parameter = axisParameterForRay(
-          ray,
-          session.anchor.center,
-          axisVector
-        );
-        if (parameter === null) return;
-        const pos: [number, number, number] = [...session.start.position];
-        pos[ai] = session.start.position[ai] + (parameter - session.anchor.axisParameter);
-        session.current = { ...session.current, position: pos };
-      } else if (session.mode === "rotate") {
-        if (!session.anchor.planeVector) return;
-        const hit = planePointForRay(ray, session.anchor.center, axisVector);
-        if (!hit) return;
-        const angle = angleAroundAxis(
-          session.anchor.planeVector,
-          hit.sub(session.anchor.center),
-          axisVector
-        );
-        const rot: [number, number, number] = [...session.start.rotation];
-        rot[ai] = session.start.rotation[ai] + angle;
-        session.current = { ...session.current, rotation: rot };
-      } else if (session.mode === "scale") {
-        const anchorParameter = session.anchor.axisParameter;
-        if (
-          anchorParameter === null ||
-          Math.abs(anchorParameter) < MIN_SCALE_ANCHOR
-        ) {
-          return;
-        }
-        const parameter = axisParameterForRay(
-          ray,
-          session.anchor.center,
-          axisVector
-        );
-        if (parameter === null) return;
-        // Drag outward from center to grow, inward to shrink -- the
-        // ratio of the grab point's distance along the axis.
-        const factor = Math.max(MIN_SCALE, parameter / anchorParameter);
-        const scl: [number, number, number] = [...session.start.scale];
-        scl[ai] = Math.max(MIN_SCALE, session.start.scale[ai] * factor);
-        session.current = { ...session.current, scale: scl };
-      }
-
-      config.onPreview(session.instanceId, session.current);
+      previewAll(session);
     },
 
     onHoverMove(event: NormalizedPointerEvent): void {
@@ -405,21 +512,32 @@ export function createTransformController(
     },
 
     onPointerUp(): void {
-      if (!session) return;
-      // Frozen/degenerate drags end with current === start; committing
-      // those would push no-op transform commands into undo history.
-      const moved =
-        JSON.stringify(session.current) !== JSON.stringify(session.start);
-      if (moved) {
-        config.onCommit(session.instanceId, session.current);
-      }
-      session = null;
+      endSession((ended) => {
+        // Frozen/degenerate drags end with current === start; committing
+        // those would push no-op transform commands into undo history.
+        const moved = ended.subjects.filter(
+          (subject) =>
+            JSON.stringify(subject.current) !== JSON.stringify(subject.start)
+        );
+        if (moved.length === 0) return;
+        config.onCommit(
+          moved.map((subject) => ({
+            instanceId: subject.instanceId,
+            values: subject.current
+          }))
+        );
+      });
     },
 
     onCancel(): void {
-      if (!session) return;
-      config.onCancel(session.instanceId, session.start);
-      session = null;
+      endSession((ended) => {
+        config.onCancel(
+          ended.subjects.map((subject) => ({
+            instanceId: subject.instanceId,
+            values: subject.start
+          }))
+        );
+      });
     }
   };
 }

@@ -10,8 +10,16 @@
  */
 
 import * as THREE from "three";
-import type { RegionDocument, Scene, SemanticCommand } from "@sugarmagic/domain";
-import { resolveSceneObjects, type SceneObject } from "@sugarmagic/runtime-core";
+import type {
+  RegionDocument,
+  Scene,
+  SemanticCommand,
+  TransformSubject
+} from "@sugarmagic/domain";
+import {
+  resolveSceneObjects,
+  type SceneObject
+} from "@sugarmagic/runtime-core";
 import {
   createInputRouter,
   createHitTestService,
@@ -19,16 +27,24 @@ import {
   createTransformController,
   gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
+  axisScaleWouldShear,
+  medianPivot,
+  type DraggedSubject,
   type InputRouter,
   type HitTestService,
+  type SelectionIntent,
   type ToolStateStore,
   type TransformValues
 } from "../../interaction";
 import {
+  ACTIVE_HULL_COLOR,
   createLayoutGizmo,
-  createSelectionHoverHull,
+  createObjectHulls,
   createOriginMarker,
   createWorldCursor,
+  HOVER_HULL_COLOR,
+  SELECTED_HULL_COLOR,
+  type HullTarget,
   type LayoutGizmo,
   type OriginMarker,
   type WorldCursor
@@ -36,9 +52,26 @@ import {
 
 export interface LayoutWorkspaceConfig {
   onCommand: (command: SemanticCommand) => void;
-  onSelect: (entityIds: string[]) => void;
-  onPreviewTransform: (instanceId: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
-  getSelectedId: () => string | null;
+  onSelect: (intent: SelectionIntent) => void;
+  onPreviewTransform: (
+    instanceId: string,
+    position: [number, number, number],
+    rotation: [number, number, number],
+    scale: [number, number, number]
+  ) => void;
+  /**
+   * Forget the drafts for these objects. A draft outranks the authored
+   * transform wherever it is drawn, so one left behind after a drag pins the
+   * object to where that drag ended and later undo appears to do nothing.
+   */
+  onClearPreviewTransforms: (instanceIds: string[]) => void;
+  /** Everything selected, in selection order. */
+  getSelectedIds: () => string[];
+  /**
+   * The selected object the author touched last. It is outlined more brightly
+   * than the rest, and later work reads it for the axis orientation.
+   */
+  getActiveId: () => string | null;
   getRegion: () => RegionDocument | null;
   /** Plan 058 — the ambient Scene whose overlay composes onto the
    *  region. Without it the gizmo can't find Scene-scoped
@@ -75,6 +108,135 @@ export interface LayoutWorkspaceInstance {
   toolState: ToolStateStore;
 }
 
+/**
+ * How a scene object of this kind records a new transform. Four kinds carry
+ * the transform itself; a marker carries a patch instead, which is why it
+ * cannot ride along in a batch with the others.
+ *
+ * The switch is exhaustive and the `never` below holds it that way: a kind
+ * with no answer here stops the build rather than falling through to whichever
+ * command happens to be last.
+ */
+export type TransformCommit =
+  | {
+      via: "transform";
+      commandKind:
+        | "TransformPlacedAsset"
+        | "TransformPlayerPresence"
+        | "TransformNPCPresence"
+        | "TransformItemPresence";
+      subjectKind: TransformSubject["subjectKind"];
+    }
+  | { via: "marker-patch" };
+
+export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
+  switch (kind) {
+    case "asset":
+      return {
+        via: "transform",
+        commandKind: "TransformPlacedAsset",
+        subjectKind: "placed-asset"
+      };
+    case "player":
+      return {
+        via: "transform",
+        commandKind: "TransformPlayerPresence",
+        subjectKind: "player-presence"
+      };
+    case "npc":
+      return {
+        via: "transform",
+        commandKind: "TransformNPCPresence",
+        subjectKind: "npc-presence"
+      };
+    case "item":
+      return {
+        via: "transform",
+        commandKind: "TransformItemPresence",
+        subjectKind: "item-presence"
+      };
+    case "marker":
+      return { via: "marker-patch" };
+    default: {
+      const unhandled: never = kind;
+      throw new Error(
+        `[layout-workspace] no transform command for scene object kind ${unhandled}; give it a case in transformCommitFor before it can be moved.`
+      );
+    }
+  }
+}
+
+/**
+ * The command that records a new transform for one object -- an inspector
+ * field edited, or snap-to-origin from the context menu. A gizmo drag covers a
+ * whole selection and batches instead, but both go through
+ * `transformCommitFor` so a kind cannot commit two different ways.
+ *
+ * A placed asset names the object `instanceId` while the three presences name
+ * it `presenceId`; that is the only difference left between them.
+ */
+export function singleTransformCommand(
+  kind: SceneObject["kind"],
+  regionId: string,
+  instanceId: string,
+  values: TransformValues
+): SemanticCommand {
+  const target = {
+    aggregateKind: "region-document" as const,
+    aggregateId: regionId
+  };
+  const { position, rotation, scale } = values;
+  const commit = transformCommitFor(kind);
+
+  if (commit.via === "marker-patch") {
+    return {
+      kind: "UpdateRegionMarker",
+      target,
+      subject: { subjectKind: "region-marker", subjectId: instanceId },
+      payload: {
+        markerId: instanceId,
+        patch: { transform: { position, rotation, scale } }
+      }
+    };
+  }
+
+  const subject = { subjectKind: commit.subjectKind, subjectId: instanceId };
+  return commit.commandKind === "TransformPlacedAsset"
+    ? {
+        kind: commit.commandKind,
+        target,
+        subject,
+        payload: { instanceId, position, rotation, scale }
+      }
+    : {
+        kind: commit.commandKind,
+        target,
+        subject,
+        payload: { presenceId: instanceId, position, rotation, scale }
+      };
+}
+
+/**
+ * A marker never shares a selection with anything else. Markers commit through
+ * `UpdateRegionMarker` with a patch while every other kind commits through a
+ * `Transform*` command, so a mixed selection would have no single shape to
+ * commit. Shift-clicking a marker, or shift-clicking anything while a marker is
+ * selected, starts a fresh selection instead of extending one.
+ */
+export function markersStayAlone(
+  intent: SelectionIntent,
+  selectedIds: readonly string[],
+  kindOf: (instanceId: string) => SceneObject["kind"] | null
+): SelectionIntent {
+  if (intent.kind !== "toggle") return intent;
+  const touchesAMarker =
+    kindOf(intent.instanceId) === "marker" ||
+    selectedIds.some((instanceId) => kindOf(instanceId) === "marker");
+  return touchesAMarker
+    ? { kind: "replace", instanceId: intent.instanceId }
+    : intent;
+}
+
 export function createLayoutWorkspace(
   config: LayoutWorkspaceConfig
 ): LayoutWorkspaceInstance {
@@ -84,7 +246,8 @@ export function createLayoutWorkspace(
   const gizmo = createLayoutGizmo();
   const originMarker = createOriginMarker();
   const worldCursor = createWorldCursor();
-  const hoverHull = createSelectionHoverHull();
+  const hoverHulls = createObjectHulls("hover-hull");
+  const selectionHulls = createObjectHulls("selection-hulls");
 
   worldCursor.setPosition([0, 0, 0]);
 
@@ -103,120 +266,225 @@ export function createLayoutWorkspace(
     };
   }
 
-  function getSceneObject(instanceId: string): SceneObject | null {
+  function resolveObjects(): SceneObject[] {
     const region = config.getRegion();
-    if (!region) return null;
-    const objects = resolveSceneObjects(region, {
+    if (!region) return [];
+    return resolveSceneObjects(region, {
       activeScene: config.getActiveScene(),
       // The gizmo asks this for the object it is attaching to, so markers
       // have to be in the answer or selecting one finds nothing.
       includeMarkers: true
     });
-    return objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null;
   }
 
-  let transformController: ReturnType<typeof createTransformController> | null = null;
+  function getSceneObject(instanceId: string): SceneObject | null {
+    return (
+      resolveObjects().find((o: SceneObject) => o.instanceId === instanceId) ??
+      null
+    );
+  }
+
+  /**
+   * The scene objects for a set of ids, in selection order. Resolving the
+   * region's objects is a full rebuild, so this does it once and matches the
+   * whole set against it rather than once per id.
+   */
+  function getSceneObjects(instanceIds: readonly string[]): SceneObject[] {
+    const wanted = new Set(instanceIds);
+    const found = new Map<string, SceneObject>();
+    for (const object of resolveObjects()) {
+      if (wanted.has(object.instanceId)) found.set(object.instanceId, object);
+    }
+    return instanceIds
+      .map((instanceId) => found.get(instanceId))
+      .filter((object): object is SceneObject => object !== undefined);
+  }
+
+  let transformController: ReturnType<typeof createTransformController> | null =
+    null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   let attachedOverlayRoot: THREE.Object3D | null = null;
+  let attachedAuthoredRoot: THREE.Object3D | null = null;
   let attachedElement: HTMLElement | null = null;
   let attachedCamera: THREE.Camera | null = null;
+  let hoveredObject: THREE.Object3D | null = null;
+
+  /**
+   * The drawn object a scene object's id refers to. Scene-object roots are
+   * named with their instance id, which is what the hit test resolves a click
+   * back to. Null while the object is still loading.
+   */
+  function getObject(instanceId: string): THREE.Object3D | null {
+    return attachedAuthoredRoot?.getObjectByName(instanceId) ?? null;
+  }
+
+  /**
+   * Decides everything that gets an outline, so hover and selection cannot
+   * disagree about an object. An object already outlined as selected is not
+   * outlined again as hovered: two shells at the same size would z-fight.
+   */
+  function syncHulls(): void {
+    const selectedTargets: HullTarget[] = [];
+    const activeId = config.getActiveId();
+    for (const instanceId of config.getSelectedIds()) {
+      const object = getObject(instanceId);
+      if (!object) continue;
+      selectedTargets.push({
+        object,
+        color: instanceId === activeId ? ACTIVE_HULL_COLOR : SELECTED_HULL_COLOR
+      });
+    }
+    selectionHulls.setTargets(selectedTargets);
+
+    const alreadyOutlined = selectedTargets.some(
+      (target) => target.object === hoveredObject
+    );
+    hoverHulls.setTargets(
+      hoveredObject && !alreadyOutlined
+        ? [{ object: hoveredObject, color: HOVER_HULL_COLOR }]
+        : []
+    );
+  }
+
+  /**
+   * Whether scaling these objects along one axis would shear them. Takes the
+   * objects rather than resolving them, so a caller that has already resolved
+   * the selection asks the question against that same snapshot.
+   */
+  function axisScaleShears(objects: readonly SceneObject[]): boolean {
+    return axisScaleWouldShear(
+      objects.map((object) => object.transform.rotation)
+    );
+  }
+
+  /**
+   * Show where a drag has put the selection, without committing it: a draft
+   * per object, and the gizmo back at the pivot of where they now sit.
+   * Cancelling uses the same path with the transforms the drag started from.
+   */
+  function showDrag(subjects: readonly DraggedSubject[]): void {
+    for (const { instanceId, values } of subjects) {
+      config.onPreviewTransform(
+        instanceId,
+        values.position,
+        values.rotation,
+        values.scale
+      );
+    }
+    const pivot = medianPivot(
+      subjects.map((subject) => subject.values.position)
+    );
+    if (!pivot) return;
+    gizmo.setPosition(pivot);
+    originMarker.setPosition(pivot);
+  }
 
   function buildTransformController(initialCamera: THREE.Camera) {
     return createTransformController({
       hitTestService,
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
-      getSelectedId: config.getSelectedId,
+      getSelectedIds: config.getSelectedIds,
+      isAxisScaleAvailable: () =>
+        !axisScaleShears(getSceneObjects(config.getSelectedIds())),
       isSelectable: config.isSelectable,
       getTransform,
-      onPreview(instanceId, values) {
-        gizmo.setPosition(values.position);
-        originMarker.setPosition(values.position);
-        config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
-      },
-      onCommit(instanceId, values) {
+      onPreview: showDrag,
+      onCommit(subjects) {
         const region = config.getRegion();
         if (!region) return;
-        const sceneObject = getSceneObject(instanceId);
-        if (!sceneObject) return;
-
         const target = {
           aggregateKind: "region-document" as const,
           aggregateId: region.identity.id
         };
-        const { position, rotation, scale } = values;
 
-        // [LAW:types-are-the-program] Exhaustive over the kind, with the
-        // `never` check below. This used to end in an unguarded "anything
-        // else is an NPC", which silently fired a presence command for a
-        // marker: no NPC had that id, nothing changed, and the gizmo
-        // snapped back to the authored position with no error anywhere.
-        switch (sceneObject.kind) {
-          case "asset":
-            config.onCommand({
-              kind: "TransformPlacedAsset",
-              target,
-              subject: { subjectKind: "placed-asset", subjectId: instanceId },
-              payload: { instanceId, position, rotation, scale }
-            });
-            return;
+        // One resolve for the whole drag. Asking per subject rebuilt every
+        // scene object in the region once per dragged object.
+        const kindById = new Map(
+          getSceneObjects(subjects.map((subject) => subject.instanceId)).map(
+            (object) => [object.instanceId, object.kind]
+          )
+        );
+        const resolved = subjects.flatMap(({ instanceId, values }) => {
+          const kind = kindById.get(instanceId);
+          return kind
+            ? [{ instanceId, values, commit: transformCommitFor(kind) }]
+            : [];
+        });
 
-          case "player":
-            config.onCommand({
-              kind: "TransformPlayerPresence",
-              target,
-              subject: { subjectKind: "player-presence", subjectId: instanceId },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
+        // Markers carry a patch and everything else carries a transform, so
+        // they go out as different commands. Each group is sent over its own
+        // list rather than one being treated as the special case.
+        for (const { instanceId, values } of resolved.filter(
+          (entry) => entry.commit.via === "marker-patch"
+        )) {
+          config.onCommand(
+            singleTransformCommand(
+              "marker",
+              region.identity.id,
+              instanceId,
+              values
+            )
+          );
+        }
 
-          case "item":
-            config.onCommand({
-              kind: "TransformItemPresence",
-              target,
-              subject: { subjectKind: "item-presence", subjectId: instanceId },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
-
-          case "npc":
-            config.onCommand({
-              kind: "TransformNPCPresence",
-              target,
-              subject: { subjectKind: "npc-presence", subjectId: instanceId },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
-
-          case "marker":
-            config.onCommand({
-              kind: "UpdateRegionMarker",
-              target,
-              subject: { subjectKind: "region-marker", subjectId: instanceId },
-              payload: {
-                markerId: instanceId,
-                patch: { transform: { position, rotation, scale } }
-              }
-            });
-            return;
-
-          default: {
-            const unhandled: never = sceneObject.kind;
-            console.warn(
-              "[layout-workspace] no transform command for scene object kind",
-              unhandled,
-              instanceId
-            );
-          }
+        const transformed = resolved.flatMap((entry) =>
+          entry.commit.via === "transform"
+            ? [
+                {
+                  subjectKind: entry.commit.subjectKind,
+                  subjectId: entry.instanceId,
+                  position: entry.values.position,
+                  rotation: entry.values.rotation,
+                  scale: entry.values.scale
+                }
+              ]
+            : []
+        );
+        if (transformed.length > 0) {
+          // One drag, one command, so one undo puts the whole selection back.
+          config.onCommand({
+            kind: "TransformSceneObjects",
+            target,
+            subject: {
+              subjectKind: transformed[0].subjectKind,
+              subjectId: transformed[0].subjectId
+            },
+            payload: { subjects: transformed }
+          });
         }
       },
-      onCancel(instanceId, values) {
-        gizmo.setPosition(values.position);
-        originMarker.setPosition(values.position);
-        config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
+      onPreviewEnded(instanceIds) {
+        config.onClearPreviewTransforms([...instanceIds]);
       },
-      onSelect(instanceId) {
-        config.onSelect(instanceId ? [instanceId] : []);
+      onCancel(subjects) {
+        // The previews are dropped by onPreviewEnded; what is left is putting
+        // the gizmo back where the drag started.
+        const pivot = medianPivot(
+          subjects.map((subject) => subject.values.position)
+        );
+        if (!pivot) return;
+        gizmo.setPosition(pivot);
+        originMarker.setPosition(pivot);
+      },
+      onSelect(intent) {
+        const selectedIds = config.getSelectedIds();
+        // One resolve for the click. Asking per id rebuilt the region's scene
+        // objects once for every already-selected object, on every click.
+        const kindById = new Map(
+          getSceneObjects(
+            intent.kind === "clear"
+              ? selectedIds
+              : [intent.instanceId, ...selectedIds]
+          ).map((object) => [object.instanceId, object.kind])
+        );
+        config.onSelect(
+          markersStayAlone(
+            intent,
+            selectedIds,
+            (instanceId) => kindById.get(instanceId) ?? null
+          )
+        );
       },
       // Hover affordances arrive through the InputRouter's hover
       // dispatch (top controller only) -- never a raw DOM listener.
@@ -224,7 +492,12 @@ export function createLayoutWorkspace(
         gizmo.setHoveredHandle(handleName);
       },
       onHoverTarget(object) {
-        hoverHull.setTarget(object);
+        // Hover fires on every pointer move, and re-syncing walks the scene
+        // graph once per selected object. Nothing changes while the cursor
+        // stays over the same thing.
+        if (object === hoveredObject) return;
+        hoveredObject = object;
+        syncHulls();
       }
     });
   }
@@ -242,11 +515,13 @@ export function createLayoutWorkspace(
       hitTestService.setAuthoredRoot(authoredRoot);
       hitTestService.setOverlayRoot(overlayRoot);
       attachedOverlayRoot = overlayRoot;
+      attachedAuthoredRoot = authoredRoot;
 
       overlayRoot.add(gizmo.root);
       overlayRoot.add(originMarker.root);
       overlayRoot.add(worldCursor.root);
-      overlayRoot.add(hoverHull.root);
+      overlayRoot.add(hoverHulls.root);
+      overlayRoot.add(selectionHulls.root);
 
       attachedCamera = camera;
       attachedElement = viewportElement;
@@ -256,7 +531,11 @@ export function createLayoutWorkspace(
 
       // Keyboard shortcuts (G/R/S)
       keydownHandler = (e: KeyboardEvent) => {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        )
+          return;
         const tool = TOOL_SHORTCUTS[e.key.toLowerCase()];
         if (tool) {
           toolState.setActiveTool(tool);
@@ -278,12 +557,16 @@ export function createLayoutWorkspace(
       attachedElement = null;
       attachedCamera = null;
       gizmo.setHoveredHandle(null);
-      hoverHull.setTarget(null);
+      hoveredObject = null;
+      hoverHulls.setTargets([]);
+      selectionHulls.setTargets([]);
+      attachedAuthoredRoot = null;
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(gizmo.root);
         attachedOverlayRoot.remove(originMarker.root);
         attachedOverlayRoot.remove(worldCursor.root);
-        attachedOverlayRoot.remove(hoverHull.root);
+        attachedOverlayRoot.remove(hoverHulls.root);
+        attachedOverlayRoot.remove(selectionHulls.root);
         attachedOverlayRoot = null;
       }
       gizmo.setVisible(false);
@@ -297,7 +580,8 @@ export function createLayoutWorkspace(
         attachedCamera = camera;
         hitTestService.setCamera(camera);
       }
-      hoverHull.syncTransform();
+      hoverHulls.syncTransform();
+      selectionHulls.syncTransform();
       if (!attachedCamera || !gizmo.root.visible) return;
       gizmo.setScale(
         gizmoWorldScaleForCamera(attachedCamera, gizmo.root.position)
@@ -308,29 +592,28 @@ export function createLayoutWorkspace(
       gizmo.dispose();
       originMarker.dispose();
       worldCursor.dispose();
-      hoverHull.dispose();
+      hoverHulls.dispose();
+      selectionHulls.dispose();
     },
 
     syncOverlays() {
-      const selectedId = config.getSelectedId();
-      if (!selectedId) {
+      syncHulls();
+      const selected = getSceneObjects(config.getSelectedIds());
+      // One reading of the rule feeds both the greyed handles and the refusal
+      // to drag them, so what is shown and what is allowed cannot disagree.
+      gizmo.setAxisScaleAvailable(!axisScaleShears(selected));
+      const pivot = medianPivot(selected.map((o) => o.transform.position));
+      if (!pivot) {
         gizmo.setVisible(false);
         originMarker.setVisible(false);
         return;
       }
 
-      const transform = getTransform(selectedId);
-      if (!transform) {
-        gizmo.setVisible(false);
-        originMarker.setVisible(false);
-        return;
-      }
-
-      gizmo.setPosition(transform.position);
+      gizmo.setPosition(pivot);
       // Size comes from camera distance (updateForCamera), not the
       // object's scale -- the gizmo reads constant on screen.
       gizmo.setVisible(true);
-      originMarker.setPosition(transform.position);
+      originMarker.setPosition(pivot);
       originMarker.setVisible(true);
     }
   };

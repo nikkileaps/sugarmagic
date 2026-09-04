@@ -1009,6 +1009,39 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+/**
+ * One object moved by a transform that covered a whole selection, and where it
+ * ended up.
+ *
+ * Region markers are deliberately absent from `subjectKind`. They are written
+ * through `UpdateRegionMarker` with a patch rather than a transform, so a
+ * marker in a batch has no shape to commit -- leaving the kind out means such a
+ * batch cannot be built rather than having to be rejected.
+ */
+export interface TransformSubject {
+  subjectKind:
+    | "placed-asset"
+    | "player-presence"
+    | "npc-presence"
+    | "item-presence";
+  subjectId: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+}
+
+/**
+ * Every object moved by ONE gizmo drag. A single command, and therefore a
+ * single transaction, so undo puts the whole selection back rather than one
+ * object at a time -- the same reason a scatter-brush stroke is one command.
+ */
+export type TransformSceneObjectsCommand = SemanticCommandBase<
+  "TransformSceneObjects",
+  {
+    subjects: TransformSubject[];
+  }
+>;
+
 export type AssignPlacedAssetInspectableCommand = SemanticCommandBase<
   "AssignPlacedAssetInspectable",
   {
@@ -1193,6 +1226,7 @@ export type SemanticCommand =
   | UpdateLandscapeChannelCommand
   | DeleteLandscapeChannelCommand
   | TransformPlacedAssetCommand
+  | TransformSceneObjectsCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
   | UpdateRegionLayoutSketchCommand

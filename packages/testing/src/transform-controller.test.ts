@@ -15,6 +15,7 @@ import {
   createTransformController,
   type HitTestService,
   type NormalizedPointerEvent,
+  type SelectionIntent,
   type TransformValues
 } from "@sugarmagic/workspaces";
 
@@ -27,7 +28,8 @@ const IDENTITY: TransformValues = {
 function pointer(
   normalizedX: number,
   normalizedY: number,
-  buttons = 0
+  buttons = 0,
+  modifiers: { shiftKey?: boolean } = {}
 ): NormalizedPointerEvent {
   return {
     screenX: 0,
@@ -36,7 +38,7 @@ function pointer(
     normalizedY,
     button: 0,
     buttons,
-    shiftKey: false,
+    shiftKey: modifiers.shiftKey ?? false,
     ctrlKey: false,
     altKey: false,
     metaKey: false
@@ -58,6 +60,7 @@ interface Harness {
   commits: TransformValues[];
   cancels: TransformValues[];
   hoverHandles: Array<string | null>;
+  previewsEnded: string[][];
   hoverTargets: Array<THREE.Object3D | null>;
 }
 
@@ -70,6 +73,7 @@ function makeHarness(options: {
   const previews: TransformValues[] = [];
   const commits: TransformValues[] = [];
   const cancels: TransformValues[] = [];
+  const previewsEnded: string[][] = [];
   const hoverHandles: Array<string | null> = [];
   const hoverTargets: Array<THREE.Object3D | null> = [];
 
@@ -106,13 +110,16 @@ function makeHarness(options: {
     hitTestService,
     getCamera: () => camera,
     getActiveTool: () => "move",
-    onPreview: (_, values) => previews.push(values),
-    onCommit: (_, values) => commits.push(values),
-    onCancel: (_, values) => cancels.push(values),
+    // This harness drags a single object, so the reported batch is unwrapped
+    // back to one transform and every assertion below reads as it always did.
+    onPreview: (subjects) => previews.push(...subjects.map((s) => s.values)),
+    onCommit: (subjects) => commits.push(...subjects.map((s) => s.values)),
+    onCancel: (subjects) => cancels.push(...subjects.map((s) => s.values)),
+    onPreviewEnded: (instanceIds) => previewsEnded.push([...instanceIds]),
     onSelect: () => {},
     onHoverHandle: (name) => hoverHandles.push(name),
     onHoverTarget: (object) => hoverTargets.push(object),
-    getSelectedId: () => "instance-1",
+    getSelectedIds: () => ["instance-1"],
     getTransform: () => ({
       position: [...start.position],
       rotation: [...start.rotation],
@@ -120,7 +127,15 @@ function makeHarness(options: {
     })
   });
 
-  return { controller, previews, commits, cancels, hoverHandles, hoverTargets };
+  return {
+    controller,
+    previews,
+    commits,
+    cancels,
+    previewsEnded,
+    hoverHandles,
+    hoverTargets
+  };
 }
 
 // With the camera 10 out at fov 60 / aspect 1, NDC x maps to world x
@@ -153,6 +168,50 @@ describe("transform controller drags", () => {
     h.controller.onPointerDown!(pointer(0, 0));
     h.controller.onPointerUp!(pointer(0, 0));
     expect(h.commits).toHaveLength(0);
+  });
+
+  it("ends the preview even when the drag committed nothing", () => {
+    // A preview left behind outranks the authored transform, so an object
+    // whose drag came back to where it started would stay pinned there.
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    h.controller.onPointerMove!(pointer(0, 0));
+    h.controller.onPointerUp!(pointer(0, 0));
+
+    expect(h.commits).toHaveLength(0);
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends the preview when the drag commits", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0));
+    h.controller.onPointerUp!(pointer(0.2, 0));
+
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends the preview when the drag is cancelled", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    h.controller.onCancel!();
+
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends a drag once, however many times it is told to stop", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0));
+    h.controller.onPointerUp!(pointer(0.2, 0));
+    h.controller.onCancel!();
+    h.controller.onPointerUp!(pointer(0.2, 0));
+
+    expect(h.previewsEnded).toHaveLength(1);
+    expect(h.commits).toHaveLength(1);
+    expect(h.cancels).toHaveLength(0);
   });
 
   it("cancel restores the drag-start values", () => {
@@ -255,6 +314,249 @@ describe("transform controller hover", () => {
 });
 
 /**
+ * A move drag covers the whole selection. Move is the pivot-independent
+ * transform, so every object takes the same translation and the selection
+ * keeps its spacing.
+ */
+describe("dragging many objects", () => {
+  /** Three props in a row on x, at 0, 5 and 20. */
+  const ROW: Record<string, TransformValues> = {
+    prop_a: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+    prop_b: { position: [5, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+    prop_c: { position: [20, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
+  };
+
+  function rowHarness(
+    handle: string,
+    options: { axisScaleAvailable?: boolean } = {}
+  ) {
+    const previews: Array<
+      Array<{ instanceId: string; values: TransformValues }>
+    > = [];
+    const commits: Array<
+      Array<{ instanceId: string; values: TransformValues }>
+    > = [];
+    const cancels: Array<
+      Array<{ instanceId: string; values: TransformValues }>
+    > = [];
+    const hitTestService = {
+      testGizmo: () => ({
+        mode: "gizmo" as const,
+        objectName: handle,
+        point: new THREE.Vector3(),
+        distance: 1,
+        object: new THREE.Object3D()
+      }),
+      testSelect: () => null,
+      testSurface: () => null,
+      setCamera: () => {},
+      setAuthoredRoot: () => {},
+      setOverlayRoot: () => {},
+      setSurfaceRoot: () => {}
+    } as HitTestService;
+
+    const controller = createTransformController({
+      hitTestService,
+      getCamera: () => makeCamera(),
+      getActiveTool: () => "move",
+      onPreview: (subjects) => previews.push([...subjects]),
+      onCommit: (subjects) => commits.push([...subjects]),
+      onCancel: (subjects) => cancels.push([...subjects]),
+      onPreviewEnded: () => {},
+      onSelect: () => {},
+      onHoverHandle: () => {},
+      onHoverTarget: () => {},
+      getSelectedIds: () => ["prop_a", "prop_b", "prop_c"],
+      isAxisScaleAvailable: () => options.axisScaleAvailable ?? true,
+      getTransform: (instanceId) => {
+        const found = ROW[instanceId];
+        return found
+          ? {
+              position: [...found.position],
+              rotation: [...found.rotation],
+              scale: [...found.scale]
+            }
+          : null;
+      }
+    });
+    return { controller, previews, commits, cancels };
+  }
+
+  it("moves every selected object by the same amount", () => {
+    const h = rowHarness("gizmo-move-x");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.1, 0));
+
+    const last = h.previews.at(-1)!;
+    const shift = 0.1 * WORLD_PER_NDC;
+    expect(last).toHaveLength(3);
+    expect(last[0].values.position[0]).toBeCloseTo(shift, 3);
+    expect(last[1].values.position[0]).toBeCloseTo(5 + shift, 3);
+    expect(last[2].values.position[0]).toBeCloseTo(20 + shift, 3);
+  });
+
+  it("keeps the spacing between the objects", () => {
+    const h = rowHarness("gizmo-move-x");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.3, 0));
+
+    const [a, b, c] = h.previews.at(-1)!.map((s) => s.values.position[0]);
+    expect(b - a).toBeCloseTo(5, 3);
+    expect(c - b).toBeCloseTo(15, 3);
+  });
+
+  it("commits the whole selection in one call", () => {
+    const h = rowHarness("gizmo-move-x");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.1, 0));
+    h.controller.onPointerUp!(pointer(0.1, 0));
+
+    expect(h.commits).toHaveLength(1);
+    expect(h.commits[0].map((s) => s.instanceId)).toEqual([
+      "prop_a",
+      "prop_b",
+      "prop_c"
+    ]);
+  });
+
+  it("cancels every object back to where it started", () => {
+    const h = rowHarness("gizmo-move-x");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.4, 0));
+    h.controller.onCancel!();
+
+    expect(h.cancels).toHaveLength(1);
+    expect(h.cancels[0].map((s) => s.values.position[0])).toEqual([0, 5, 20]);
+  });
+
+  it("rotates the row as a unit and turns each object in it", () => {
+    const h = rowHarness("gizmo-rotate-center");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0.2));
+
+    const last = h.previews.at(-1)!;
+    // The three origins are collinear on x. Orbiting about the pivot lifts
+    // them off that line...
+    const movedOffTheRow = last.some(
+      (subject) => Math.abs(subject.values.position[2]) > 1e-6
+    );
+    expect(movedOffTheRow).toBe(true);
+    // ...and each object turns by the same amount as well as moving.
+    const turns = last.map((subject) => subject.values.rotation);
+    expect(turns[1]).toEqual(turns[0]);
+    expect(turns[2]).toEqual(turns[0]);
+    expect(turns[0].some((angle) => Math.abs(angle) > 1e-6)).toBe(true);
+  });
+
+  it("keeps the object sitting nearest the pivot closest to it", () => {
+    const h = rowHarness("gizmo-scale-center");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.15, 0.15));
+
+    const last = h.previews.at(-1)!;
+    // Scaling about the pivot spreads the row out and grows each object.
+    const spread = last[2].values.position[0] - last[0].values.position[0];
+    expect(spread).toBeGreaterThan(20);
+    expect(last[0].values.scale[0]).toBeGreaterThan(1);
+  });
+
+  it("refuses an axis scale drag when that would shear the selection", () => {
+    const h = rowHarness("gizmo-scale-x", { axisScaleAvailable: false });
+    expect(h.controller.onPointerDown!(pointer(0, 0))).toBe(false);
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    expect(h.previews).toHaveLength(0);
+  });
+
+  it("still allows uniform scale when axis scale is unavailable", () => {
+    const h = rowHarness("gizmo-scale-center", { axisScaleAvailable: false });
+    expect(h.controller.onPointerDown!(pointer(0, 0))).toBe(true);
+  });
+
+  it("anchors the drag at the pivot, not at the first object", () => {
+    // The three origins average to (25/3, 0, 0). A centre drag reads the
+    // pointer against that plane, so the gizmo the author grabbed is the one
+    // the maths uses.
+    const h = rowHarness("gizmo-move-center");
+    expect(h.controller.onPointerDown!(pointer(0, 0))).toBe(true);
+    h.controller.onPointerMove!(pointer(0.1, 0));
+    const last = h.previews.at(-1)!;
+    expect(last[1].values.position[0] - last[0].values.position[0]).toBeCloseTo(
+      5,
+      3
+    );
+  });
+});
+
+/**
+ * What a click asks the selection to do. The controller reads the modifier and
+ * names the intent; deciding what the selection then holds is the store's job.
+ */
+describe("selection intent", () => {
+  function selectionHarness(hit: string | null) {
+    const selects: SelectionIntent[] = [];
+    const object = new THREE.Object3D();
+    const hitTestService = {
+      testGizmo: () => null,
+      testSelect: () =>
+        hit === null
+          ? null
+          : {
+              mode: "select" as const,
+              objectName: hit,
+              point: new THREE.Vector3(),
+              distance: 1,
+              object
+            },
+      testSurface: () => null,
+      setCamera: () => {},
+      setAuthoredRoot: () => {},
+      setOverlayRoot: () => {},
+      setSurfaceRoot: () => {}
+    } as HitTestService;
+
+    const controller = createTransformController({
+      hitTestService,
+      getCamera: () => makeCamera(),
+      getActiveTool: () => "move",
+      onPreview: () => {},
+      onCommit: () => {},
+      onCancel: () => {},
+      onPreviewEnded: () => {},
+      onSelect: (intent) => selects.push(intent),
+      onHoverHandle: () => {},
+      onHoverTarget: () => {},
+      getSelectedIds: () => [],
+      getTransform: () => ({ ...IDENTITY })
+    });
+    return { controller, selects };
+  }
+
+  it("a plain click replaces the whole selection", () => {
+    const { controller, selects } = selectionHarness("prop_a");
+    controller.onPointerDown!(pointer(0, 0));
+    expect(selects).toEqual([{ kind: "replace", instanceId: "prop_a" }]);
+  });
+
+  it("a shift-click toggles the clicked object", () => {
+    const { controller, selects } = selectionHarness("prop_a");
+    controller.onPointerDown!(pointer(0, 0, 0, { shiftKey: true }));
+    expect(selects).toEqual([{ kind: "toggle", instanceId: "prop_a" }]);
+  });
+
+  it("clicking empty space clears the selection", () => {
+    const { controller, selects } = selectionHarness(null);
+    controller.onPointerDown!(pointer(0, 0));
+    expect(selects).toEqual([{ kind: "clear" }]);
+  });
+
+  it("shift-clicking empty space clears rather than toggling nothing", () => {
+    const { controller, selects } = selectionHarness(null);
+    controller.onPointerDown!(pointer(0, 0, 0, { shiftKey: true }));
+    expect(selects).toEqual([{ kind: "clear" }]);
+  });
+});
+
+/**
  * Locking (epic #226 story 8). The scene composer draws the region so an
  * author can see where things sit, and lets them edit only the Scene's
  * overlay. "Locked" has to hold for picking, hovering AND dragging, or it
@@ -262,7 +564,7 @@ describe("transform controller hover", () => {
  */
 describe("selection locking", () => {
   function lockingHarness(locked: string) {
-    const selects: Array<string | null> = [];
+    const selects: SelectionIntent[] = [];
     const hovers: Array<THREE.Object3D | null> = [];
     const object = new THREE.Object3D();
     const hitTestService = {
@@ -288,10 +590,11 @@ describe("selection locking", () => {
       onPreview: () => {},
       onCommit: () => {},
       onCancel: () => {},
+      onPreviewEnded: () => {},
       onSelect: (id) => selects.push(id),
       onHoverHandle: () => {},
       onHoverTarget: (hit) => hovers.push(hit),
-      getSelectedId: () => locked,
+      getSelectedIds: () => [locked],
       getTransform: () => ({ ...IDENTITY }),
       isSelectable: (instanceId) => instanceId !== locked
     });
@@ -301,7 +604,7 @@ describe("selection locking", () => {
   it("clicking a locked object selects nothing, not the thing behind it", () => {
     const { controller, selects } = lockingHarness("region:station-wall");
     controller.onPointerDown!(pointer(0, 0));
-    expect(selects).toEqual([null]);
+    expect(selects).toEqual([{ kind: "clear" }]);
   });
 
   it("a locked object gets no hover cue", () => {

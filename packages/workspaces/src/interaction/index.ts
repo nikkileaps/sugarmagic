@@ -34,9 +34,20 @@ export {
 } from "./tool-state";
 
 export {
+  applyDelta,
+  axisScaleWouldShear,
+  medianPivot,
+  type SelectionDelta,
+  type Vector3Tuple
+} from "./selection-transform";
+
+export {
   createTransformController,
+  type DraggedSubject,
+  type SelectionIntent,
   type TransformControllerConfig,
   type TransformSession,
+  type TransformSubjectSession,
   type TransformAxis,
   type TransformValues
 } from "./transform-controller";

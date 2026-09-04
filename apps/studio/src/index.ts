@@ -10,6 +10,18 @@ export { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProje
 export { createSurfacePreviewGeometry } from "./viewport/surface-preview-samplers";
 export { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 export {
+  historyShortcut,
+  isTypingTarget,
+  type HistoryAction
+} from "./keyboard/history-shortcuts";
+export {
+  isSceneComposer,
+  isSelectableHere,
+  regionOwns,
+  transformOverlayAttaches,
+  type WorkspaceLocation
+} from "./viewport/overlays/transform-overlay-gates";
+export {
   bakePaintUvsIntoGlb,
   type PaintUvBakeOptions,
   type PaintUvBakeResult

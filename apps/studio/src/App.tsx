@@ -53,6 +53,7 @@ import {
   type Surface,
   createAuthoringSession,
   applyCommand,
+  redoSession,
   undoSession,
   markSessionClean,
   switchActiveRegion,
@@ -144,7 +145,7 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
-  type Scene,
+  type Scene
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -244,6 +245,7 @@ import {
 } from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
+import { historyShortcut, isTypingTarget } from "./keyboard/history-shortcuts";
 import {
   clearLivePaintedMasks,
   computeAssetColliderBounds,
@@ -264,7 +266,10 @@ import {
 } from "./plugins/catalog";
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
-import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
+import {
+  cancelActiveViewportGesture,
+  resolveNPCInteractionOptions
+} from "@sugarmagic/workspaces";
 import { UIPreviewSession } from "./preview/UIPreviewSession";
 
 function renderPluginSectionGroup(
@@ -312,9 +317,7 @@ async function writeProjectAssetFile(
 ): Promise<void> {
   const { handle } = projectStore.getState();
   if (!handle) {
-    throw new Error(
-      `Cannot write "${relativeAssetPath}": no project is open.`
-    );
+    throw new Error(`Cannot write "${relativeAssetPath}": no project is open.`);
   }
   if (!relativeAssetPath.startsWith("assets/")) {
     // Everything outside assets/ is either authored truth or a generated file
@@ -391,7 +394,10 @@ async function seedAnimationLibraryIfNeeded(
     getAllAnimationLibraryDefinitions(session).map((d) => d.definitionId)
   );
   const SLUGS = ["cozy-idle", "cozy-walk", "cozy-run"];
-  if (SLUGS.every((slug) => existing.has(cozySeedDefinitionId(projectId, slug)))) return;
+  if (
+    SLUGS.every((slug) => existing.has(cozySeedDefinitionId(projectId, slug)))
+  )
+    return;
 
   try {
     const result = await seedCozyAnimations(
@@ -586,7 +592,11 @@ async function performSave(
     if (!options.silentOverwriteManagedFiles) {
       window.alert(`${reason}\n\nProject was not saved.`);
     }
-    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
+    return {
+      ok: false,
+      reason,
+      alreadyReported: !options.silentOverwriteManagedFiles
+    };
   }
   // Content that references something which does not exist cannot work in
   // play and cannot be fixed by playing further, so it stops the save. The
@@ -604,7 +614,11 @@ async function performSave(
     if (!options.silentOverwriteManagedFiles) {
       window.alert(`${reason}\n\nProject was not saved.`);
     }
-    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
+    return {
+      ok: false,
+      reason,
+      alreadyReported: !options.silentOverwriteManagedFiles
+    };
   }
   const baseSaveInput = {
     handle,
@@ -904,7 +918,9 @@ function handleUpdateScene(
 function handleDeleteScene(sceneId: string) {
   const { session } = projectStore.getState();
   if (!session) return;
-  projectStore.getState().updateSession(deleteSceneFromSession(session, sceneId));
+  projectStore
+    .getState()
+    .updateSession(deleteSceneFromSession(session, sceneId));
 }
 
 function handleReorderScene(sceneId: string, direction: "up" | "down") {
@@ -1074,7 +1090,8 @@ async function postPreviewBootMessage(
   } catch (error) {
     return {
       ok: false,
-      message: "Preview could not start: building the Sugarlang payload failed.",
+      message:
+        "Preview could not start: building the Sugarlang payload failed.",
       detail: error instanceof Error ? error.message : String(error)
     };
   }
@@ -1084,7 +1101,8 @@ async function postPreviewBootMessage(
   if (sugarlangEnabled && !sugarlangBootPayload) {
     return {
       ok: false,
-      message: "Preview did not start: Sugarlang is enabled but no target language is set.",
+      message:
+        "Preview did not start: Sugarlang is enabled but no target language is set.",
       detail:
         "Set a target language in the Sugarlang workspace's Language panel, or disable the Sugarlang plugin to preview without it."
     };
@@ -1180,6 +1198,10 @@ export function App() {
     (s) => s.activeEnvironmentId
   );
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
+  const activeSelectionId = useStore(
+    shellStore,
+    (s) => s.selection.activeEntityId
+  );
 
   const phase = useStore(projectStore, (s) => s.phase);
   const projectHandle = useStore(projectStore, (s) => s.handle);
@@ -1230,6 +1252,7 @@ export function App() {
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
+  const redoCount = session?.redoStack.length ?? 0;
   // Flips false->true once when a project loads; the only session-derived
   // trigger for the preview boot, so edits don't re-fire it.
   const hasSession = session != null;
@@ -1406,12 +1429,16 @@ export function App() {
     () => ({
       worldFlagDefinitions,
       createWorldFlag: (name) => {
-        const definition = createWorldFlagDefinition({ name, displayName: name });
+        const definition = createWorldFlagDefinition({
+          name,
+          displayName: name
+        });
         dispatchCommand({
           kind: "CreateWorldFlagDefinition",
           target: {
             aggregateKind: "game-project",
-            aggregateId: projectStore.getState().session?.gameProject.identity.id ?? ""
+            aggregateId:
+              projectStore.getState().session?.gameProject.identity.id ?? ""
           },
           subject: {
             subjectKind: "world-flag-definition",
@@ -1588,8 +1615,9 @@ export function App() {
     const entry = pluginConfigurations.find(
       (configuration) => configuration.pluginId === "sugarlang"
     );
-    const configured = (entry?.config as { targetLanguage?: unknown } | undefined)
-      ?.targetLanguage;
+    const configured = (
+      entry?.config as { targetLanguage?: unknown } | undefined
+    )?.targetLanguage;
     return typeof configured === "string" && configured.trim().length > 0
       ? configured.trim().toLowerCase()
       : "";
@@ -2054,7 +2082,12 @@ export function App() {
     } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
     const fileHandle = await pickFile({
-      types: [{ description: "Blender GLB", accept: { "model/gltf-binary": [".glb"] } }]
+      types: [
+        {
+          description: "Blender GLB",
+          accept: { "model/gltf-binary": [".glb"] }
+        }
+      ]
     });
     const file = await fileHandle.getFile();
     try {
@@ -2094,13 +2127,15 @@ export function App() {
     (definitionId: string, displayName: string) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
-      projectStore
-        .getState()
-        .updateSession(
-          updateAnimationLibraryDefinitionInSession(currentSession, definitionId, {
+      projectStore.getState().updateSession(
+        updateAnimationLibraryDefinitionInSession(
+          currentSession,
+          definitionId,
+          {
             displayName
-          })
-        );
+          }
+        )
+      );
     },
     []
   );
@@ -2114,7 +2149,10 @@ export function App() {
       projectStore
         .getState()
         .updateSession(
-          removeAnimationLibraryDefinitionFromSession(currentSession, definitionId)
+          removeAnimationLibraryDefinitionFromSession(
+            currentSession,
+            definitionId
+          )
         );
     },
     []
@@ -2418,8 +2456,7 @@ export function App() {
     new Map<string, HTMLCanvasElement>()
   );
   const paintedMaskPreviewLoads = useRef(new Set<string>());
-  const [paintedMaskPreviewVersion, setPaintedMaskPreviewVersion] =
-    useState(0);
+  const [paintedMaskPreviewVersion, setPaintedMaskPreviewVersion] = useState(0);
 
   const getPaintedMaskPreviewCanvas = useCallback(
     (maskTextureId: string): HTMLCanvasElement | null => {
@@ -2579,7 +2616,10 @@ export function App() {
                 );
             }
           } catch (error) {
-            console.warn("[collider-bounds] origin-correct rebake failed", error);
+            console.warn(
+              "[collider-bounds] origin-correct rebake failed",
+              error
+            );
           }
         }
         // Same ordering as paint-UV regen: drop the renderables first so
@@ -2625,7 +2665,10 @@ export function App() {
       if (shape === "none") {
         projectStore.getState().updateSession(
           updateAssetDefinitionInSession(session, assetDefinitionId, {
-            collider: { shape: "none", localBounds: current?.localBounds ?? null }
+            collider: {
+              shape: "none",
+              localBounds: current?.localBounds ?? null
+            }
           })
         );
         return;
@@ -3064,7 +3107,12 @@ export function App() {
     });
     return computeNavMeshInputHash(input) !== activeRegion.navMesh.inputHash;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRegion, staleContentLibrary, staleActiveScene, stalePlayerDefinition]);
+  }, [
+    activeRegion,
+    staleContentLibrary,
+    staleActiveScene,
+    stalePlayerDefinition
+  ]);
 
   // --- Surface Studio ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =
@@ -3156,8 +3204,10 @@ export function App() {
     if (!region) {
       return null;
     }
-    const overlay =
-      sceneOverlayForRegion(getActiveScene(session), region.identity.id);
+    const overlay = sceneOverlayForRegion(
+      getActiveScene(session),
+      region.identity.id
+    );
     const instance =
       region.placedAssets.find(
         (asset) => asset.instanceId === surfaceStudioTarget.instanceId
@@ -3247,6 +3297,7 @@ export function App() {
     activeRegionId,
     activeEnvironmentId,
     selectedIds,
+    activeSelectionId,
     session,
     assetDefinitions,
     surfaceDefinitions,
@@ -3277,6 +3328,7 @@ export function App() {
       shellStore.getState().setActiveEnvironmentId(environmentId),
     onCreateEnvironment: handleCreateEnvironment,
     onSelect: (ids) => shellStore.getState().setSelection(ids),
+    onToggleSelect: (id) => shellStore.getState().toggleSelection(id),
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
@@ -3364,8 +3416,9 @@ export function App() {
     regions: regionDocuments,
     episodes: session?.gameProject.episodes ?? [],
     soundCueDefinitions,
-    creditsDefinition:
-      session?.gameProject.creditsDefinition ?? { sections: [] },
+    creditsDefinition: session?.gameProject.creditsDefinition ?? {
+      sections: []
+    },
     onUpdateCredits: (credits) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
@@ -3560,7 +3613,9 @@ export function App() {
       <SceneComposerPanel
         scenes={getAllScenes(session.gameProject.episodes)}
         selectedScene={getActiveScene(session)}
-        region={session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null}
+        region={
+          session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null
+        }
         // Only the Scene changes. The composer's region is derived from
         // it in `selectViewportProjection`, so writing the shell's active
         // region here would be a second copy of an answer the Scene
@@ -3638,10 +3693,9 @@ export function App() {
   // by workspaceKind, render each contribution's view, and pass the
   // sorted result into the Publish productmode hook.
   const pluginPublishWorkspaceItems = useMemo(() => {
-    const publishWorkspaceDefinitions =
-      studioPluginWorkspaceDefinitions.filter(
-        (definition) => definition.productMode === "publish"
-      );
+    const publishWorkspaceDefinitions = studioPluginWorkspaceDefinitions.filter(
+      (definition) => definition.productMode === "publish"
+    );
     return pluginShellContributions.publishWorkspaces
       .map((contribution) => {
         const definition = publishWorkspaceDefinitions.find(
@@ -3784,8 +3838,15 @@ export function App() {
   // design sections appear alongside the settings panel.
   const activeDesignPanels = (() => {
     const base = activePluginView ?? genericPluginView ?? designView;
-    if (activePluginView && !activePluginView.centerPanel && genericPluginView?.centerPanel) {
-      return { ...activePluginView, centerPanel: genericPluginView.centerPanel };
+    if (
+      activePluginView &&
+      !activePluginView.centerPanel &&
+      genericPluginView?.centerPanel
+    ) {
+      return {
+        ...activePluginView,
+        centerPanel: genericPluginView.centerPanel
+      };
     }
     return base;
   })();
@@ -3888,6 +3949,31 @@ export function App() {
     projectStore.getState().updateSession(undoSession(s));
   }, []);
 
+  const handleRedo = useCallback(() => {
+    const { session: s } = projectStore.getState();
+    if (!s) return;
+    projectStore.getState().updateSession(redoSession(s));
+  }, []);
+
+  // Undo and redo from the keyboard, anywhere in Studio.
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const action = historyShortcut(event);
+      if (!action) return;
+      // The browser would otherwise run its own undo over the top of ours.
+      event.preventDefault();
+      // A drag in progress is holding the transforms it read at pointer-down.
+      // Undoing under it would leave those stale values to be written back on
+      // release, so the drag is abandoned first.
+      cancelActiveViewportGesture();
+      if (action === "undo") handleUndo();
+      else handleRedo();
+    };
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [handleUndo, handleRedo]);
+
   const statusMessage = useMemo(() => {
     if (phase === "no-project") return "No project open";
     if (phase === "error") return "Error loading project";
@@ -3937,126 +4023,240 @@ export function App() {
 
   return (
     <SurfaceAuthoringProvider catalog={surfaceAuthoringCatalog}>
-    <WorldFlagRegistryProvider registry={worldFlagRegistry}>
-      <ProjectManagerDialog
-        opened={phase === "no-project"}
-        onOpen={handleOpenProject}
-        onCreate={handleCreateProject}
-        reopenProjectName={reopenable?.name ?? null}
-        onReopen={() => {
-          void (async () => {
-            if (!reopenable) return;
-            // requestPermission only prompts inside a user gesture, which
-            // this click is.
-            const allowed = await requestProjectDirectoryAccess(
-              reopenable.handle
-            );
-            if (!allowed) return;
-            const opened = await reopenRememberedProject(reopenable.handle);
-            if (!opened) setReopenable(null);
-          })();
-        }}
-      />
-      <CreateRegionDialog
-        opened={createRegionOpen}
-        onClose={() => setCreateRegionOpen(false)}
-        onCreate={handleCreateRegion}
-      />
-      <LibraryPopover
-        shellStore={shellStore}
-        materialDefinitions={materialDefinitions}
-        textureDefinitions={textureDefinitions}
-        shaderDefinitions={shaderDefinitions}
-        audioClipDefinitions={audioClipDefinitions}
-        assetDefinitions={assetDefinitions}
-        animationLibraryDefinitions={animationLibraryDefinitions}
-        contentLibrary={session?.contentLibrary ?? null}
-        assetSources={assetSources}
-        assetResolver={studioRenderEngine.assetResolver}
-        isMaterialReferenced={(definitionId) =>
-          session
-            ? materialDefinitionHasReferences(session, definitionId)
-            : false
-        }
-        isTextureReferenced={(definitionId) =>
-          session
-            ? textureDefinitionHasReferences(session, definitionId)
-            : false
-        }
-        isAssetReferenced={(definitionId) =>
-          session ? assetDefinitionHasReferences(session, definitionId) : false
-        }
-        assetsPreselectId={assetsLibraryPreselectId}
-        onImportAssetDefinition={handleImportAsset}
-        onUpdateAssetDefinition={handleUpdateAssetDefinition}
-        onRemoveAssetDefinition={handleRemoveAssetDefinition}
-        onCorrectAssetOrigin={handleCorrectAssetOrigin}
-        onSetAssetColliderShape={handleSetAssetColliderShape}
-        onRemoveTextureDefinition={(definitionId) => {
-          const { session: currentSession } = projectStore.getState();
-          if (!currentSession) return;
-          projectStore
-            .getState()
-            .updateSession(
-              removeTextureDefinitionFromSession(currentSession, definitionId)
-            );
-        }}
-        onCreateMaterialDefinition={handleCreateMaterialDefinition}
-        onImportPbrMaterial={handleImportPbrMaterial}
-        onImportTextureDefinition={handleImportTextureDefinition}
-        onImportAudioClipDefinition={handleImportAudioClipDefinition}
-        onImportAnimationLibrary={handleImportAnimationLibrary}
-        onUpdateAudioClipDefinition={handleUpdateAudioClipDefinition}
-        onUpdateAnimationLibraryDefinition={handleUpdateAnimationLibraryDefinition}
-        onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
-        onRemoveAudioClipDefinition={handleRemoveAudioClipDefinition}
-        onRemoveAnimationLibraryDefinition={handleRemoveAnimationLibraryDefinition}
-        onEditShaderInGraph={(shaderDefinitionId) => {
-          // Close the popover and route the existing workspace-
-          // navigation handler to the Render workspace's shader
-          // graph editor with this shader pre-selected.
-          shellStore.getState().setActiveLibrary(null);
-          handleWorkspaceNavigation({
-            kind: "shader-graph",
-            shaderDefinitionId
-          });
-        }}
-      />
-      <Modal
-        opened={pluginsOpen}
-        onClose={() => setPluginsOpen(false)}
-        title="Plugins"
-        centered
-        styles={{
-          header: {
-            background: "var(--sm-color-surface1)",
-            borderBottom: "1px solid var(--sm-panel-border)"
-          },
-          title: { color: "var(--sm-color-text)", fontWeight: 600 },
-          body: { background: "var(--sm-color-surface1)", padding: "20px" },
-          content: { background: "var(--sm-color-surface1)" },
-          close: {
-            color: "var(--sm-color-overlay1)",
-            "&:hover": { background: "var(--sm-active-bg)" }
+      <WorldFlagRegistryProvider registry={worldFlagRegistry}>
+        <ProjectManagerDialog
+          opened={phase === "no-project"}
+          onOpen={handleOpenProject}
+          onCreate={handleCreateProject}
+          reopenProjectName={reopenable?.name ?? null}
+          onReopen={() => {
+            void (async () => {
+              if (!reopenable) return;
+              // requestPermission only prompts inside a user gesture, which
+              // this click is.
+              const allowed = await requestProjectDirectoryAccess(
+                reopenable.handle
+              );
+              if (!allowed) return;
+              const opened = await reopenRememberedProject(reopenable.handle);
+              if (!opened) setReopenable(null);
+            })();
+          }}
+        />
+        <CreateRegionDialog
+          opened={createRegionOpen}
+          onClose={() => setCreateRegionOpen(false)}
+          onCreate={handleCreateRegion}
+        />
+        <LibraryPopover
+          shellStore={shellStore}
+          materialDefinitions={materialDefinitions}
+          textureDefinitions={textureDefinitions}
+          shaderDefinitions={shaderDefinitions}
+          audioClipDefinitions={audioClipDefinitions}
+          assetDefinitions={assetDefinitions}
+          animationLibraryDefinitions={animationLibraryDefinitions}
+          contentLibrary={session?.contentLibrary ?? null}
+          assetSources={assetSources}
+          assetResolver={studioRenderEngine.assetResolver}
+          isMaterialReferenced={(definitionId) =>
+            session
+              ? materialDefinitionHasReferences(session, definitionId)
+              : false
           }
-        }}
-      >
-        <Stack gap="md">
-          <Stack gap="xs">
-            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-              Installed Plugins
-            </Text>
-            {installedPlugins.length === 0 ? (
-              <Text size="sm" c="var(--sm-color-overlay0)">
-                No plugins installed in this project yet.
+          isTextureReferenced={(definitionId) =>
+            session
+              ? textureDefinitionHasReferences(session, definitionId)
+              : false
+          }
+          isAssetReferenced={(definitionId) =>
+            session
+              ? assetDefinitionHasReferences(session, definitionId)
+              : false
+          }
+          assetsPreselectId={assetsLibraryPreselectId}
+          onImportAssetDefinition={handleImportAsset}
+          onUpdateAssetDefinition={handleUpdateAssetDefinition}
+          onRemoveAssetDefinition={handleRemoveAssetDefinition}
+          onCorrectAssetOrigin={handleCorrectAssetOrigin}
+          onSetAssetColliderShape={handleSetAssetColliderShape}
+          onRemoveTextureDefinition={(definitionId) => {
+            const { session: currentSession } = projectStore.getState();
+            if (!currentSession) return;
+            projectStore
+              .getState()
+              .updateSession(
+                removeTextureDefinitionFromSession(currentSession, definitionId)
+              );
+          }}
+          onCreateMaterialDefinition={handleCreateMaterialDefinition}
+          onImportPbrMaterial={handleImportPbrMaterial}
+          onImportTextureDefinition={handleImportTextureDefinition}
+          onImportAudioClipDefinition={handleImportAudioClipDefinition}
+          onImportAnimationLibrary={handleImportAnimationLibrary}
+          onUpdateAudioClipDefinition={handleUpdateAudioClipDefinition}
+          onUpdateAnimationLibraryDefinition={
+            handleUpdateAnimationLibraryDefinition
+          }
+          onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
+          onRemoveAudioClipDefinition={handleRemoveAudioClipDefinition}
+          onRemoveAnimationLibraryDefinition={
+            handleRemoveAnimationLibraryDefinition
+          }
+          onEditShaderInGraph={(shaderDefinitionId) => {
+            // Close the popover and route the existing workspace-
+            // navigation handler to the Render workspace's shader
+            // graph editor with this shader pre-selected.
+            shellStore.getState().setActiveLibrary(null);
+            handleWorkspaceNavigation({
+              kind: "shader-graph",
+              shaderDefinitionId
+            });
+          }}
+        />
+        <Modal
+          opened={pluginsOpen}
+          onClose={() => setPluginsOpen(false)}
+          title="Plugins"
+          centered
+          styles={{
+            header: {
+              background: "var(--sm-color-surface1)",
+              borderBottom: "1px solid var(--sm-panel-border)"
+            },
+            title: { color: "var(--sm-color-text)", fontWeight: 600 },
+            body: { background: "var(--sm-color-surface1)", padding: "20px" },
+            content: { background: "var(--sm-color-surface1)" },
+            close: {
+              color: "var(--sm-color-overlay1)",
+              "&:hover": { background: "var(--sm-active-bg)" }
+            }
+          }}
+        >
+          <Stack gap="md">
+            <Stack gap="xs">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
+                Installed Plugins
               </Text>
-            ) : (
-              installedPlugins.map((plugin) => {
-                const configuration =
-                  pluginConfigurations.find(
-                    (entry) => entry.pluginId === plugin.manifest.pluginId
-                  ) ?? null;
-                return (
+              {installedPlugins.length === 0 ? (
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  No plugins installed in this project yet.
+                </Text>
+              ) : (
+                installedPlugins.map((plugin) => {
+                  const configuration =
+                    pluginConfigurations.find(
+                      (entry) => entry.pluginId === plugin.manifest.pluginId
+                    ) ?? null;
+                  return (
+                    <Stack
+                      key={plugin.manifest.pluginId}
+                      gap="xs"
+                      p="md"
+                      style={{
+                        border: "1px solid var(--sm-panel-border)",
+                        borderRadius: "var(--sm-radius-md)",
+                        background: "var(--sm-color-surface2)"
+                      }}
+                    >
+                      <Group justify="space-between" align="flex-start">
+                        <Stack gap={4} style={{ flex: 1 }}>
+                          <Text fw={600}>{plugin.manifest.displayName}</Text>
+                        </Stack>
+                        <Stack gap="xs" align="flex-end">
+                          <Switch
+                            checked={configuration?.enabled === true}
+                            onChange={() =>
+                              handleSetPluginEnabled(
+                                plugin.manifest.pluginId,
+                                configuration?.enabled !== true
+                              )
+                            }
+                            label="Enabled"
+                          />
+                          <UnstyledButton
+                            onClick={() =>
+                              handleUninstallPlugin(plugin.manifest.pluginId)
+                            }
+                            style={{
+                              color: "var(--sm-color-overlay1)",
+                              fontSize: "var(--sm-font-size-sm)"
+                            }}
+                          >
+                            Uninstall
+                          </UnstyledButton>
+                        </Stack>
+                      </Group>
+                      <Group gap={6}>
+                        {plugin.manifest.capabilityIds.map((capabilityId) => (
+                          <Badge
+                            key={capabilityId}
+                            variant="light"
+                            color="blue"
+                          >
+                            {capabilityId}
+                          </Badge>
+                        ))}
+                      </Group>
+                      {plugin.shell ? (
+                        <Stack gap={4}>
+                          {(plugin.shell.projectSettings ?? []).map((entry) => (
+                            <Text
+                              key={entry.settingsId}
+                              size="xs"
+                              c="var(--sm-color-subtext)"
+                            >
+                              Project Settings: {entry.label}
+                            </Text>
+                          ))}
+                          {(plugin.shell.designWorkspaces ?? []).map(
+                            (entry) => (
+                              <Text
+                                key={entry.workspaceKind}
+                                size="xs"
+                                c="var(--sm-color-subtext)"
+                              >
+                                Design Workspace: {entry.label}
+                              </Text>
+                            )
+                          )}
+                          {(plugin.shell.designSections ?? []).map((entry) => (
+                            <Text
+                              key={entry.sectionId}
+                              size="xs"
+                              c="var(--sm-color-subtext)"
+                            >
+                              Design Section: {entry.workspaceKind} /{" "}
+                              {entry.label}
+                            </Text>
+                          ))}
+                        </Stack>
+                      ) : null}
+                    </Stack>
+                  );
+                })
+              )}
+            </Stack>
+            <Stack gap="xs">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
+                Available To Install
+              </Text>
+              {availablePlugins.length === 0 ? (
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  No newly discovered plugins are waiting to be installed.
+                </Text>
+              ) : (
+                availablePlugins.map((plugin) => (
                   <Stack
                     key={plugin.manifest.pluginId}
                     gap="xs"
@@ -4071,623 +4271,563 @@ export function App() {
                       <Stack gap={4} style={{ flex: 1 }}>
                         <Text fw={600}>{plugin.manifest.displayName}</Text>
                       </Stack>
-                      <Stack gap="xs" align="flex-end">
-                        <Switch
-                          checked={configuration?.enabled === true}
-                          onChange={() =>
-                            handleSetPluginEnabled(
-                              plugin.manifest.pluginId,
-                              configuration?.enabled !== true
-                            )
-                          }
-                          label="Enabled"
-                        />
-                        <UnstyledButton
-                          onClick={() =>
-                            handleUninstallPlugin(plugin.manifest.pluginId)
-                          }
-                          style={{
-                            color: "var(--sm-color-overlay1)",
-                            fontSize: "var(--sm-font-size-sm)"
-                          }}
-                        >
-                          Uninstall
-                        </UnstyledButton>
-                      </Stack>
+                      <UnstyledButton
+                        onClick={() =>
+                          handleInstallPlugin(plugin.manifest.pluginId)
+                        }
+                        style={{
+                          color: "var(--sm-accent-blue)",
+                          fontSize: "var(--sm-font-size-sm)",
+                          fontWeight: 600
+                        }}
+                      >
+                        Install
+                      </UnstyledButton>
                     </Group>
                     <Group gap={6}>
                       {plugin.manifest.capabilityIds.map((capabilityId) => (
-                        <Badge key={capabilityId} variant="light" color="blue">
+                        <Badge key={capabilityId} variant="light" color="gray">
                           {capabilityId}
                         </Badge>
                       ))}
                     </Group>
-                    {plugin.shell ? (
-                      <Stack gap={4}>
-                        {(plugin.shell.projectSettings ?? []).map((entry) => (
-                          <Text
-                            key={entry.settingsId}
-                            size="xs"
-                            c="var(--sm-color-subtext)"
-                          >
-                            Project Settings: {entry.label}
-                          </Text>
-                        ))}
-                        {(plugin.shell.designWorkspaces ?? []).map((entry) => (
-                          <Text
-                            key={entry.workspaceKind}
-                            size="xs"
-                            c="var(--sm-color-subtext)"
-                          >
-                            Design Workspace: {entry.label}
-                          </Text>
-                        ))}
-                        {(plugin.shell.designSections ?? []).map((entry) => (
-                          <Text
-                            key={entry.sectionId}
-                            size="xs"
-                            c="var(--sm-color-subtext)"
-                          >
-                            Design Section: {entry.workspaceKind} /{" "}
-                            {entry.label}
-                          </Text>
-                        ))}
-                      </Stack>
-                    ) : null}
                   </Stack>
-                );
-              })
-            )}
+                ))
+              )}
+            </Stack>
           </Stack>
-          <Stack gap="xs">
-            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-              Available To Install
-            </Text>
-            {availablePlugins.length === 0 ? (
-              <Text size="sm" c="var(--sm-color-overlay0)">
-                No newly discovered plugins are waiting to be installed.
-              </Text>
-            ) : (
-              availablePlugins.map((plugin) => (
-                <Stack
-                  key={plugin.manifest.pluginId}
-                  gap="xs"
-                  p="md"
-                  style={{
-                    border: "1px solid var(--sm-panel-border)",
-                    borderRadius: "var(--sm-radius-md)",
-                    background: "var(--sm-color-surface2)"
-                  }}
-                >
-                  <Group justify="space-between" align="flex-start">
-                    <Stack gap={4} style={{ flex: 1 }}>
-                      <Text fw={600}>{plugin.manifest.displayName}</Text>
-                    </Stack>
-                    <UnstyledButton
-                      onClick={() =>
-                        handleInstallPlugin(plugin.manifest.pluginId)
-                      }
-                      style={{
-                        color: "var(--sm-accent-blue)",
-                        fontSize: "var(--sm-font-size-sm)",
-                        fontWeight: 600
-                      }}
-                    >
-                      Install
-                    </UnstyledButton>
-                  </Group>
-                  <Group gap={6}>
-                    {plugin.manifest.capabilityIds.map((capabilityId) => (
-                      <Badge key={capabilityId} variant="light" color="gray">
-                        {capabilityId}
-                      </Badge>
-                    ))}
-                  </Group>
-                </Stack>
-              ))
-            )}
-          </Stack>
-        </Stack>
-      </Modal>
+        </Modal>
 
-      <ShellFrame
-        headerPanel={
-          <Group h={44} px="md" align="center" gap={0} wrap="nowrap">
-            <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
-              Sugarmagic
-            </Text>
-            {phase === "active" && session && (
-              <Group
-                gap={6}
-                align="center"
-                mr="var(--sm-space-lg)"
-                wrap="nowrap"
-              >
-                <Menu position="bottom-start" offset={4}>
-                  <Menu.Target>
-                    <UnstyledButton
-                      px="md"
-                      py={6}
-                      styles={{
-                        root: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-accent-blue)",
-                          background: "var(--sm-active-bg)",
-                          borderRadius: "var(--sm-radius-sm)",
-                          "&:hover": { background: "var(--sm-active-bg-hover)" }
-                        }
-                      }}
-                    >
-                      📁 {session.gameProject.displayName}
-                    </UnstyledButton>
-                  </Menu.Target>
-                  <Menu.Dropdown
-                    styles={{
-                      dropdown: {
-                        background: "var(--sm-color-surface1)",
-                        border: "1px solid var(--sm-panel-border)",
-                        minWidth: 200,
-                        padding: "var(--sm-space-xs) 0"
-                      }
-                    }}
-                  >
-                    {/* Studio reopens the last project on its own now, so
-                        the welcome dialog no longer appears -- this is the
-                        way to switch to a different one. */}
-                    <Menu.Item
-                      onClick={handleOpenProject}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
-                        }
-                      }}
-                    >
-                      📁 Open Game
-                    </Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item
-                      onClick={handleSave}
-                      // Always available: not every mutation flips the
-                      // dirty flag (painted-mask strokes are the known
-                      // gap), and a save that finds nothing changed is
-                      // harmless. Better to always let the author save
-                      // than to silently strand real changes behind a
-                      // grayed-out menu (2026-07-13).
-                      rightSection={
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          ⌘S
-                        </Text>
-                      }
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" },
-                          "&[data-disabled]": {
-                            color: "var(--sm-color-overlay0)"
-                          }
-                        }
-                      }}
-                    >
-                      💾 Save Game
-                    </Menu.Item>
-                    <Menu.Item
-                      onClick={handleUndo}
-                      disabled={undoCount === 0}
-                      rightSection={
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          ⌘Z
-                        </Text>
-                      }
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" },
-                          "&[data-disabled]": {
-                            color: "var(--sm-color-overlay0)"
-                          }
-                        }
-                      }}
-                    >
-                      ↩ Undo
-                    </Menu.Item>
-                    <Menu.Divider
-                      styles={{
-                        divider: { borderColor: "var(--sm-panel-border)" }
-                      }}
-                    />
-                    <Menu.Sub position="right-start" offset={4}>
-                      <Menu.Sub.Target>
-                        <Menu.Sub.Item
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          📚 Libraries
-                        </Menu.Sub.Item>
-                      </Menu.Sub.Target>
-                      <Menu.Sub.Dropdown
+        <ShellFrame
+          headerPanel={
+            <Group h={44} px="md" align="center" gap={0} wrap="nowrap">
+              <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
+                Sugarmagic
+              </Text>
+              {phase === "active" && session && (
+                <Group
+                  gap={6}
+                  align="center"
+                  mr="var(--sm-space-lg)"
+                  wrap="nowrap"
+                >
+                  <Menu position="bottom-start" offset={4}>
+                    <Menu.Target>
+                      <UnstyledButton
+                        px="md"
+                        py={6}
                         styles={{
-                          dropdown: {
-                            background: "var(--sm-color-surface1)",
-                            border: "1px solid var(--sm-panel-border)",
-                            minWidth: 200,
-                            padding: "var(--sm-space-xs) 0"
+                          root: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-accent-blue)",
+                            background: "var(--sm-active-bg)",
+                            borderRadius: "var(--sm-radius-sm)",
+                            "&:hover": {
+                              background: "var(--sm-active-bg-hover)"
+                            }
                           }
                         }}
                       >
-                        <Menu.Item
-                          onClick={() => {
-                            setAssetsLibraryPreselectId(null);
-                            shellStore.getState().setActiveLibrary("assets");
-                          }}
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          📦 Assets
-                        </Menu.Item>
-                        <Menu.Item
-                          onClick={() =>
-                            shellStore.getState().setActiveLibrary("materials")
-                          }
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          🎨 Materials
-                        </Menu.Item>
-                        <Menu.Item
-                          onClick={() =>
-                            shellStore.getState().setActiveLibrary("textures")
-                          }
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          🖼 Textures
-                        </Menu.Item>
-                        <Menu.Item
-                          onClick={() =>
-                            shellStore.getState().setActiveLibrary("shaders")
-                          }
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          ⚙ Shaders
-                        </Menu.Item>
-                        <Menu.Item
-                          onClick={() =>
-                            shellStore.getState().setActiveLibrary("audio")
-                          }
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          Audio
-                        </Menu.Item>
-                        <Menu.Item
-                          onClick={() =>
-                            shellStore.getState().setActiveLibrary("animations")
-                          }
-                          styles={{
-                            item: {
-                              fontSize: "var(--sm-font-size-lg)",
-                              color: "var(--sm-color-text)",
-                              padding: "10px 16px",
-                              "&:hover": { background: "var(--sm-active-bg)" }
-                            }
-                          }}
-                        >
-                          Animations
-                        </Menu.Item>
-                      </Menu.Sub.Dropdown>
-                    </Menu.Sub>
-                    <Menu.Divider
+                        📁 {session.gameProject.displayName}
+                      </UnstyledButton>
+                    </Menu.Target>
+                    <Menu.Dropdown
                       styles={{
-                        divider: { borderColor: "var(--sm-panel-border)" }
-                      }}
-                    />
-                    <Menu.Item
-                      onClick={() => setPluginsOpen(true)}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
+                        dropdown: {
+                          background: "var(--sm-color-surface1)",
+                          border: "1px solid var(--sm-panel-border)",
+                          minWidth: 200,
+                          padding: "var(--sm-space-xs) 0"
                         }
                       }}
                     >
-                      🧩 Plugins
-                    </Menu.Item>
-                    <Menu.Item
-                      onClick={handleReload}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
+                      {/* Studio reopens the last project on its own now, so
+                        the welcome dialog no longer appears -- this is the
+                        way to switch to a different one. */}
+                      <Menu.Item
+                        onClick={handleOpenProject}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        📁 Open Game
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        onClick={handleSave}
+                        // Always available: not every mutation flips the
+                        // dirty flag (painted-mask strokes are the known
+                        // gap), and a save that finds nothing changed is
+                        // harmless. Better to always let the author save
+                        // than to silently strand real changes behind a
+                        // grayed-out menu (2026-07-13).
+                        rightSection={
+                          <Text size="xs" c="var(--sm-color-overlay0)">
+                            ⌘S
+                          </Text>
                         }
-                      }}
-                    >
-                      🔄 Reload Project
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-                <Badge
-                  variant="light"
-                  color="blue"
-                  size="sm"
-                  styles={{
-                    root: {
-                      background: "var(--sm-active-bg)",
-                      color: "var(--sm-accent-blue)",
-                      fontWeight: 600,
-                      textTransform: "none"
-                    }
-                  }}
-                >
-                  v{session.gameProject.majorVersion}
-                </Badge>
-                {/* Scene selector (Ambient Context). Scope narrows
-                    left to right: project > version > Scene >
-                    workspaces. */}
-                <Menu position="bottom-start" width={240}>
-                  <Menu.Target>
-                    <UnstyledButton
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        background: "var(--sm-active-bg)",
-                        color: "var(--sm-color-text)",
-                        fontSize: "var(--sm-font-size-sm)",
-                        fontWeight: 600
-                      }}
-                    >
-                      🎬 {getActiveScene(session)?.displayName ?? "Scene"}
-                      <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
-                    </UnstyledButton>
-                  </Menu.Target>
-                  <Menu.Dropdown
-                    styles={{
-                      dropdown: {
-                        background: "var(--sm-color-surface1)",
-                        border: "1px solid var(--sm-panel-border)",
-                        padding: "var(--sm-space-xs) 0"
-                      }
-                    }}
-                  >
-                    {/* One group per Episode, its Scenes in order
-                        underneath. The grouping is the containment
-                        made visible; authoring Episodes is story 2. */}
-                    {session.gameProject.episodes.map((episode) => (
-                      <Fragment key={episode.episodeId}>
-                        <Menu.Label>{episode.displayName}</Menu.Label>
-                        {episode.scenes.map((scene) => (
-                          <Menu.Item
-                            key={scene.sceneId}
-                            onClick={() => handleSceneSelect(scene.sceneId)}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" },
+                            "&[data-disabled]": {
+                              color: "var(--sm-color-overlay0)"
+                            }
+                          }
+                        }}
+                      >
+                        💾 Save Game
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={handleUndo}
+                        disabled={undoCount === 0}
+                        rightSection={
+                          <Text size="xs" c="var(--sm-color-overlay0)">
+                            ⌘Z
+                          </Text>
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" },
+                            "&[data-disabled]": {
+                              color: "var(--sm-color-overlay0)"
+                            }
+                          }
+                        }}
+                      >
+                        ↩ Undo
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={handleRedo}
+                        disabled={redoCount === 0}
+                        rightSection={
+                          <Text size="xs" c="var(--sm-color-overlay0)">
+                            ⇧⌘Z
+                          </Text>
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" },
+                            "&[data-disabled]": {
+                              color: "var(--sm-color-overlay0)"
+                            }
+                          }
+                        }}
+                      >
+                        ↪ Redo
+                      </Menu.Item>
+                      <Menu.Divider
+                        styles={{
+                          divider: { borderColor: "var(--sm-panel-border)" }
+                        }}
+                      />
+                      <Menu.Sub position="right-start" offset={4}>
+                        <Menu.Sub.Target>
+                          <Menu.Sub.Item
                             styles={{
                               item: {
                                 fontSize: "var(--sm-font-size-lg)",
-                                color:
-                                  scene.sceneId ===
-                                  getActiveScene(session)?.sceneId
-                                    ? "var(--sm-accent-blue)"
-                                    : "var(--sm-color-text)",
+                                color: "var(--sm-color-text)",
                                 padding: "10px 16px",
                                 "&:hover": { background: "var(--sm-active-bg)" }
                               }
                             }}
                           >
-                            {scene.sceneId === getActiveScene(session)?.sceneId
-                              ? "✓ "
-                              : ""}
-                            {scene.displayName}
+                            📚 Libraries
+                          </Menu.Sub.Item>
+                        </Menu.Sub.Target>
+                        <Menu.Sub.Dropdown
+                          styles={{
+                            dropdown: {
+                              background: "var(--sm-color-surface1)",
+                              border: "1px solid var(--sm-panel-border)",
+                              minWidth: 200,
+                              padding: "var(--sm-space-xs) 0"
+                            }
+                          }}
+                        >
+                          <Menu.Item
+                            onClick={() => {
+                              setAssetsLibraryPreselectId(null);
+                              shellStore.getState().setActiveLibrary("assets");
+                            }}
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            📦 Assets
                           </Menu.Item>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </Menu.Dropdown>
-                </Menu>
-              </Group>
-            )}
-            <ModeBar
-              items={modeBarItems}
-              activeId={activeProductMode}
-              onSelect={(id) =>
-                shellStore
-                  .getState()
-                  .setActiveProductMode(id as typeof activeProductMode)
-              }
-            />
-            {phase === "active" && (
-              <ActionStripe
-                isPreviewRunning={isPreviewRunning}
-                onStartPreview={() => {
-                  setPreviewBootError(null);
-                  handleStartPreview(
-                    assetSources,
-                    installedPluginIds,
-                    (message, detail) => setPreviewBootError({ message, detail })
-                  );
-                }}
-                onStopPreview={handleStopPreview}
-                previewDisabled={!session}
-              />
-            )}
-          </Group>
-        }
-        subHeaderPanel={
-          phase === "active"
-            ? isBuild
-              ? buildView.subHeaderPanel
-              : isStory
-                ? storyView.subHeaderPanel
-                : isDesign
-                  ? designView.subHeaderPanel
-                : isRender
-                  ? renderView.subHeaderPanel
-                  : isPublish
-                    ? publishView.subHeaderPanel
-                    : undefined
-            : undefined
-        }
-        leftPanel={
-          isBuild
-            ? buildView.leftPanel
-            : isStory
-              ? storyView.leftPanel
-              : isDesign
-                ? activeDesignPanels.leftPanel
-              : isRender
-                ? renderView.leftPanel
-                : isPublish
-                  ? publishView.leftPanel
-                  : null
-        }
-        rightPanel={
-          isBuild
-            ? buildView.rightPanel
-            : isStory
-              ? storyView.rightPanel
-              : isDesign
-                ? activeDesignPanels.rightPanel
-              : isRender
-                ? renderView.rightPanel
-                : isPublish
-                  ? publishView.rightPanel
-                  : undefined
-        }
-        bottomPanel={
-          <StatusBar
-            message={statusMessage}
-            severity={phase === "error" ? "error" : "info"}
-            trailing={activeWorkspaceId ?? undefined}
-          />
-        }
-        centerPanel={
-          phase === "active" && isBuild && buildView.centerPanel ? (
-            buildView.centerPanel
-          ) : phase === "active" && isStory && storyView.centerPanel ? (
-            storyView.centerPanel
-          ) : phase === "active" &&
-            isDesign &&
-            activeDesignPanels.centerPanel ? (
-            activeDesignPanels.centerPanel
-          ) : phase === "active" && isRender && renderView.centerPanel ? (
-            renderView.centerPanel
-          ) : phase === "active" && isPublish && publishView.centerPanel ? (
-            publishView.centerPanel
-          ) : (
-            <ViewportFrame>
-              {shouldRenderSharedViewport ? (
-                <>
-                  <div
-                    ref={viewportRef}
-                    style={{ position: "absolute", inset: 0 }}
-                  />
-                  {isBuild && buildView.viewportOverlay}
-                  {isDesign && activeDesignPanels.viewportOverlay}
-                  {isRender && renderView.viewportOverlay}
-                  {isPublish && publishView.viewportOverlay}
-                </>
-              ) : (
-                <Text size="sm" c="var(--sm-color-overlay0)">
-                  Open or create a project to begin.
-                </Text>
+                          <Menu.Item
+                            onClick={() =>
+                              shellStore
+                                .getState()
+                                .setActiveLibrary("materials")
+                            }
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            🎨 Materials
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() =>
+                              shellStore.getState().setActiveLibrary("textures")
+                            }
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            🖼 Textures
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() =>
+                              shellStore.getState().setActiveLibrary("shaders")
+                            }
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            ⚙ Shaders
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() =>
+                              shellStore.getState().setActiveLibrary("audio")
+                            }
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            Audio
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() =>
+                              shellStore
+                                .getState()
+                                .setActiveLibrary("animations")
+                            }
+                            styles={{
+                              item: {
+                                fontSize: "var(--sm-font-size-lg)",
+                                color: "var(--sm-color-text)",
+                                padding: "10px 16px",
+                                "&:hover": { background: "var(--sm-active-bg)" }
+                              }
+                            }}
+                          >
+                            Animations
+                          </Menu.Item>
+                        </Menu.Sub.Dropdown>
+                      </Menu.Sub>
+                      <Menu.Divider
+                        styles={{
+                          divider: { borderColor: "var(--sm-panel-border)" }
+                        }}
+                      />
+                      <Menu.Item
+                        onClick={() => setPluginsOpen(true)}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        🧩 Plugins
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={handleReload}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        🔄 Reload Project
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                  <Badge
+                    variant="light"
+                    color="blue"
+                    size="sm"
+                    styles={{
+                      root: {
+                        background: "var(--sm-active-bg)",
+                        color: "var(--sm-accent-blue)",
+                        fontWeight: 600,
+                        textTransform: "none"
+                      }
+                    }}
+                  >
+                    v{session.gameProject.majorVersion}
+                  </Badge>
+                  {/* Scene selector (Ambient Context). Scope narrows
+                    left to right: project > version > Scene >
+                    workspaces. */}
+                  <Menu position="bottom-start" width={240}>
+                    <Menu.Target>
+                      <UnstyledButton
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          background: "var(--sm-active-bg)",
+                          color: "var(--sm-color-text)",
+                          fontSize: "var(--sm-font-size-sm)",
+                          fontWeight: 600
+                        }}
+                      >
+                        🎬 {getActiveScene(session)?.displayName ?? "Scene"}
+                        <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
+                      </UnstyledButton>
+                    </Menu.Target>
+                    <Menu.Dropdown
+                      styles={{
+                        dropdown: {
+                          background: "var(--sm-color-surface1)",
+                          border: "1px solid var(--sm-panel-border)",
+                          padding: "var(--sm-space-xs) 0"
+                        }
+                      }}
+                    >
+                      {/* One group per Episode, its Scenes in order
+                        underneath. The grouping is the containment
+                        made visible; authoring Episodes is story 2. */}
+                      {session.gameProject.episodes.map((episode) => (
+                        <Fragment key={episode.episodeId}>
+                          <Menu.Label>{episode.displayName}</Menu.Label>
+                          {episode.scenes.map((scene) => (
+                            <Menu.Item
+                              key={scene.sceneId}
+                              onClick={() => handleSceneSelect(scene.sceneId)}
+                              styles={{
+                                item: {
+                                  fontSize: "var(--sm-font-size-lg)",
+                                  color:
+                                    scene.sceneId ===
+                                    getActiveScene(session)?.sceneId
+                                      ? "var(--sm-accent-blue)"
+                                      : "var(--sm-color-text)",
+                                  padding: "10px 16px",
+                                  "&:hover": {
+                                    background: "var(--sm-active-bg)"
+                                  }
+                                }
+                              }}
+                            >
+                              {scene.sceneId ===
+                              getActiveScene(session)?.sceneId
+                                ? "✓ "
+                                : ""}
+                              {scene.displayName}
+                            </Menu.Item>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
               )}
-            </ViewportFrame>
-          )
-        }
-      />
-      <SurfaceStudioModal
-        opened={surfaceStudioTarget !== null}
-        onClose={() => {
-          // Closing remounts the scene viewport (it was unmounted while
-          // the Studio owned the render) -- show progress until it
-          // settles so the reload doesn't read as a hang.
-          setBusyToast("Updating scene...");
-          setSurfaceStudioTarget(null);
-        }}
-        engine={studioRenderEngine}
-        session={session}
-        surface={surfaceStudioSurface}
-        target={surfaceStudioTarget}
-        slotLabel={surfaceStudioTarget?.slotName ?? ""}
-        onChangeSurface={handleSurfaceStudioChange}
-        brushSettings={{
-          radius: surfaceBrushSettings?.radius ?? 2,
-          strength: surfaceBrushSettings?.strength ?? 0.6,
-          falloff: surfaceBrushSettings?.falloff ?? 0.7,
-          mode: surfaceBrushSettings?.mode ?? "paint"
-        }}
-        onChangeBrushSettings={(next) =>
-          viewportStore.getState().setSurfaceBrushSettings({
-            surfaceDefinitionId:
-              surfaceBrushSettings?.surfaceDefinitionId ?? null,
-            radius: next.radius,
-            strength: next.strength,
-            falloff: next.falloff,
-            mode: next.mode
-          })
-        }
-        readMaskTexture={handleReadMaskTexture}
-        writeMaskTexture={handleWriteMaskTexture}
-        getMaskPreviewCanvas={getPaintedMaskPreviewCanvas}
-        maskPreviewVersion={paintedMaskPreviewVersion}
-      />
-      {busyToast ? <ProgressToast message={busyToast} /> : null}
-      {previewBootError ? (
-        <ErrorToast
-          message={previewBootError.message}
-          detail={previewBootError.detail}
-          onDismiss={() => setPreviewBootError(null)}
+              <ModeBar
+                items={modeBarItems}
+                activeId={activeProductMode}
+                onSelect={(id) =>
+                  shellStore
+                    .getState()
+                    .setActiveProductMode(id as typeof activeProductMode)
+                }
+              />
+              {phase === "active" && (
+                <ActionStripe
+                  isPreviewRunning={isPreviewRunning}
+                  onStartPreview={() => {
+                    setPreviewBootError(null);
+                    handleStartPreview(
+                      assetSources,
+                      installedPluginIds,
+                      (message, detail) =>
+                        setPreviewBootError({ message, detail })
+                    );
+                  }}
+                  onStopPreview={handleStopPreview}
+                  previewDisabled={!session}
+                />
+              )}
+            </Group>
+          }
+          subHeaderPanel={
+            phase === "active"
+              ? isBuild
+                ? buildView.subHeaderPanel
+                : isStory
+                  ? storyView.subHeaderPanel
+                  : isDesign
+                    ? designView.subHeaderPanel
+                    : isRender
+                      ? renderView.subHeaderPanel
+                      : isPublish
+                        ? publishView.subHeaderPanel
+                        : undefined
+              : undefined
+          }
+          leftPanel={
+            isBuild
+              ? buildView.leftPanel
+              : isStory
+                ? storyView.leftPanel
+                : isDesign
+                  ? activeDesignPanels.leftPanel
+                  : isRender
+                    ? renderView.leftPanel
+                    : isPublish
+                      ? publishView.leftPanel
+                      : null
+          }
+          rightPanel={
+            isBuild
+              ? buildView.rightPanel
+              : isStory
+                ? storyView.rightPanel
+                : isDesign
+                  ? activeDesignPanels.rightPanel
+                  : isRender
+                    ? renderView.rightPanel
+                    : isPublish
+                      ? publishView.rightPanel
+                      : undefined
+          }
+          bottomPanel={
+            <StatusBar
+              message={statusMessage}
+              severity={phase === "error" ? "error" : "info"}
+              trailing={activeWorkspaceId ?? undefined}
+            />
+          }
+          centerPanel={
+            phase === "active" && isBuild && buildView.centerPanel ? (
+              buildView.centerPanel
+            ) : phase === "active" && isStory && storyView.centerPanel ? (
+              storyView.centerPanel
+            ) : phase === "active" &&
+              isDesign &&
+              activeDesignPanels.centerPanel ? (
+              activeDesignPanels.centerPanel
+            ) : phase === "active" && isRender && renderView.centerPanel ? (
+              renderView.centerPanel
+            ) : phase === "active" && isPublish && publishView.centerPanel ? (
+              publishView.centerPanel
+            ) : (
+              <ViewportFrame>
+                {shouldRenderSharedViewport ? (
+                  <>
+                    <div
+                      ref={viewportRef}
+                      style={{ position: "absolute", inset: 0 }}
+                    />
+                    {isBuild && buildView.viewportOverlay}
+                    {isDesign && activeDesignPanels.viewportOverlay}
+                    {isRender && renderView.viewportOverlay}
+                    {isPublish && publishView.viewportOverlay}
+                  </>
+                ) : (
+                  <Text size="sm" c="var(--sm-color-overlay0)">
+                    Open or create a project to begin.
+                  </Text>
+                )}
+              </ViewportFrame>
+            )
+          }
         />
-      ) : null}
-    </WorldFlagRegistryProvider>
+        <SurfaceStudioModal
+          opened={surfaceStudioTarget !== null}
+          onClose={() => {
+            // Closing remounts the scene viewport (it was unmounted while
+            // the Studio owned the render) -- show progress until it
+            // settles so the reload doesn't read as a hang.
+            setBusyToast("Updating scene...");
+            setSurfaceStudioTarget(null);
+          }}
+          engine={studioRenderEngine}
+          session={session}
+          surface={surfaceStudioSurface}
+          target={surfaceStudioTarget}
+          slotLabel={surfaceStudioTarget?.slotName ?? ""}
+          onChangeSurface={handleSurfaceStudioChange}
+          brushSettings={{
+            radius: surfaceBrushSettings?.radius ?? 2,
+            strength: surfaceBrushSettings?.strength ?? 0.6,
+            falloff: surfaceBrushSettings?.falloff ?? 0.7,
+            mode: surfaceBrushSettings?.mode ?? "paint"
+          }}
+          onChangeBrushSettings={(next) =>
+            viewportStore.getState().setSurfaceBrushSettings({
+              surfaceDefinitionId:
+                surfaceBrushSettings?.surfaceDefinitionId ?? null,
+              radius: next.radius,
+              strength: next.strength,
+              falloff: next.falloff,
+              mode: next.mode
+            })
+          }
+          readMaskTexture={handleReadMaskTexture}
+          writeMaskTexture={handleWriteMaskTexture}
+          getMaskPreviewCanvas={getPaintedMaskPreviewCanvas}
+          maskPreviewVersion={paintedMaskPreviewVersion}
+        />
+        {busyToast ? <ProgressToast message={busyToast} /> : null}
+        {previewBootError ? (
+          <ErrorToast
+            message={previewBootError.message}
+            detail={previewBootError.detail}
+            onDismiss={() => setPreviewBootError(null)}
+          />
+        ) : null}
+      </WorldFlagRegistryProvider>
     </SurfaceAuthoringProvider>
   );
 }
