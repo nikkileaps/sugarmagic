@@ -44,15 +44,11 @@ export function asAuthoredViewportRoot(
   return group as AuthoredViewportRoot;
 }
 
-export function asOverlayViewportRoot(
-  group: THREE.Group
-): OverlayViewportRoot {
+export function asOverlayViewportRoot(group: THREE.Group): OverlayViewportRoot {
   return group as OverlayViewportRoot;
 }
 
-export function asSurfaceViewportRoot(
-  group: THREE.Group
-): SurfaceViewportRoot {
+export function asSurfaceViewportRoot(group: THREE.Group): SurfaceViewportRoot {
   return group as SurfaceViewportRoot;
 }
 
@@ -65,6 +61,8 @@ export interface ViewportOverlayStateAccess {
    *  here rather than each holding its own store reference. */
   getShellState(): ShellState;
   getSelectionIds(): string[];
+  /** The selected object the author touched last, drawn as the active one. */
+  getActiveSelectionId(): string | null;
   setSelection(entityIds: string[]): void;
   setTransformDraft(instanceId: string, transform: TransformDraft): void;
   getLandscapeDraft(): RegionLandscapeState | null;
@@ -85,9 +83,7 @@ export interface ViewportOverlayStateAccess {
     instanceId?: string;
     assetDefinitionId?: string;
   }): void;
-  setCameraQuaternion(
-    quaternion: [number, number, number, number]
-  ): void;
+  setCameraQuaternion(quaternion: [number, number, number, number]): void;
 }
 
 export interface ViewportOverlayContext {

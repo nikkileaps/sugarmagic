@@ -10,10 +10,16 @@ export {
 } from "./layout-workspace";
 
 export {
+  ACTIVE_HULL_COLOR,
   createLayoutGizmo,
+  createObjectHulls,
   createOriginMarker,
   createWorldCursor,
+  HOVER_HULL_COLOR,
+  SELECTED_HULL_COLOR,
+  type HullTarget,
   type LayoutGizmo,
+  type ObjectHulls,
   type OriginMarker,
   type WorldCursor
 } from "./gizmo";

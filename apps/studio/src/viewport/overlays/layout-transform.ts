@@ -48,6 +48,9 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     getSelectedId() {
       return context.stateAccess.getSelectionIds()[0] ?? null;
     },
+    getActiveId() {
+      return context.stateAccess.getActiveSelectionId();
+    },
     getRegion() {
       return context.stateAccess.getActiveRegion();
     },
@@ -116,9 +119,13 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       regionId: project.session
-        ? getActiveRegion(project.session)?.identity.id ?? null
+        ? (getActiveRegion(project.session)?.identity.id ?? null)
         : null,
       selectionIds: shell.selection.entityIds,
+      // The active object is outlined differently from the rest, so a change
+      // in which one is active has to redraw even when the same set stays
+      // selected.
+      activeSelectionId: shell.selection.activeEntityId,
       activeTool: viewport.activeTransformTool
     }),
     (slice) => {

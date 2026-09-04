@@ -66,7 +66,10 @@ interface AuthoringViewportOptions {
   engine: WebRenderEngine;
   stores: ProjectionStores;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
-  writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  writeMaskTexture: (
+    maskTextureId: string,
+    imageData: ImageData
+  ) => Promise<void>;
   createMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
   ensureAssetPaintUvs: (assetDefinitionId: string) => Promise<void>;
   /** Fires when in-flight renderable loads drain to zero -- used to
@@ -91,7 +94,12 @@ function resolveLandscapeGridSpec(
 }
 
 function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
-  const grid = new THREE.GridHelper(spec.size, spec.divisions, GRID_COLOR, GRID_COLOR);
+  const grid = new THREE.GridHelper(
+    spec.size,
+    spec.divisions,
+    GRID_COLOR,
+    GRID_COLOR
+  );
   grid.position.y = 0.01;
   grid.name = "authoring-landscape-grid";
   return grid;
@@ -159,14 +167,15 @@ function reportRenderableError(
   );
 }
 
-
 function applyTransformOverride(
   object: SceneObject,
-  transformOverride: {
-    position: [number, number, number];
-    rotation: [number, number, number];
-    scale: [number, number, number];
-  } | undefined
+  transformOverride:
+    | {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: [number, number, number];
+      }
+    | undefined
 ): SceneObject {
   if (!transformOverride) {
     return object;
@@ -182,7 +191,6 @@ function applyTransformOverride(
   };
 }
 
-
 export function createAuthoringViewport(
   options: AuthoringViewportOptions
 ): WorkspaceViewport {
@@ -192,7 +200,14 @@ export function createAuthoringViewport(
   perspectiveCamera.position.set(5, 5, 5);
   perspectiveCamera.lookAt(0, 0, 0);
 
-  const orthographicCamera = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 1000);
+  const orthographicCamera = new THREE.OrthographicCamera(
+    -20,
+    20,
+    20,
+    -20,
+    0.1,
+    1000
+  );
   orthographicCamera.position.set(0, 48, 0.001);
   orthographicCamera.up.set(0, 0, -1);
   orthographicCamera.lookAt(0, 0, 0);
@@ -429,45 +444,48 @@ export function createAuthoringViewport(
   // into InstancedMeshes (fast meadows in the editor), and picking + the
   // gizmo resolve individual members via the instanceOrder marker +
   // per-instance matrix-patch.
-  const renderableReconciler: RenderableReconciler = createRenderableReconciler({
-    parent: authoredRoot,
-    resolveUrl: (object) =>
-      object.modelSourcePath
-        ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath) ??
-          null
-        : null,
-    loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
-    createFallback: (object) =>
-      object.kind === "asset"
-        ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
-        : createCapsuleFallback(object, {
-            fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
-          }),
-    createErrorFallback: (object, error) => {
-      reportRenderableError(object, "load", error);
-      return createErrorFallbackMesh();
-    },
-    shaderRuntime: renderView.shaderRuntime,
-    getFileSources: () => currentAssetSources,
-    enableShadows: (renderableRoot) =>
-      renderView.enableShadowsOnObject(renderableRoot),
-    grouping: true,
-    isInstanceable: assetObjectIsInstanceable,
-    onSettled: () => options.onRenderablesSettled?.(),
-    // Every authored renderable root carries the scene-object marker so the
-    // single hit-test enforcer + surface painting can resolve it (was set by
-    // the old createRenderableRoot; the reconciler doesn't know this key, so
-    // the studio stamps it here). Instanced group roots (070.6, once grouping
-    // flips ON) carry the instanceOrder so a raycast index resolves to the
-    // member PlacedAssetInstance.
-    onEntryLoaded: (entry) => {
-      entry.root.userData[SCENE_OBJECT_MARKER_KEY] = buildSceneObjectMarker(entry);
-    },
-    logger: {
-      warn: (message, payload) =>
-        console.warn("[authoring-viewport]", message, payload)
+  const renderableReconciler: RenderableReconciler = createRenderableReconciler(
+    {
+      parent: authoredRoot,
+      resolveUrl: (object) =>
+        object.modelSourcePath
+          ? (renderView.assetResolver.resolveAssetUrl(object.modelSourcePath) ??
+            null)
+          : null,
+      loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+      createFallback: (object) =>
+        object.kind === "asset"
+          ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
+          : createCapsuleFallback(object, {
+              fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
+            }),
+      createErrorFallback: (object, error) => {
+        reportRenderableError(object, "load", error);
+        return createErrorFallbackMesh();
+      },
+      shaderRuntime: renderView.shaderRuntime,
+      getFileSources: () => currentAssetSources,
+      enableShadows: (renderableRoot) =>
+        renderView.enableShadowsOnObject(renderableRoot),
+      grouping: true,
+      isInstanceable: assetObjectIsInstanceable,
+      onSettled: () => options.onRenderablesSettled?.(),
+      // Every authored renderable root carries the scene-object marker so the
+      // single hit-test enforcer + surface painting can resolve it (was set by
+      // the old createRenderableRoot; the reconciler doesn't know this key, so
+      // the studio stamps it here). Instanced group roots (070.6, once grouping
+      // flips ON) carry the instanceOrder so a raycast index resolves to the
+      // member PlacedAssetInstance.
+      onEntryLoaded: (entry) => {
+        entry.root.userData[SCENE_OBJECT_MARKER_KEY] =
+          buildSceneObjectMarker(entry);
+      },
+      logger: {
+        warn: (message, payload) =>
+          console.warn("[authoring-viewport]", message, payload)
+      }
     }
-  });
+  );
   let unsubscribeProjection: (() => void) | null = null;
   let unsubscribeShaderEnsureFrame: (() => void) | null = null;
   let unsubscribeTexturesUpdated: (() => void) | null = null;
@@ -524,8 +542,13 @@ export function createAuthoringViewport(
       return;
     }
 
-    const { region, contentLibrary, playerDefinition, itemDefinitions, npcDefinitions } =
-      projection;
+    const {
+      region,
+      contentLibrary,
+      playerDefinition,
+      itemDefinitions,
+      npcDefinitions
+    } = projection;
     const landscape = projection.landscapeOverride ?? region.landscape;
     renderView.landscapeController.applyLandscape(
       landscape,
@@ -627,7 +650,9 @@ export function createAuthoringViewport(
       const overlayContext: ViewportOverlayContext = {
         overlayRoot,
         authoredRoot,
-        surfaceRoot: asSurfaceViewportRoot(renderView.landscapeController.surfaceRoot),
+        surfaceRoot: asSurfaceViewportRoot(
+          renderView.landscapeController.surfaceRoot
+        ),
         domElement: element,
         stateAccess: {
           getSession(): AuthoringSession | null {
@@ -646,20 +671,25 @@ export function createAuthoringViewport(
           getSelectionIds(): string[] {
             return options.stores.shellStore.getState().selection.entityIds;
           },
+          getActiveSelectionId(): string | null {
+            return options.stores.shellStore.getState().selection
+              .activeEntityId;
+          },
           setSelection(entityIds: string[]) {
             options.stores.shellStore.getState().setSelection(entityIds);
           },
           setTransformDraft(instanceId: string, transform: TransformDraft) {
-            options.stores.viewportStore.getState().setTransformDraft(
-              instanceId,
-              transform
-            );
+            options.stores.viewportStore
+              .getState()
+              .setTransformDraft(instanceId, transform);
           },
           getLandscapeDraft(): RegionLandscapeState | null {
             return options.stores.viewportStore.getState().landscapeDraft;
           },
           setLandscapeDraft(landscape: RegionLandscapeState | null) {
-            options.stores.viewportStore.getState().setLandscapeDraft(landscape);
+            options.stores.viewportStore
+              .getState()
+              .setLandscapeDraft(landscape);
           },
           paintLandscape(
             canonicalLandscape: RegionLandscapeState,
@@ -673,7 +703,9 @@ export function createAuthoringViewport(
             options.stores.viewportStore.getState().clearLandscapeDraft();
           },
           setActiveMaskPaintTarget(target) {
-            options.stores.viewportStore.getState().setActiveMaskPaintTarget(target);
+            options.stores.viewportStore
+              .getState()
+              .setActiveMaskPaintTarget(target);
           },
           clearMaskPaintFillRequest() {
             options.stores.viewportStore.getState().clearMaskPaintFillRequest();
@@ -693,7 +725,9 @@ export function createAuthoringViewport(
             }
           },
           setCameraQuaternion(quaternion: [number, number, number, number]) {
-            options.stores.viewportStore.getState().setCameraQuaternion(quaternion);
+            options.stores.viewportStore
+              .getState()
+              .setCameraQuaternion(quaternion);
           }
         },
         getCamera() {
@@ -712,7 +746,12 @@ export function createAuthoringViewport(
           listener: Parameters<typeof subscribeToProjection<T>>[2],
           opts?: Parameters<typeof subscribeToProjection<T>>[3]
         ) {
-          return subscribeToProjection(options.stores, selector, listener, opts);
+          return subscribeToProjection(
+            options.stores,
+            selector,
+            listener,
+            opts
+          );
         },
         readMaskTexture(maskTextureId: string) {
           return options.readMaskTexture(maskTextureId);
@@ -733,11 +772,15 @@ export function createAuthoringViewport(
           if (!session) {
             return;
           }
-          const definition = getMaskTextureDefinition(session.contentLibrary, maskTextureId);
+          const definition = getMaskTextureDefinition(
+            session.contentLibrary,
+            maskTextureId
+          );
           if (!definition) {
             return;
           }
-          const texture = renderView.assetResolver.resolveMaskTextureDefinition(definition);
+          const texture =
+            renderView.assetResolver.resolveMaskTextureDefinition(definition);
           texture.dispose();
           texture.image = canvas;
           texture.needsUpdate = true;

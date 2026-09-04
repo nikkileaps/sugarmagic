@@ -10,8 +10,15 @@
  */
 
 import * as THREE from "three";
-import type { RegionDocument, Scene, SemanticCommand } from "@sugarmagic/domain";
-import { resolveSceneObjects, type SceneObject } from "@sugarmagic/runtime-core";
+import type {
+  RegionDocument,
+  Scene,
+  SemanticCommand
+} from "@sugarmagic/domain";
+import {
+  resolveSceneObjects,
+  type SceneObject
+} from "@sugarmagic/runtime-core";
 import {
   createInputRouter,
   createHitTestService,
@@ -25,10 +32,14 @@ import {
   type TransformValues
 } from "../../interaction";
 import {
+  ACTIVE_HULL_COLOR,
   createLayoutGizmo,
-  createSelectionHoverHull,
+  createObjectHulls,
   createOriginMarker,
   createWorldCursor,
+  HOVER_HULL_COLOR,
+  SELECTED_HULL_COLOR,
+  type HullTarget,
   type LayoutGizmo,
   type OriginMarker,
   type WorldCursor
@@ -37,8 +48,18 @@ import {
 export interface LayoutWorkspaceConfig {
   onCommand: (command: SemanticCommand) => void;
   onSelect: (entityIds: string[]) => void;
-  onPreviewTransform: (instanceId: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
+  onPreviewTransform: (
+    instanceId: string,
+    position: [number, number, number],
+    rotation: [number, number, number],
+    scale: [number, number, number]
+  ) => void;
   getSelectedId: () => string | null;
+  /**
+   * The selected object the author touched last. It is outlined more brightly
+   * than the rest, and later work reads it for the pivot and axis orientation.
+   */
+  getActiveId: () => string | null;
   getRegion: () => RegionDocument | null;
   /** Plan 058 — the ambient Scene whose overlay composes onto the
    *  region. Without it the gizmo can't find Scene-scoped
@@ -84,7 +105,8 @@ export function createLayoutWorkspace(
   const gizmo = createLayoutGizmo();
   const originMarker = createOriginMarker();
   const worldCursor = createWorldCursor();
-  const hoverHull = createSelectionHoverHull();
+  const hoverHulls = createObjectHulls("hover-hull");
+  const selectionHulls = createObjectHulls("selection-hulls");
 
   worldCursor.setPosition([0, 0, 0]);
 
@@ -112,14 +134,57 @@ export function createLayoutWorkspace(
       // have to be in the answer or selecting one finds nothing.
       includeMarkers: true
     });
-    return objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null;
+    return (
+      objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null
+    );
   }
 
-  let transformController: ReturnType<typeof createTransformController> | null = null;
+  let transformController: ReturnType<typeof createTransformController> | null =
+    null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   let attachedOverlayRoot: THREE.Object3D | null = null;
+  let attachedAuthoredRoot: THREE.Object3D | null = null;
   let attachedElement: HTMLElement | null = null;
   let attachedCamera: THREE.Camera | null = null;
+  let hoveredObject: THREE.Object3D | null = null;
+
+  /**
+   * The drawn object a scene object's id refers to. Scene-object roots are
+   * named with their instance id, which is what the hit test resolves a click
+   * back to. Null while the object is still loading.
+   */
+  function getObject(instanceId: string): THREE.Object3D | null {
+    return attachedAuthoredRoot?.getObjectByName(instanceId) ?? null;
+  }
+
+  /**
+   * Decides everything that gets an outline, so hover and selection cannot
+   * disagree about an object. An object already outlined as selected is not
+   * outlined again as hovered: two shells at the same size would z-fight.
+   */
+  function syncHulls(): void {
+    const selectedTargets: HullTarget[] = [];
+    const activeId = config.getActiveId();
+    const selectedId = config.getSelectedId();
+    for (const instanceId of selectedId ? [selectedId] : []) {
+      const object = getObject(instanceId);
+      if (!object) continue;
+      selectedTargets.push({
+        object,
+        color: instanceId === activeId ? ACTIVE_HULL_COLOR : SELECTED_HULL_COLOR
+      });
+    }
+    selectionHulls.setTargets(selectedTargets);
+
+    const alreadyOutlined = selectedTargets.some(
+      (target) => target.object === hoveredObject
+    );
+    hoverHulls.setTargets(
+      hoveredObject && !alreadyOutlined
+        ? [{ object: hoveredObject, color: HOVER_HULL_COLOR }]
+        : []
+    );
+  }
 
   function buildTransformController(initialCamera: THREE.Camera) {
     return createTransformController({
@@ -132,7 +197,12 @@ export function createLayoutWorkspace(
       onPreview(instanceId, values) {
         gizmo.setPosition(values.position);
         originMarker.setPosition(values.position);
-        config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
+        config.onPreviewTransform(
+          instanceId,
+          values.position,
+          values.rotation,
+          values.scale
+        );
       },
       onCommit(instanceId, values) {
         const region = config.getRegion();
@@ -165,7 +235,10 @@ export function createLayoutWorkspace(
             config.onCommand({
               kind: "TransformPlayerPresence",
               target,
-              subject: { subjectKind: "player-presence", subjectId: instanceId },
+              subject: {
+                subjectKind: "player-presence",
+                subjectId: instanceId
+              },
               payload: { presenceId: instanceId, position, rotation, scale }
             });
             return;
@@ -213,7 +286,12 @@ export function createLayoutWorkspace(
       onCancel(instanceId, values) {
         gizmo.setPosition(values.position);
         originMarker.setPosition(values.position);
-        config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
+        config.onPreviewTransform(
+          instanceId,
+          values.position,
+          values.rotation,
+          values.scale
+        );
       },
       onSelect(instanceId) {
         config.onSelect(instanceId ? [instanceId] : []);
@@ -224,7 +302,8 @@ export function createLayoutWorkspace(
         gizmo.setHoveredHandle(handleName);
       },
       onHoverTarget(object) {
-        hoverHull.setTarget(object);
+        hoveredObject = object;
+        syncHulls();
       }
     });
   }
@@ -242,11 +321,13 @@ export function createLayoutWorkspace(
       hitTestService.setAuthoredRoot(authoredRoot);
       hitTestService.setOverlayRoot(overlayRoot);
       attachedOverlayRoot = overlayRoot;
+      attachedAuthoredRoot = authoredRoot;
 
       overlayRoot.add(gizmo.root);
       overlayRoot.add(originMarker.root);
       overlayRoot.add(worldCursor.root);
-      overlayRoot.add(hoverHull.root);
+      overlayRoot.add(hoverHulls.root);
+      overlayRoot.add(selectionHulls.root);
 
       attachedCamera = camera;
       attachedElement = viewportElement;
@@ -256,7 +337,11 @@ export function createLayoutWorkspace(
 
       // Keyboard shortcuts (G/R/S)
       keydownHandler = (e: KeyboardEvent) => {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        )
+          return;
         const tool = TOOL_SHORTCUTS[e.key.toLowerCase()];
         if (tool) {
           toolState.setActiveTool(tool);
@@ -278,12 +363,16 @@ export function createLayoutWorkspace(
       attachedElement = null;
       attachedCamera = null;
       gizmo.setHoveredHandle(null);
-      hoverHull.setTarget(null);
+      hoveredObject = null;
+      hoverHulls.setTargets([]);
+      selectionHulls.setTargets([]);
+      attachedAuthoredRoot = null;
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(gizmo.root);
         attachedOverlayRoot.remove(originMarker.root);
         attachedOverlayRoot.remove(worldCursor.root);
-        attachedOverlayRoot.remove(hoverHull.root);
+        attachedOverlayRoot.remove(hoverHulls.root);
+        attachedOverlayRoot.remove(selectionHulls.root);
         attachedOverlayRoot = null;
       }
       gizmo.setVisible(false);
@@ -297,7 +386,8 @@ export function createLayoutWorkspace(
         attachedCamera = camera;
         hitTestService.setCamera(camera);
       }
-      hoverHull.syncTransform();
+      hoverHulls.syncTransform();
+      selectionHulls.syncTransform();
       if (!attachedCamera || !gizmo.root.visible) return;
       gizmo.setScale(
         gizmoWorldScaleForCamera(attachedCamera, gizmo.root.position)
@@ -308,10 +398,12 @@ export function createLayoutWorkspace(
       gizmo.dispose();
       originMarker.dispose();
       worldCursor.dispose();
-      hoverHull.dispose();
+      hoverHulls.dispose();
+      selectionHulls.dispose();
     },
 
     syncOverlays() {
+      syncHulls();
       const selectedId = config.getSelectedId();
       if (!selectedId) {
         gizmo.setVisible(false);
