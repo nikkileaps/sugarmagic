@@ -69,6 +69,16 @@ export interface TransformSession {
   anchor: DragAnchor;
 }
 
+/**
+ * What a click means for the selection. The object and the intent travel
+ * together, so a clear cannot arrive carrying an object and a toggle cannot
+ * arrive without one.
+ */
+export type SelectionIntent =
+  | { kind: "replace"; instanceId: string }
+  | { kind: "toggle"; instanceId: string }
+  | { kind: "clear" };
+
 export interface TransformControllerConfig {
   hitTestService: HitTestService;
   /** Accessor, not a snapshot: the active camera can be swapped
@@ -78,7 +88,7 @@ export interface TransformControllerConfig {
   onPreview: (instanceId: string, values: TransformValues) => void;
   onCommit: (instanceId: string, values: TransformValues) => void;
   onCancel: (instanceId: string, values: TransformValues) => void;
-  onSelect: (instanceId: string | null) => void;
+  onSelect: (intent: SelectionIntent) => void;
   /**
    * Whether a scene object may be selected or dragged (epic #226). The
    * scene composer draws the region's own content so the author can see
@@ -136,9 +146,7 @@ export function createTransformController(
       const normal = new THREE.Vector3();
       camera.getWorldDirection(normal);
       const hit = planePointForRay(ray, center, normal);
-      const worldQuaternion = camera.getWorldQuaternion(
-        new THREE.Quaternion()
-      );
+      const worldQuaternion = camera.getWorldQuaternion(new THREE.Quaternion());
       const screenDiagonal = new THREE.Vector3(1, 0, 0)
         .applyQuaternion(worldQuaternion)
         .add(new THREE.Vector3(0, 1, 0).applyQuaternion(worldQuaternion))
@@ -281,8 +289,16 @@ export function createTransformController(
             instanceId: selectedId,
             mode: parsed.mode,
             axis: parsed.axis,
-            start: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
-            current: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
+            start: {
+              position: [...transform.position],
+              rotation: [...transform.rotation],
+              scale: [...transform.scale]
+            },
+            current: {
+              position: [...transform.position],
+              rotation: [...transform.rotation],
+              scale: [...transform.scale]
+            },
             anchor: anchorForPointer(
               event,
               parsed.mode,
@@ -301,10 +317,16 @@ export function createTransformController(
       // A locked object is not a miss that falls through to something
       // behind it -- clicking the station selects nothing, which is what
       // "you cannot edit this here" looks like.
-      config.onSelect(
+      const picked =
         selectHit && isSelectable(selectHit.objectName)
           ? selectHit.objectName
-          : null
+          : null;
+      // Shift extends: an object outside the selection joins it, one already
+      // in it leaves. A plain click starts over from the object clicked.
+      config.onSelect(
+        picked === null
+          ? { kind: "clear" }
+          : { kind: event.shiftKey ? "toggle" : "replace", instanceId: picked }
       );
       return false;
     },
@@ -336,7 +358,9 @@ export function createTransformController(
         );
         if (parameter === null) return;
         const pos: [number, number, number] = [...session.start.position];
-        pos[ai] = session.start.position[ai] + (parameter - session.anchor.axisParameter);
+        pos[ai] =
+          session.start.position[ai] +
+          (parameter - session.anchor.axisParameter);
         session.current = { ...session.current, position: pos };
       } else if (session.mode === "rotate") {
         if (!session.anchor.planeVector) return;

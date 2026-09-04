@@ -5,6 +5,7 @@ export {
 
 export {
   createLayoutWorkspace,
+  markersStayAlone,
   type LayoutWorkspaceConfig,
   type LayoutWorkspaceInstance
 } from "./layout-workspace";

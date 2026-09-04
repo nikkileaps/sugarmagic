@@ -19,7 +19,8 @@ import {
 import { shallowEqual } from "@sugarmagic/shell";
 import {
   createLayoutWorkspace,
-  setLayoutWorkspaceForViewport
+  setLayoutWorkspaceForViewport,
+  type SelectionIntent
 } from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "../overlay-context";
 
@@ -30,8 +31,25 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       if (!session) return;
       context.stateAccess.updateSession(applyCommand(session, command));
     },
-    onSelect(entityIds: string[]) {
-      context.stateAccess.setSelection(entityIds);
+    onSelect(intent: SelectionIntent) {
+      switch (intent.kind) {
+        case "replace":
+          context.stateAccess.setSelection([intent.instanceId]);
+          return;
+        case "toggle":
+          context.stateAccess.toggleSelection(intent.instanceId);
+          return;
+        case "clear":
+          context.stateAccess.clearSelection();
+          return;
+        default: {
+          const unhandled: never = intent;
+          console.warn(
+            "[layout-transform] unhandled selection intent",
+            unhandled
+          );
+        }
+      }
     },
     onPreviewTransform(
       instanceId: string,

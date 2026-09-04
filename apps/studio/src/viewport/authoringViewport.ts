@@ -678,6 +678,12 @@ export function createAuthoringViewport(
           setSelection(entityIds: string[]) {
             options.stores.shellStore.getState().setSelection(entityIds);
           },
+          toggleSelection(entityId: string) {
+            options.stores.shellStore.getState().toggleSelection(entityId);
+          },
+          clearSelection() {
+            options.stores.shellStore.getState().clearSelection();
+          },
           setTransformDraft(instanceId: string, transform: TransformDraft) {
             options.stores.viewportStore
               .getState()

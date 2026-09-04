@@ -35,6 +35,7 @@ export {
 
 export {
   createTransformController,
+  type SelectionIntent,
   type TransformControllerConfig,
   type TransformSession,
   type TransformAxis,

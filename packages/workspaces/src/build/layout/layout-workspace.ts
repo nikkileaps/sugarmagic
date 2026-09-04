@@ -28,6 +28,7 @@ import {
   TOOL_SHORTCUTS,
   type InputRouter,
   type HitTestService,
+  type SelectionIntent,
   type ToolStateStore,
   type TransformValues
 } from "../../interaction";
@@ -47,7 +48,7 @@ import {
 
 export interface LayoutWorkspaceConfig {
   onCommand: (command: SemanticCommand) => void;
-  onSelect: (entityIds: string[]) => void;
+  onSelect: (intent: SelectionIntent) => void;
   onPreviewTransform: (
     instanceId: string,
     position: [number, number, number],
@@ -94,6 +95,31 @@ export interface LayoutWorkspaceInstance {
   inputRouter: InputRouter;
   hitTestService: HitTestService;
   toolState: ToolStateStore;
+}
+
+/**
+ * A marker never shares a selection with anything else. Markers commit through
+ * `UpdateRegionMarker` with a patch while every other kind commits through a
+ * `Transform*` command, so a mixed selection would have no single shape to
+ * commit. Shift-clicking a marker, or shift-clicking anything while a marker is
+ * selected, starts a fresh selection instead of extending one.
+ *
+ * Reading the one selected id is enough to spot a selected marker: because this
+ * rule never lets a marker join a larger selection, a selected marker is always
+ * the only thing selected.
+ */
+export function markersStayAlone(
+  intent: SelectionIntent,
+  selectedId: string | null,
+  kindOf: (instanceId: string) => SceneObject["kind"] | null
+): SelectionIntent {
+  if (intent.kind !== "toggle") return intent;
+  const touchesAMarker =
+    kindOf(intent.instanceId) === "marker" ||
+    (selectedId !== null && kindOf(selectedId) === "marker");
+  return touchesAMarker
+    ? { kind: "replace", instanceId: intent.instanceId }
+    : intent;
 }
 
 export function createLayoutWorkspace(
@@ -293,8 +319,14 @@ export function createLayoutWorkspace(
           values.scale
         );
       },
-      onSelect(instanceId) {
-        config.onSelect(instanceId ? [instanceId] : []);
+      onSelect(intent) {
+        config.onSelect(
+          markersStayAlone(
+            intent,
+            config.getSelectedId(),
+            (instanceId) => getSceneObject(instanceId)?.kind ?? null
+          )
+        );
       },
       // Hover affordances arrive through the InputRouter's hover
       // dispatch (top controller only) -- never a raw DOM listener.

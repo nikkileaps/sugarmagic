@@ -64,6 +64,10 @@ export interface ViewportOverlayStateAccess {
   /** The selected object the author touched last, drawn as the active one. */
   getActiveSelectionId(): string | null;
   setSelection(entityIds: string[]): void;
+  /** Shift-click: the object joins the selection, or leaves it if already in. */
+  toggleSelection(entityId: string): void;
+  /** Deselect everything without leaving the workspace. */
+  clearSelection(): void;
   setTransformDraft(instanceId: string, transform: TransformDraft): void;
   getLandscapeDraft(): RegionLandscapeState | null;
   setLandscapeDraft(landscape: RegionLandscapeState | null): void;

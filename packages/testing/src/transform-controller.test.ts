@@ -15,6 +15,7 @@ import {
   createTransformController,
   type HitTestService,
   type NormalizedPointerEvent,
+  type SelectionIntent,
   type TransformValues
 } from "@sugarmagic/workspaces";
 
@@ -27,7 +28,8 @@ const IDENTITY: TransformValues = {
 function pointer(
   normalizedX: number,
   normalizedY: number,
-  buttons = 0
+  buttons = 0,
+  modifiers: { shiftKey?: boolean } = {}
 ): NormalizedPointerEvent {
   return {
     screenX: 0,
@@ -36,7 +38,7 @@ function pointer(
     normalizedY,
     button: 0,
     buttons,
-    shiftKey: false,
+    shiftKey: modifiers.shiftKey ?? false,
     ctrlKey: false,
     altKey: false,
     metaKey: false
@@ -255,6 +257,74 @@ describe("transform controller hover", () => {
 });
 
 /**
+ * What a click asks the selection to do. The controller reads the modifier and
+ * names the intent; deciding what the selection then holds is the store's job.
+ */
+describe("selection intent", () => {
+  function selectionHarness(hit: string | null) {
+    const selects: SelectionIntent[] = [];
+    const object = new THREE.Object3D();
+    const hitTestService = {
+      testGizmo: () => null,
+      testSelect: () =>
+        hit === null
+          ? null
+          : {
+              mode: "select" as const,
+              objectName: hit,
+              point: new THREE.Vector3(),
+              distance: 1,
+              object
+            },
+      testSurface: () => null,
+      setCamera: () => {},
+      setAuthoredRoot: () => {},
+      setOverlayRoot: () => {},
+      setSurfaceRoot: () => {}
+    } as HitTestService;
+
+    const controller = createTransformController({
+      hitTestService,
+      getCamera: () => makeCamera(),
+      getActiveTool: () => "move",
+      onPreview: () => {},
+      onCommit: () => {},
+      onCancel: () => {},
+      onSelect: (intent) => selects.push(intent),
+      onHoverHandle: () => {},
+      onHoverTarget: () => {},
+      getSelectedId: () => null,
+      getTransform: () => ({ ...IDENTITY })
+    });
+    return { controller, selects };
+  }
+
+  it("a plain click replaces the whole selection", () => {
+    const { controller, selects } = selectionHarness("prop_a");
+    controller.onPointerDown!(pointer(0, 0));
+    expect(selects).toEqual([{ kind: "replace", instanceId: "prop_a" }]);
+  });
+
+  it("a shift-click toggles the clicked object", () => {
+    const { controller, selects } = selectionHarness("prop_a");
+    controller.onPointerDown!(pointer(0, 0, 0, { shiftKey: true }));
+    expect(selects).toEqual([{ kind: "toggle", instanceId: "prop_a" }]);
+  });
+
+  it("clicking empty space clears the selection", () => {
+    const { controller, selects } = selectionHarness(null);
+    controller.onPointerDown!(pointer(0, 0));
+    expect(selects).toEqual([{ kind: "clear" }]);
+  });
+
+  it("shift-clicking empty space clears rather than toggling nothing", () => {
+    const { controller, selects } = selectionHarness(null);
+    controller.onPointerDown!(pointer(0, 0, 0, { shiftKey: true }));
+    expect(selects).toEqual([{ kind: "clear" }]);
+  });
+});
+
+/**
  * Locking (epic #226 story 8). The scene composer draws the region so an
  * author can see where things sit, and lets them edit only the Scene's
  * overlay. "Locked" has to hold for picking, hovering AND dragging, or it
@@ -262,7 +332,7 @@ describe("transform controller hover", () => {
  */
 describe("selection locking", () => {
   function lockingHarness(locked: string) {
-    const selects: Array<string | null> = [];
+    const selects: SelectionIntent[] = [];
     const hovers: Array<THREE.Object3D | null> = [];
     const object = new THREE.Object3D();
     const hitTestService = {
@@ -301,7 +371,7 @@ describe("selection locking", () => {
   it("clicking a locked object selects nothing, not the thing behind it", () => {
     const { controller, selects } = lockingHarness("region:station-wall");
     controller.onPointerDown!(pointer(0, 0));
-    expect(selects).toEqual([null]);
+    expect(selects).toEqual([{ kind: "clear" }]);
   });
 
   it("a locked object gets no hover cue", () => {
