@@ -124,7 +124,11 @@ export interface LayoutWorkspaceViewProps {
   getViewportElement: () => HTMLElement | null;
   viewportStore: ViewportStore;
   selectedIds: string[];
+  /** The selected object the author touched last, marked apart in the tree. */
+  activeSelectionId: string | null;
   onSelect: (ids: string[]) => void;
+  /** Shift-click: the object joins the selection, or leaves it if already in. */
+  onToggleSelect: (id: string) => void;
   onCommand: (command: SemanticCommand) => void;
   getRegion: () => ReturnType<typeof getActiveRegion>;
   /**
@@ -375,7 +379,9 @@ export function useLayoutWorkspaceView(
     getViewportElement,
     viewportStore,
     selectedIds,
+    activeSelectionId,
     onSelect,
+    onToggleSelect,
     onCommand,
     getRegion,
     getRegionContents,
@@ -549,7 +555,10 @@ export function useLayoutWorkspaceView(
 
       event.preventDefault();
 
-      if (selectedIds[0] !== hit.objectName) {
+      // Right-clicking anything already selected opens the menu for the whole
+      // selection. Testing only the first selected id threw the rest away when
+      // the author right-clicked any other member of it.
+      if (!selectedIds.includes(hit.objectName)) {
         onSelectRef.current([hit.objectName]);
       }
 
@@ -1536,8 +1545,15 @@ export function useLayoutWorkspaceView(
           <SceneExplorer
             roots={explorerRoots}
             selectedIds={selectedIds}
+            activeInstanceId={activeSelectionId}
             selectedFolderId={selectedFolderId}
-            onSelect={(id) => onSelect([id])}
+            // Shift extends here exactly as it does in the viewport. Blender's
+            // own Outliner uses a different modifier from its viewport; one
+            // gesture meaning one thing throughout is worth more than matching
+            // that split.
+            onSelect={(id, { extend }) =>
+              extend ? onToggleSelect(id) : onSelect([id])
+            }
             onSelectFolder={(folderId) => {
               setSelectedFolderState({
                 regionId: region.identity.id,

@@ -77,6 +77,7 @@ export interface BuildProductModeViewProps {
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   selectedIds: string[];
+  activeSelectionId: string | null;
   session: AuthoringSession | null;
   assetDefinitions: AssetDefinition[];
   surfaceDefinitions: SurfaceDefinition[];
@@ -105,6 +106,7 @@ export interface BuildProductModeViewProps {
   onSelectEnvironment: (environmentId: string) => void;
   onCreateEnvironment: () => void;
   onSelect: (ids: string[]) => void;
+  onToggleSelect: (id: string) => void;
   onCommand: (command: SemanticCommand) => void;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
@@ -187,6 +189,7 @@ export function useBuildProductModeView(
     activeRegionId,
     activeEnvironmentId,
     selectedIds,
+    activeSelectionId,
     session,
     assetDefinitions,
     surfaceDefinitions,
@@ -215,6 +218,7 @@ export function useBuildProductModeView(
     onSelectEnvironment,
     onCreateEnvironment,
     onSelect,
+    onToggleSelect,
     onCommand,
     navigationTarget,
     onConsumeNavigationTarget,
@@ -262,7 +266,9 @@ export function useBuildProductModeView(
       activeBuildKind === "layout" ? getViewportElement : () => null,
     viewportStore,
     selectedIds,
+    activeSelectionId,
     onSelect,
+    onToggleSelect,
     onCommand,
     getRegion: () => (session ? getActiveRegion(session) : null),
     getRegionContents: () =>

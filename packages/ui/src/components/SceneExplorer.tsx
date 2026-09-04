@@ -55,8 +55,14 @@ export type SceneExplorerNode =
 export interface SceneExplorerProps {
   roots: SceneExplorerNode[];
   selectedIds: string[];
+  /** The selected row the author touched last, marked apart from the rest. */
+  activeInstanceId?: string | null;
   selectedFolderId?: string | null;
-  onSelect: (instanceId: string) => void;
+  /**
+   * `extend` is a shift-click: the row joins the selection, or leaves it if it
+   * was already in. Without it the row replaces the whole selection.
+   */
+  onSelect: (instanceId: string, options: { extend: boolean }) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (instanceId: string) => void;
   /** Plan 070.3 — toggle a folder's viewport visibility (its eye). */
@@ -81,10 +87,7 @@ export interface SceneExplorerProps {
    * root (un-foldered). Only asset entities are draggable; presences
    * live outside the folder tree.
    */
-  onMoveEntityToFolder?: (
-    instanceId: string,
-    folderId: string | null
-  ) => void;
+  onMoveEntityToFolder?: (instanceId: string, folderId: string | null) => void;
 }
 
 type ContextMenuState =
@@ -143,10 +146,7 @@ function loadExpansionChoices(): Record<string, boolean> {
 
 function saveExpansionChoices(choices: Record<string, boolean>): void {
   try {
-    window.localStorage.setItem(
-      EXPANSION_STORAGE_KEY,
-      JSON.stringify(choices)
-    );
+    window.localStorage.setItem(EXPANSION_STORAGE_KEY, JSON.stringify(choices));
   } catch {
     // Storage unavailable (private mode, quota) -- expansion simply
     // stops persisting; the session still works.
@@ -166,11 +166,11 @@ function LandscapeRow({
   node: SceneExplorerLandscape;
   depth: number;
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, options: { extend: boolean }) => void;
 }) {
   return (
     <Box
-      onClick={() => onSelect(node.landscapeId)}
+      onClick={() => onSelect(node.landscapeId, { extend: false })}
       style={{
         display: "flex",
         alignItems: "center",
@@ -201,6 +201,7 @@ function EntityRow({
   node,
   depth,
   isSelected,
+  isActive,
   onSelect,
   onToggleVisibility,
   onOpenContextMenu,
@@ -209,7 +210,8 @@ function EntityRow({
   node: SceneExplorerEntity;
   depth: number;
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  isActive: boolean;
+  onSelect: (id: string, options: { extend: boolean }) => void;
   onToggleVisibility?: (id: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
   draggable?: boolean;
@@ -228,10 +230,13 @@ function EntityRow({
             }
           : undefined
       }
-      onClick={() => onSelect(node.instanceId)}
+      onClick={(event) => onSelect(node.instanceId, { extend: event.shiftKey })}
       onContextMenu={(event) => {
         event.preventDefault();
-        onSelect(node.instanceId);
+        // Right-clicking a row that is already selected opens the menu for the
+        // whole selection. Selecting here unconditionally would throw the rest
+        // of it away just as the author reached for an action on it.
+        if (!isSelected) onSelect(node.instanceId, { extend: false });
         onOpenContextMenu(event, {
           kind: "entity",
           x: event.clientX,
@@ -248,6 +253,10 @@ function EntityRow({
         fontSize: "var(--sm-font-size-sm)",
         color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)",
         background: isSelected ? "var(--sm-active-bg)" : "transparent",
+        // The active row is the one a transform reads for its reference, so it
+        // is marked apart from the rest of the selection rather than blending
+        // into it.
+        boxShadow: isActive ? "inset 2px 0 0 var(--sm-accent-blue)" : undefined,
         transition: "var(--sm-transition-fast)",
         cursor: "pointer"
       }}
@@ -256,7 +265,7 @@ function EntityRow({
         <Text component="span" size="xs">
           {getKindIcon(node.assetKind)}
         </Text>
-        <Text size="xs" truncate fw={isSelected ? 600 : 400}>
+        <Text size="xs" truncate fw={isActive || isSelected ? 600 : 400}>
           {node.displayName}
         </Text>
       </Group>
@@ -291,6 +300,7 @@ function FolderRow({
   onToggle,
   isSelected,
   selectedIds,
+  activeInstanceId,
   selectedFolderId,
   onSelect,
   onSelectFolder,
@@ -307,16 +317,14 @@ function FolderRow({
   onToggle: () => void;
   isSelected: boolean;
   selectedIds: string[];
+  activeInstanceId?: string | null;
   selectedFolderId?: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, options: { extend: boolean }) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
   onToggleFolderVisibility?: (folderId: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
-  onMoveEntityToFolder?: (
-    instanceId: string,
-    folderId: string | null
-  ) => void;
+  onMoveEntityToFolder?: (instanceId: string, folderId: string | null) => void;
   expansionChoices: Record<string, boolean>;
   onToggleFolder: (folderId: string) => void;
 }) {
@@ -388,9 +396,7 @@ function FolderRow({
             : isSelected
               ? "var(--sm-active-bg)"
               : "transparent",
-          outline: isDropTarget
-            ? "1px dashed var(--sm-accent-blue)"
-            : "none",
+          outline: isDropTarget ? "1px dashed var(--sm-accent-blue)" : "none",
           outlineOffset: -1,
           transition: "var(--sm-transition-fast)",
           cursor: "pointer"
@@ -464,6 +470,7 @@ function FolderRow({
             node={child}
             depth={depth + 1}
             selectedIds={selectedIds}
+            activeInstanceId={activeInstanceId}
             selectedFolderId={selectedFolderId}
             onSelect={onSelect}
             onSelectFolder={onSelectFolder}
@@ -483,6 +490,7 @@ function TreeNode({
   node,
   depth,
   selectedIds,
+  activeInstanceId,
   selectedFolderId,
   onSelect,
   onSelectFolder,
@@ -496,16 +504,14 @@ function TreeNode({
   node: SceneExplorerNode;
   depth: number;
   selectedIds: string[];
+  activeInstanceId?: string | null;
   selectedFolderId?: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, options: { extend: boolean }) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
   onToggleFolderVisibility?: (folderId: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
-  onMoveEntityToFolder?: (
-    instanceId: string,
-    folderId: string | null
-  ) => void;
+  onMoveEntityToFolder?: (instanceId: string, folderId: string | null) => void;
   expansionChoices: Record<string, boolean>;
   onToggleFolder: (folderId: string) => void;
 }) {
@@ -515,12 +521,11 @@ function TreeNode({
         node={node}
         depth={depth}
         isSelected={selectedIds.includes(node.instanceId)}
+        isActive={activeInstanceId === node.instanceId}
         onSelect={onSelect}
         onToggleVisibility={onToggleVisibility}
         onOpenContextMenu={onOpenContextMenu}
-        draggable={Boolean(
-          onMoveEntityToFolder && node.entityKind === "asset"
-        )}
+        draggable={Boolean(onMoveEntityToFolder && node.entityKind === "asset")}
       />
     );
   }
@@ -536,8 +541,7 @@ function TreeNode({
     );
   }
 
-  const isExpanded =
-    expansionChoices[node.folderId] ?? Boolean(node.isRoot);
+  const isExpanded = expansionChoices[node.folderId] ?? Boolean(node.isRoot);
   return (
     <FolderRow
       node={node}
@@ -546,6 +550,7 @@ function TreeNode({
       onToggle={() => onToggleFolder(node.folderId)}
       isSelected={selectedFolderId === node.folderId}
       selectedIds={selectedIds}
+      activeInstanceId={activeInstanceId}
       selectedFolderId={selectedFolderId}
       onSelect={onSelect}
       onSelectFolder={onSelectFolder}
@@ -564,6 +569,7 @@ function TreeNode({
 export function SceneExplorer({
   roots,
   selectedIds,
+  activeInstanceId,
   selectedFolderId,
   onSelect,
   onSelectFolder,
@@ -580,9 +586,8 @@ export function SceneExplorer({
 }: SceneExplorerProps) {
   const entityCount = countEntities(roots);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [expansionChoices, setExpansionChoices] = useState<
-    Record<string, boolean>
-  >(loadExpansionChoices);
+  const [expansionChoices, setExpansionChoices] =
+    useState<Record<string, boolean>>(loadExpansionChoices);
   const handleToggleFolder = (folderId: string) => {
     setExpansionChoices((current) => {
       const currentlyExpanded =
@@ -600,7 +605,8 @@ export function SceneExplorer({
   const closeContextMenu = () => setContextMenu(null);
 
   const handleRenameFolder = () => {
-    if (!contextMenu || contextMenu.kind !== "folder" || !onRenameFolder) return;
+    if (!contextMenu || contextMenu.kind !== "folder" || !onRenameFolder)
+      return;
     const folder = findFolderById(roots, contextMenu.folderId);
     if (!folder || folder.isRoot) return;
     const nextName = window.prompt("Rename folder", folder.displayName);
@@ -617,6 +623,7 @@ export function SceneExplorer({
           node={node}
           depth={0}
           selectedIds={selectedIds}
+          activeInstanceId={activeInstanceId}
           selectedFolderId={selectedFolderId}
           onSelect={onSelect}
           onSelectFolder={onSelectFolder}
@@ -659,12 +666,17 @@ export function SceneExplorer({
         <Menu.Dropdown>
           {contextMenu?.kind === "entity" ? (
             <>
-              {findEntityById(roots, contextMenu.instanceId)?.entityKind === "asset" && (
+              {findEntityById(roots, contextMenu.instanceId)?.entityKind ===
+                "asset" && (
                 <>
-                  <Menu.Item onClick={() => onDuplicateEntity?.(contextMenu.instanceId)}>
+                  <Menu.Item
+                    onClick={() => onDuplicateEntity?.(contextMenu.instanceId)}
+                  >
                     Duplicate
                   </Menu.Item>
-                  <Menu.Item onClick={() => onEditEntity?.(contextMenu.instanceId)}>
+                  <Menu.Item
+                    onClick={() => onEditEntity?.(contextMenu.instanceId)}
+                  >
                     Edit
                   </Menu.Item>
                   {(() => {
@@ -680,7 +692,10 @@ export function SceneExplorer({
                   <Menu.Divider />
                 </>
               )}
-              <Menu.Item color="red" onClick={() => onDeleteEntity?.(contextMenu.instanceId)}>
+              <Menu.Item
+                color="red"
+                onClick={() => onDeleteEntity?.(contextMenu.instanceId)}
+              >
                 Delete
               </Menu.Item>
             </>
@@ -688,15 +703,15 @@ export function SceneExplorer({
             <>
               <Menu.Item
                 onClick={() =>
-                  onCreateFolder?.(contextMenu.isRoot ? null : contextMenu.folderId)
+                  onCreateFolder?.(
+                    contextMenu.isRoot ? null : contextMenu.folderId
+                  )
                 }
               >
                 Add Folder
               </Menu.Item>
               {!contextMenu.isRoot && (
-                <Menu.Item onClick={handleRenameFolder}>
-                  Edit
-                </Menu.Item>
+                <Menu.Item onClick={handleRenameFolder}>Edit</Menu.Item>
               )}
               {!contextMenu.isRoot && (
                 <>
