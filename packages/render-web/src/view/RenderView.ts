@@ -16,6 +16,10 @@ import {
 } from "../environment/applyPostProcessStack";
 import { createEnvironmentSceneController, type EnvironmentSceneController } from "../environment/EnvironmentSceneController";
 import { createLandscapeSceneController, type LandscapeSceneController } from "../landscape";
+import {
+  createPlacedLightController,
+  type PlacedLightController
+} from "../placed-lights";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
@@ -41,6 +45,7 @@ export interface RenderView {
   readonly shaderRuntime: ShaderRuntime;
   readonly assetResolver: AuthoredAssetResolver;
   readonly environmentController: EnvironmentSceneController;
+  readonly placedLightController: PlacedLightController;
   readonly landscapeController: LandscapeSceneController;
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;
@@ -75,6 +80,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
   const { engine, scene, compileProfile } = options;
   const logger = options.logger ?? engine.logger;
   const environmentController = createEnvironmentSceneController(scene);
+  const placedLightController = createPlacedLightController(scene);
   const landscapeController = createLandscapeSceneController(
     scene,
     engine.assetResolver,
@@ -233,6 +239,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       return engine.assetResolver;
     },
     environmentController,
+    placedLightController,
     landscapeController,
     scene,
     get camera() {
@@ -303,6 +310,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       detachFromEngine();
       landscapeController.dispose();
       environmentController.dispose();
+      placedLightController.dispose();
       renderPipeline?.dispose();
       renderPipeline = null;
       appliedEnvironmentVersion = -1;

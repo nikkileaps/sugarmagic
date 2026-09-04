@@ -33,6 +33,7 @@ export * from "./captureFrame";
 export * from "./engine/WebRenderEngine";
 export * from "./environment";
 export * from "./landscape";
+export * from "./placed-lights";
 export * from "./render";
 export * from "./renderableFallbacks";
 export * from "./renderableTransforms";

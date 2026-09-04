@@ -2411,6 +2411,12 @@ export function createWebRuntimeHost(
       const activeRegionContents = activeRegion
         ? composeRegionContents(activeRegion, activeScene)
         : null;
+      // The same lights Studio's viewport gets, from the same composed list.
+      // Nowhere to be is no lights, so walking out of a region takes its
+      // lanterns with it.
+      renderView.placedLightController.apply(
+        activeRegionContents?.placedLights ?? []
+      );
       // Plan 059 §059.1 — music resolution. In-game: the Scene's
       // audioOverride shadows the project default; null = silence
       // (the intended default — BotW model, sounds cued by

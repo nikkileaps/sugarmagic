@@ -589,6 +589,8 @@ export function createAuthoringViewport(
     // `region.placedAssets` — else scene-scoped items in a hidden folder render
     // but never hide.
     const composed = composeRegionContents(region, projection.activeScene);
+    // The same lights the running game gets, from the same composed list.
+    renderView.placedLightController.apply(composed.placedLights);
     const hidden = resolveHiddenAssetInstanceIds(
       composed,
       projection.hiddenFolderIds
