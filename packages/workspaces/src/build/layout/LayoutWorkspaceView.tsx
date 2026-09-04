@@ -83,6 +83,7 @@ import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { hasMixedRotations } from "../../interaction/selection-transform";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
+import { singleTransformCommand } from "./layout-workspace";
 
 // Vertical side rail (the Design > Animation viewport pattern): the
 // rail sits below the options-bar row, so an armed tool's settings
@@ -796,107 +797,22 @@ export function useLayoutWorkspaceView(
       if (transformKind === "rotation") nextRotation[axis] = value;
       if (transformKind === "scale") nextScale[axis] = value;
 
-      if (asset) {
-        onCommand({
-          kind: "TransformPlacedAsset",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: { subjectKind: "placed-asset", subjectId: instanceId },
-          payload: {
-            instanceId,
-            position: nextPosition,
-            rotation: nextRotation,
-            scale: nextScale
-          }
-        });
-        return;
-      }
+      const kind = asset
+        ? ("asset" as const)
+        : marker
+          ? ("marker" as const)
+          : playerPresence
+            ? ("player" as const)
+            : itemPresence
+              ? ("item" as const)
+              : ("npc" as const);
 
-      if (marker) {
-        onCommand({
-          kind: "UpdateRegionMarker",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: { subjectKind: "region-marker", subjectId: instanceId },
-          payload: {
-            markerId: instanceId,
-            patch: {
-              transform: {
-                position: nextPosition,
-                rotation: nextRotation,
-                scale: nextScale
-              }
-            }
-          }
-        });
-        return;
-      }
-
-      if (playerPresence) {
-        onCommand({
-          kind: "TransformPlayerPresence",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: { subjectKind: "player-presence", subjectId: instanceId },
-          payload: {
-            presenceId: instanceId,
-            position: nextPosition,
-            rotation: nextRotation,
-            scale: nextScale
-          }
-        });
-        return;
-      }
-
-      if (itemPresence) {
-        onCommand({
-          kind: "TransformItemPresence",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: { subjectKind: "item-presence", subjectId: instanceId },
-          payload: {
-            presenceId: instanceId,
-            position: nextPosition,
-            rotation: nextRotation,
-            scale: nextScale
-          }
-        });
-        return;
-      }
-
-      if (npcPresence) {
-        onCommand({
-          kind: "TransformNPCPresence",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: { subjectKind: "npc-presence", subjectId: instanceId },
-          payload: {
-            presenceId: instanceId,
-            position: nextPosition,
-            rotation: nextRotation,
-            scale: nextScale
-          }
-        });
-        return;
-      }
-
-      // Every branch above is explicit so nothing reaches here by falling
-      // through. This used to be an unguarded NPC command, which is how a
-      // marker drag quietly fired a presence transform for an id no
-      // presence had.
-      console.warn(
-        "[layout] no transform command for this selection",
-        instanceId
+      onCommand(
+        singleTransformCommand(kind, currentRegion.identity.id, instanceId, {
+          position: nextPosition,
+          rotation: nextRotation,
+          scale: nextScale
+        })
       );
     },
     [getRegion, getRegionContents, onCommand]
@@ -1362,59 +1278,34 @@ export function useLayoutWorkspaceView(
       regionContents.itemPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
-    const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
+    const marker =
+      (region.markers ?? []).find(
+        (entry) => entry.markerId === contextMenu.instanceId
+      ) ?? null;
+    const source =
+      asset ?? playerPresence ?? npcPresence ?? itemPresence ?? marker;
     if (!source) return;
 
-    if (asset) {
-      onCommand({
-        kind: "TransformPlacedAsset",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: region.identity.id
-        },
-        subject: {
-          subjectKind: "placed-asset",
-          subjectId: asset.instanceId
-        },
-        payload: {
-          instanceId: asset.instanceId,
-          position: [0, 0, 0],
-          rotation: asset.transform.rotation,
-          scale: asset.transform.scale
-        }
-      });
-      setContextMenu(null);
-      return;
-    }
-
-    onCommand({
-      kind: playerPresence
-        ? "TransformPlayerPresence"
-        : itemPresence
-          ? "TransformItemPresence"
-          : "TransformNPCPresence",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: playerPresence
-          ? "player-presence"
+    const kind = asset
+      ? ("asset" as const)
+      : marker
+        ? ("marker" as const)
+        : playerPresence
+          ? ("player" as const)
           : itemPresence
-            ? "item-presence"
-            : "npc-presence",
-        subjectId: contextMenu.instanceId
-      },
-      payload: {
-        presenceId: contextMenu.instanceId,
+            ? ("item" as const)
+            : ("npc" as const);
+
+    onCommand(
+      singleTransformCommand(kind, region.identity.id, contextMenu.instanceId, {
         position: [0, 0, 0],
         rotation: source.transform.rotation,
         scale: source.transform.scale
-      }
-    });
+      })
+    );
 
     setContextMenu(null);
-  }, [contextMenu, onCommand, region]);
+  }, [contextMenu, onCommand, region, regionContents]);
 
   // Plan 058 §058.3 — classify the context-menu target for the
   // scope-conversion / cross-Scene-copy actions.

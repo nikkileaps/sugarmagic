@@ -120,19 +120,43 @@ export interface LayoutWorkspaceInstance {
  * `never` below are what stop a new kind from doing that again.
  */
 export type TransformCommit =
-  | { via: "transform"; subjectKind: TransformSubject["subjectKind"] }
+  | {
+      via: "transform";
+      commandKind:
+        | "TransformPlacedAsset"
+        | "TransformPlayerPresence"
+        | "TransformNPCPresence"
+        | "TransformItemPresence";
+      subjectKind: TransformSubject["subjectKind"];
+    }
   | { via: "marker-patch" };
 
 export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
   switch (kind) {
     case "asset":
-      return { via: "transform", subjectKind: "placed-asset" };
+      return {
+        via: "transform",
+        commandKind: "TransformPlacedAsset",
+        subjectKind: "placed-asset"
+      };
     case "player":
-      return { via: "transform", subjectKind: "player-presence" };
+      return {
+        via: "transform",
+        commandKind: "TransformPlayerPresence",
+        subjectKind: "player-presence"
+      };
     case "npc":
-      return { via: "transform", subjectKind: "npc-presence" };
+      return {
+        via: "transform",
+        commandKind: "TransformNPCPresence",
+        subjectKind: "npc-presence"
+      };
     case "item":
-      return { via: "transform", subjectKind: "item-presence" };
+      return {
+        via: "transform",
+        commandKind: "TransformItemPresence",
+        subjectKind: "item-presence"
+      };
     case "marker":
       return { via: "marker-patch" };
     default: {
@@ -142,6 +166,56 @@ export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
       );
     }
   }
+}
+
+/**
+ * The command that records a new transform for one object -- an inspector
+ * field edited, or snap-to-origin from the context menu. A gizmo drag covers a
+ * whole selection and batches instead, but both go through
+ * `transformCommitFor` so a kind cannot commit two different ways.
+ *
+ * A placed asset names the object `instanceId` while the three presences name
+ * it `presenceId`; that is the only difference left between them.
+ */
+export function singleTransformCommand(
+  kind: SceneObject["kind"],
+  regionId: string,
+  instanceId: string,
+  values: TransformValues
+): SemanticCommand {
+  const target = {
+    aggregateKind: "region-document" as const,
+    aggregateId: regionId
+  };
+  const { position, rotation, scale } = values;
+  const commit = transformCommitFor(kind);
+
+  if (commit.via === "marker-patch") {
+    return {
+      kind: "UpdateRegionMarker",
+      target,
+      subject: { subjectKind: "region-marker", subjectId: instanceId },
+      payload: {
+        markerId: instanceId,
+        patch: { transform: { position, rotation, scale } }
+      }
+    };
+  }
+
+  const subject = { subjectKind: commit.subjectKind, subjectId: instanceId };
+  return commit.commandKind === "TransformPlacedAsset"
+    ? {
+        kind: commit.commandKind,
+        target,
+        subject,
+        payload: { instanceId, position, rotation, scale }
+      }
+    : {
+        kind: commit.commandKind,
+        target,
+        subject,
+        payload: { presenceId: instanceId, position, rotation, scale }
+      };
 }
 
 /**

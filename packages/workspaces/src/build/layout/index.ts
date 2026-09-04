@@ -6,6 +6,9 @@ export {
 export {
   createLayoutWorkspace,
   markersStayAlone,
+  singleTransformCommand,
+  transformCommitFor,
+  type TransformCommit,
   type LayoutWorkspaceConfig,
   type LayoutWorkspaceInstance
 } from "./layout-workspace";
