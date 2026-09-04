@@ -244,6 +244,7 @@ import {
 } from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
+import { isTypingTarget, isUndoShortcut } from "./keyboard/undo-shortcut";
 import {
   clearLivePaintedMasks,
   computeAssetColliderBounds,
@@ -3942,6 +3943,19 @@ export function App() {
     if (!s) return;
     projectStore.getState().updateSession(undoSession(s));
   }, []);
+
+  // Cmd+Z / Ctrl+Z anywhere in Studio. The File menu has advertised this
+  // shortcut next to Undo for a while with nothing bound to it.
+  useEffect(() => {
+    const handleUndoShortcut = (event: KeyboardEvent) => {
+      if (!isUndoShortcut(event) || isTypingTarget(event.target)) return;
+      // The browser would otherwise run its own undo over the top of ours.
+      event.preventDefault();
+      handleUndo();
+    };
+    window.addEventListener("keydown", handleUndoShortcut);
+    return () => window.removeEventListener("keydown", handleUndoShortcut);
+  }, [handleUndo]);
 
   const statusMessage = useMemo(() => {
     if (phase === "no-project") return "No project open";
