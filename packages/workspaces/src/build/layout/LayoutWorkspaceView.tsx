@@ -193,6 +193,7 @@ const SCENE_OBJECT_KIND_LABELS: Record<SceneObject["kind"], string> = {
 const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
   folders: [],
   placedAssets: [],
+  placedLights: [],
   playerPresence: null,
   npcPresences: [],
   itemPresences: []

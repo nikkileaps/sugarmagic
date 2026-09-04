@@ -23,6 +23,7 @@
 
 import type {
   PlacedAssetInstance,
+  PlacedLight,
   RegionDocument,
   RegionNavMeshArtifact,
   RegionItemPresence,
@@ -48,6 +49,7 @@ import {
 export interface ComposedRegionContents {
   folders: RegionSceneFolder[];
   placedAssets: PlacedAssetInstance[];
+  placedLights: PlacedLight[];
   playerPresence: RegionPlayerPresence | null;
   npcPresences: RegionNPCPresence[];
   itemPresences: RegionItemPresence[];
@@ -132,6 +134,12 @@ export function composeRegionContents(
         (asset) => !suppressed.has(asset.instanceId)
       ),
       ...(overlay?.placedAssets ?? [])
+    ],
+    placedLights: [
+      ...region.placedLights.filter(
+        (light) => !suppressed.has(light.instanceId)
+      ),
+      ...(overlay?.placedLights ?? [])
     ],
     // Exactly one player spawn: the Scene's answer wins where it has one,
     // otherwise the region's. Reading the overlay alone used to be the

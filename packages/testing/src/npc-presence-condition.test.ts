@@ -42,6 +42,7 @@ const NPC_DEF_ID = "npc:finn";
 
 function makeRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: REGION_ID, schema: "RegionDocument", version: 1 },
     displayName: "Wordlark Hollow",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

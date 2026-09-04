@@ -216,6 +216,7 @@ describe("dangling story point references", () => {
     nodeId: string
   ): RegionDocument[] {
     const region: RegionDocument = {
+      placedLights: [],
       identity: { id: "region:test", schema: "RegionDocument", version: 1 },
       displayName: "Test Region",
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
@@ -306,6 +307,7 @@ describe("behavior tasks with no ordering between them", () => {
   ): RegionDocument[] {
     return [
       {
+        placedLights: [],
         identity: { id: "region:test", schema: "RegionDocument", version: 1 },
         displayName: "Test Region",
         placement: {

@@ -86,6 +86,93 @@ export interface RegionSceneTransform {
   scale: [number, number, number];
 }
 
+export type PlacedLightKind = "point" | "spot" | "area";
+
+/** The cone of a `spot` light. Null on every other kind. */
+export interface PlacedLightSpotConfig {
+  /** Half-angle of the cone, in degrees. */
+  angleDeg: number;
+  /** How soft the cone's edge is, 0 (hard) to 1 (fully feathered). */
+  penumbra: number;
+  /** A content-library texture projected through the cone — a window
+   *  frame, leaves, a lattice. Null projects nothing. */
+  projectedTextureId: string | null;
+}
+
+/** The rectangle of an `area` light, in metres. Null on every other kind. */
+export interface PlacedLightAreaConfig {
+  width: number;
+  height: number;
+}
+
+export type PlacedLightModulationKind = "steady" | "flame" | "candle" | "pulse";
+
+/**
+ * How a placed light varies over time: a closed set of named behaviors
+ * sharing one set of numbers, rather than a curve editor or a node graph.
+ *
+ * The behavior is a pure function of elapsed time and `seed`, so two
+ * candles in one room never flicker in step and nothing depends on frame
+ * rate. No phase is persisted — a reload restarts the wobble, which is not
+ * something a player can see.
+ */
+export interface PlacedLightModulation {
+  kind: PlacedLightModulationKind;
+  /** Base rate of the behavior, in cycles per second. */
+  speed: number;
+  /** How far intensity swings, as a fraction of the light's intensity. */
+  amount: number;
+  /** How far the color drifts along with the swing, 0 to 1. */
+  colorWobble: number;
+  /** This light's fixed offset into the behavior, 0 to 1. Two lights with
+   *  the same settings and different seeds look independent. */
+  seed: number;
+}
+
+/**
+ * A light the author places in a region the way they place a prop: a
+ * lantern, a fire in a hearth, a warm pool of sun through a window.
+ *
+ * The region's environment still owns the sun. A placed light adds to it
+ * and never replaces it.
+ *
+ * Fields the kind does not use are null. `createPlacedLight` is what makes
+ * that true — it is the only constructor, and it clamps every field to the
+ * kind, so a point light holding a cone cannot be built.
+ */
+export interface PlacedLight {
+  instanceId: string;
+  kind: PlacedLightKind;
+  displayName: string;
+  parentFolderId: string | null;
+  /**
+   * Off is dark in Studio and in the shipped game. One state, not a
+   * separate editor-only hide.
+   *
+   * A quest cannot light or snuff this. When a story beat needs to,
+   * `RegionNPCPresence.condition` is the shape to follow, and the cost to
+   * solve then is a frame hitch: adding a light to the three.js scene or
+   * removing one recompiles every material, while changing its color or
+   * intensity is free.
+   */
+  enabled: boolean;
+  /** Hex, the same convention as the environment's `SunLight.color`. */
+  color: number;
+  /**
+   * Point and spot lights are in candela; area lights are in nits. three.js
+   * reads a different unit per light class, so one number means two things
+   * and the Inspector labels it per kind rather than pretending otherwise.
+   */
+  intensity: number;
+  /** How far the light reaches, in metres. Null for `area`, which has no
+   *  reach cutoff in three.js. */
+  radius: number | null;
+  spot: PlacedLightSpotConfig | null;
+  area: PlacedLightAreaConfig | null;
+  modulation: PlacedLightModulation;
+  transform: RegionSceneTransform;
+}
+
 export interface RegionPlayerPresence {
   presenceId: string;
   transform: RegionSceneTransform;
@@ -441,6 +528,9 @@ export interface RegionDocument {
   placement: RegionPlacement;
   /** Base-scope placed assets — always visible in every Scene. */
   placedAssets: PlacedAssetInstance[];
+  /** Base-scope placed lights — always lit in every Scene. A Scene overlay
+   *  adds its own or suppresses these; it never replaces the set. */
+  placedLights: PlacedLight[];
   /** Folder tree grouping the base-scope placed assets. */
   folders: RegionSceneFolder[];
   environmentBinding: RegionEnvironmentBinding;
@@ -534,6 +624,10 @@ export function createRegionNPCBehaviorId(): string {
 
 function createPlacedAssetInstanceIdValue(): string {
   return createScopedId("placed-asset");
+}
+
+function createPlacedLightIdValue(): string {
+  return createScopedId("placed-light");
 }
 
 function createSceneFolderIdValue(): string {
@@ -874,6 +968,108 @@ export function createPlacedAssetInstance(
   };
 }
 
+/** Warm tungsten, the tone the driving uses want: lanterns, hearths,
+ *  candles, low fill. */
+export const DEFAULT_PLACED_LIGHT_COLOR = 0xffd9a0;
+/** Candela for point and spot, nits for area. Bright enough to read as a
+ *  light source in a room without blowing out the sun's exposure. */
+export const DEFAULT_PLACED_LIGHT_INTENSITY = 8;
+/** Metres. About one room's worth of reach. */
+export const DEFAULT_PLACED_LIGHT_RADIUS = 6;
+export const DEFAULT_PLACED_LIGHT_SPOT_ANGLE_DEG = 35;
+export const DEFAULT_PLACED_LIGHT_SPOT_PENUMBRA = 0.4;
+/** Metres, square. */
+export const DEFAULT_PLACED_LIGHT_AREA_SIZE = 2;
+
+/**
+ * A light's own place in its modulation cycle, derived from its id.
+ *
+ * Two candles placed from the same defaults, or one duplicated from the
+ * other, would otherwise share every number and flicker in lockstep. Their
+ * ids differ, so this makes their flicker differ, with no clock and no
+ * randomness — the same light seeds the same way on every load.
+ */
+export function placedLightSeedFromInstanceId(instanceId: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < instanceId.length; index += 1) {
+    hash ^= instanceId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967296;
+}
+
+export function createPlacedLightModulation(
+  overrides: Partial<PlacedLightModulation> | null | undefined,
+  fallbackSeed: number
+): PlacedLightModulation {
+  return {
+    kind: overrides?.kind ?? "steady",
+    speed: overrides?.speed ?? 1,
+    amount: overrides?.amount ?? 0.2,
+    colorWobble: overrides?.colorWobble ?? 0.1,
+    seed: overrides?.seed ?? fallbackSeed
+  };
+}
+
+function createPlacedLightSpotConfig(
+  overrides: Partial<PlacedLightSpotConfig> | null | undefined
+): PlacedLightSpotConfig {
+  return {
+    angleDeg: overrides?.angleDeg ?? DEFAULT_PLACED_LIGHT_SPOT_ANGLE_DEG,
+    penumbra: overrides?.penumbra ?? DEFAULT_PLACED_LIGHT_SPOT_PENUMBRA,
+    projectedTextureId: overrides?.projectedTextureId ?? null
+  };
+}
+
+function createPlacedLightAreaConfig(
+  overrides: Partial<PlacedLightAreaConfig> | null | undefined
+): PlacedLightAreaConfig {
+  return {
+    width: overrides?.width ?? DEFAULT_PLACED_LIGHT_AREA_SIZE,
+    height: overrides?.height ?? DEFAULT_PLACED_LIGHT_AREA_SIZE
+  };
+}
+
+/**
+ * The only way to build a placed light. [LAW:single-enforcer] Load paths,
+ * commands and tests all come through here, which is what keeps a light's
+ * kind and its kind-specific fields agreeing: the kind decides which of
+ * `radius`, `spot` and `area` hold a value, and the rest are null no
+ * matter what the caller passed. Changing a light's kind through this
+ * factory drops the fields the new kind does not use, so nothing stale
+ * rides along to the next save.
+ */
+export function createPlacedLight(
+  overrides: Partial<PlacedLight> = {}
+): PlacedLight {
+  const instanceId = overrides.instanceId ?? createPlacedLightIdValue();
+  const kind = overrides.kind ?? "point";
+  return {
+    instanceId,
+    kind,
+    displayName: overrides.displayName ?? "Placed Light",
+    parentFolderId: overrides.parentFolderId ?? null,
+    enabled: overrides.enabled ?? true,
+    color: overrides.color ?? DEFAULT_PLACED_LIGHT_COLOR,
+    intensity: overrides.intensity ?? DEFAULT_PLACED_LIGHT_INTENSITY,
+    radius:
+      kind === "area"
+        ? null
+        : (overrides.radius ?? DEFAULT_PLACED_LIGHT_RADIUS),
+    spot: kind === "spot" ? createPlacedLightSpotConfig(overrides.spot) : null,
+    area: kind === "area" ? createPlacedLightAreaConfig(overrides.area) : null,
+    modulation: createPlacedLightModulation(
+      overrides.modulation,
+      placedLightSeedFromInstanceId(instanceId)
+    ),
+    transform: {
+      position: overrides.transform?.position ?? [0, 0, 0],
+      rotation: overrides.transform?.rotation ?? [0, 0, 0],
+      scale: overrides.transform?.scale ?? [1, 1, 1]
+    }
+  };
+}
+
 /**
  * Placed-asset instanceIds hidden by folder visibility (Plan 070.3, #349).
  * The Scene Explorer's per-folder eye is EPHEMERAL authoring visibility (like
@@ -1136,6 +1332,7 @@ export function createDefaultRegion(options: {
     displayName: options.displayName,
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     placedAssets: [],
+    placedLights: [],
     folders: [],
     environmentBinding: {
       defaultEnvironmentId: options.defaultEnvironmentId ?? null

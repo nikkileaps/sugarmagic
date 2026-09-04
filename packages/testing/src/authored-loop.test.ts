@@ -12,6 +12,7 @@ import {
 
 function makeTestRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "test-region", schema: "RegionDocument", version: 1 },
     displayName: "Test Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
@@ -150,6 +151,7 @@ describe("first authored loop", () => {
       sceneId: "scene:test",
       regionId: region.identity.id,
       overlay: {
+          placedLights: [],
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],

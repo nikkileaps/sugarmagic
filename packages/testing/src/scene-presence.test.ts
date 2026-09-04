@@ -16,6 +16,7 @@ import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
 function makeRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "station", schema: "RegionDocument", version: 1 },
     displayName: "Station",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
@@ -138,6 +139,7 @@ describe("layout scene presences", () => {
       sceneId: "scene:test",
       regionId: region.identity.id,
       overlay: {
+          placedLights: [],
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],

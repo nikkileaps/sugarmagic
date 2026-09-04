@@ -51,6 +51,7 @@ function makeProject(): GameProject {
 
 function makeRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: {
       id: "arrival_station",
       schema: "RegionDocument",

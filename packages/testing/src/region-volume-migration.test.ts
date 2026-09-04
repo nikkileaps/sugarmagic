@@ -45,6 +45,7 @@ const AREAS: RegionAreaDefinition[] = [
 
 function legacyRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "region-vol", schema: "RegionDocument", version: 1 },
     displayName: "Volume Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

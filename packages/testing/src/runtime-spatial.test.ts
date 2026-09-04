@@ -18,6 +18,7 @@ import {
 
 function makeRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "wordlark-hollow", schema: "RegionDocument", version: 1 },
     displayName: "Wordlark Hollow Station",
     lorePageId: "root.locations.wordlark_hollow_station",

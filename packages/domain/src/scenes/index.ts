@@ -29,11 +29,13 @@
 import { createScopedId } from "../shared/identity";
 import {
   createPlacedAssetInstance,
+  createPlacedLight,
   createRegionItemPresence,
   createRegionNPCPresence,
   createRegionPlayerPresence,
   type PlacedAssetInstance,
   type PlacedAssetSurfaceSlotOverride,
+  type PlacedLight,
   type RegionItemPresence,
   type RegionNavMeshArtifact,
   type RegionNPCPresence,
@@ -223,6 +225,9 @@ export interface RegionSceneOverlay {
   npcPresences: RegionNPCPresence[];
   playerPresence: RegionPlayerPresence | null;
   placedAssets: PlacedAssetInstance[];
+  /** Lights this Scene adds to its region. Present only while the Scene is
+   *  active, the same way its placed assets are. */
+  placedLights: PlacedLight[];
   folders: RegionSceneFolder[];
   /** Plan 068.2 — Scene restyles of base placements, by instanceId. */
   assetAppearanceOverrides: Record<string, SceneAssetAppearanceOverride>;
@@ -292,6 +297,7 @@ export function createRegionSceneOverlay(
     npcPresences: [...(overrides.npcPresences ?? [])],
     playerPresence: overrides.playerPresence ?? null,
     placedAssets: [...(overrides.placedAssets ?? [])],
+    placedLights: [...(overrides.placedLights ?? [])],
     folders: [...(overrides.folders ?? [])],
     suppressedRegionIds: [...(overrides.suppressedRegionIds ?? [])],
     assetAppearanceOverrides: Object.fromEntries(
@@ -486,6 +492,9 @@ function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
       : null,
     placedAssets: (record.placedAssets ?? []).map((asset) =>
       createPlacedAssetInstance(asset)
+    ),
+    placedLights: (record.placedLights ?? []).map((light) =>
+      createPlacedLight(light)
     ),
     folders: [...(record.folders ?? [])],
     suppressedRegionIds: (record.suppressedRegionIds ?? []).filter(

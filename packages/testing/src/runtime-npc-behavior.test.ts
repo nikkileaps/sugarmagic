@@ -20,6 +20,7 @@ import {
 
 function makeRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "wordlark-hollow", schema: "RegionDocument", version: 1 },
     displayName: "Wordlark Hollow Station",
     placement: {
@@ -1007,6 +1008,7 @@ describe("069.9 — path-following state machine across frames", () => {
 describe("time-window task gating (074.4)", () => {
   function makeTimedRegion(): RegionDocument {
     return {
+      placedLights: [],
       identity: { id: "wordlark-hollow", schema: "RegionDocument", version: 1 },
       displayName: "Wordlark Hollow",
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

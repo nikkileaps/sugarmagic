@@ -253,6 +253,7 @@ describe("cross-Scene copy", () => {
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
+              placedLights: [],
               playerPresence: null,
               npcPresences: [
                 createRegionNPCPresence({
@@ -312,6 +313,7 @@ describe("cross-Scene copy", () => {
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
+              placedLights: [],
               playerPresence: {
                 presenceId: "player:1",
                 transform: {
@@ -369,6 +371,7 @@ describe("cross-Scene copy", () => {
               assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
+              placedLights: [],
               playerPresence: null,
               npcPresences: [
                 createRegionNPCPresence({
