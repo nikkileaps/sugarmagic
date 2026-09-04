@@ -73,6 +73,10 @@ import type {
   SurfaceBrushSettings,
   ViewportStore
 } from "@sugarmagic/shell";
+import {
+  resolveSceneObjects,
+  type SceneObject
+} from "@sugarmagic/runtime-core";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
@@ -176,6 +180,15 @@ export interface LayoutWorkspaceViewProps {
 }
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
+
+/** What each scene-object kind is called where the author reads it. */
+const SCENE_OBJECT_KIND_LABELS: Record<SceneObject["kind"], string> = {
+  asset: "Asset",
+  player: "Player",
+  npc: "NPC",
+  item: "Item",
+  marker: "Marker"
+};
 
 const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
   folders: [],
@@ -631,6 +644,38 @@ export function useLayoutWorkspaceView(
       regionContents
     ]
   );
+
+  /**
+   * What the author has selected, named, when there is more than one of them.
+   * Empty for a single selection, which gets its own full inspector instead.
+   *
+   * Read through `resolveSceneObjects` so the names match what the rest of the
+   * app calls these objects, including its fallbacks for an agent with no
+   * definition behind it.
+   */
+  const selectedObjects = useMemo<SceneObject[]>(() => {
+    if (!region || selectedIds.length < 2) return [];
+    const byId = new Map(
+      resolveSceneObjects(region, {
+        activeScene,
+        includeMarkers: true,
+        playerDefinition,
+        itemDefinitions,
+        npcDefinitions
+      }).map((object) => [object.instanceId, object])
+    );
+    return selectedIds.flatMap((instanceId) => {
+      const object = byId.get(instanceId);
+      return object ? [object] : [];
+    });
+  }, [
+    region,
+    activeScene,
+    selectedIds,
+    playerDefinition,
+    itemDefinitions,
+    npcDefinitions
+  ]);
 
   /**
    * Whether scaling the selection along one axis would shear it. The same rule
@@ -1667,6 +1712,29 @@ export function useLayoutWorkspaceView(
         ) : selectedIds.length > 1 ? (
           <Stack gap="md">
             <FactRow label="Selected" value={`${selectedIds.length} objects`} />
+            {/* A readout, not a multi-object editor: the author needs to see
+                what the gizmo is about to move. Per-object fields stay with
+                the single-selection inspector. */}
+            <Stack gap={2}>
+              {selectedObjects.map((object) => (
+                <Group
+                  key={object.instanceId}
+                  justify="space-between"
+                  wrap="nowrap"
+                >
+                  <Text
+                    size="xs"
+                    truncate
+                    fw={object.instanceId === activeSelectionId ? 700 : 400}
+                  >
+                    {object.displayName}
+                  </Text>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {SCENE_OBJECT_KIND_LABELS[object.kind]}
+                  </Text>
+                </Group>
+              ))}
+            </Stack>
             {selectionShears ? (
               <Text size="xs" c="var(--sm-color-overlay0)">
                 Axis scale unavailable: these objects face different ways. The
