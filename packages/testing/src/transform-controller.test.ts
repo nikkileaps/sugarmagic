@@ -60,6 +60,7 @@ interface Harness {
   commits: TransformValues[];
   cancels: TransformValues[];
   hoverHandles: Array<string | null>;
+  previewsEnded: string[][];
   hoverTargets: Array<THREE.Object3D | null>;
 }
 
@@ -72,6 +73,7 @@ function makeHarness(options: {
   const previews: TransformValues[] = [];
   const commits: TransformValues[] = [];
   const cancels: TransformValues[] = [];
+  const previewsEnded: string[][] = [];
   const hoverHandles: Array<string | null> = [];
   const hoverTargets: Array<THREE.Object3D | null> = [];
 
@@ -113,6 +115,7 @@ function makeHarness(options: {
     onPreview: (subjects) => previews.push(...subjects.map((s) => s.values)),
     onCommit: (subjects) => commits.push(...subjects.map((s) => s.values)),
     onCancel: (subjects) => cancels.push(...subjects.map((s) => s.values)),
+    onPreviewEnded: (instanceIds) => previewsEnded.push([...instanceIds]),
     onSelect: () => {},
     onHoverHandle: (name) => hoverHandles.push(name),
     onHoverTarget: (object) => hoverTargets.push(object),
@@ -124,7 +127,15 @@ function makeHarness(options: {
     })
   });
 
-  return { controller, previews, commits, cancels, hoverHandles, hoverTargets };
+  return {
+    controller,
+    previews,
+    commits,
+    cancels,
+    previewsEnded,
+    hoverHandles,
+    hoverTargets
+  };
 }
 
 // With the camera 10 out at fov 60 / aspect 1, NDC x maps to world x
@@ -157,6 +168,50 @@ describe("transform controller drags", () => {
     h.controller.onPointerDown!(pointer(0, 0));
     h.controller.onPointerUp!(pointer(0, 0));
     expect(h.commits).toHaveLength(0);
+  });
+
+  it("ends the preview even when the drag committed nothing", () => {
+    // A preview left behind outranks the authored transform, so an object
+    // whose drag came back to where it started would stay pinned there.
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    h.controller.onPointerMove!(pointer(0, 0));
+    h.controller.onPointerUp!(pointer(0, 0));
+
+    expect(h.commits).toHaveLength(0);
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends the preview when the drag commits", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0));
+    h.controller.onPointerUp!(pointer(0.2, 0));
+
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends the preview when the drag is cancelled", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    h.controller.onCancel!();
+
+    expect(h.previewsEnded).toEqual([["instance-1"]]);
+  });
+
+  it("ends a drag once, however many times it is told to stop", () => {
+    const h = makeHarness({ gizmoHitName: "gizmo-move-x" });
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0));
+    h.controller.onPointerUp!(pointer(0.2, 0));
+    h.controller.onCancel!();
+    h.controller.onPointerUp!(pointer(0.2, 0));
+
+    expect(h.previewsEnded).toHaveLength(1);
+    expect(h.commits).toHaveLength(1);
+    expect(h.cancels).toHaveLength(0);
   });
 
   it("cancel restores the drag-start values", () => {
@@ -307,6 +362,7 @@ describe("dragging many objects", () => {
       onPreview: (subjects) => previews.push([...subjects]),
       onCommit: (subjects) => commits.push([...subjects]),
       onCancel: (subjects) => cancels.push([...subjects]),
+      onPreviewEnded: () => {},
       onSelect: () => {},
       onHoverHandle: () => {},
       onHoverTarget: () => {},
@@ -465,6 +521,7 @@ describe("selection intent", () => {
       onPreview: () => {},
       onCommit: () => {},
       onCancel: () => {},
+      onPreviewEnded: () => {},
       onSelect: (intent) => selects.push(intent),
       onHoverHandle: () => {},
       onHoverTarget: () => {},
@@ -533,6 +590,7 @@ describe("selection locking", () => {
       onPreview: () => {},
       onCommit: () => {},
       onCancel: () => {},
+      onPreviewEnded: () => {},
       onSelect: (id) => selects.push(id),
       onHoverHandle: () => {},
       onHoverTarget: (hit) => hovers.push(hit),

@@ -10,7 +10,7 @@ import type { TransformValues } from "./transform-controller";
 export type Vector3Tuple = [number, number, number];
 
 /** Scales below this collapse an object to nothing and cannot be undone by dragging back. */
-const MIN_SCALE = 0.01;
+export const MIN_SCALE = 0.01;
 
 /**
  * Where the gizmo sits for a selection: the mean of the selected objects'
@@ -134,23 +134,34 @@ export function applyDelta(
 }
 
 /**
- * Whether the selected objects point in more than one direction.
+ * Whether scaling this selection along one axis would shear it.
  *
- * Scaling such a selection along an axis about a shared pivot produces shear,
- * and a position/rotation/scale triple has no way to hold a sheared matrix --
- * the Blender manual puts it plainly: shear "can't be represented by location,
- * scale and rotation". Rather than write a wrong answer the axis scale handles
- * go unavailable, and uniform scale, which never shears, still works.
+ * `applyDelta` spreads the objects' origins along WORLD axes while multiplying
+ * each object's own scale, which is read along its LOCAL axes. Those two agree
+ * only where an object is unrotated. Where they disagree the arrangement
+ * stretches one way and the geometry stretches another, which is shear -- and
+ * a position/rotation/scale triple has no way to hold a sheared matrix. The
+ * Blender manual puts it plainly: shear "can't be represented by location,
+ * scale and rotation".
  *
- * Compared as quaternions so that two ways of writing the same turn count as
- * the same direction.
+ * So the question is not whether the objects agree with each other -- two props
+ * both turned 45 degrees shear exactly as badly as one turned and one not --
+ * but whether any of them is turned at all.
+ *
+ * One object is always safe: the pivot is its own origin, so there is no spread
+ * to disagree with, and scaling its local axes is what a single-object axis
+ * drag has always done.
  */
-export function hasMixedRotations(rotations: readonly Vector3Tuple[]): boolean {
+export function axisScaleWouldShear(
+  rotations: readonly Vector3Tuple[]
+): boolean {
   if (rotations.length < 2) return false;
-  const [first, ...rest] = rotations.map((rotation) =>
-    new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation, "XYZ"))
-  );
-  // A quaternion and its negation are the same rotation, so compare the
-  // absolute dot product: 1 means identical, less means they differ.
-  return rest.some((other) => Math.abs(first.dot(other)) < 1 - 1e-6);
+  return rotations.some((rotation) => {
+    const turn = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(...rotation, "XYZ")
+    );
+    // The identity quaternion is (0, 0, 0, +-1), so |w| is 1 exactly when the
+    // object is unrotated, whichever way round the quaternion was written.
+    return Math.abs(turn.w) < 1 - 1e-6;
+  });
 }

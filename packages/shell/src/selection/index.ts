@@ -46,7 +46,7 @@ export function emptySelection(
 export function clearSelection(
   selection: ShellSelectionState
 ): ShellSelectionState {
-  return { ...selection, entityIds: [] };
+  return replaceSelection(selection, []);
 }
 
 /**

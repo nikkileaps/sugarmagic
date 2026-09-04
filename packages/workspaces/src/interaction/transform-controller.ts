@@ -28,6 +28,7 @@ import {
 import {
   applyDelta,
   medianPivot,
+  MIN_SCALE,
   type SelectionDelta,
   type Vector3Tuple
 } from "./selection-transform";
@@ -120,6 +121,12 @@ export interface TransformControllerConfig {
   onCommit: (subjects: readonly DraggedSubject[]) => void;
   /** Every dragged object, back at the transform it started the drag with. */
   onCancel: (subjects: readonly DraggedSubject[]) => void;
+  /**
+   * The drag is over for these objects, however it ended. Whatever the preview
+   * put on screen has to be dropped here: a preview left behind outranks the
+   * authored transform, pinning the object where the drag left it.
+   */
+  onPreviewEnded: (instanceIds: readonly string[]) => void;
   onSelect: (intent: SelectionIntent) => void;
   /**
    * Whether a scene object may be selected or dragged (epic #226). The
@@ -162,7 +169,6 @@ function copyTransform(values: TransformValues): TransformValues {
   };
 }
 
-const MIN_SCALE = 0.01;
 /** Axis-scale grab points closer to the center than this can't drive
  *  a stable ratio (the axis handles sit ~1.3 gizmo units out, so only
  *  degenerate shaft grabs near the origin are affected). */
@@ -335,6 +341,22 @@ export function createTransformController(
     return { mode: "scale", factor };
   }
 
+  /**
+   * The one way a drag ends.
+   *
+   * Every exit runs `finish` and then reports the previews to drop, so a drag
+   * cannot leave a preview behind whatever it ends by: committing, cancelling,
+   * or moving nothing at all. The session is cleared first, because `finish`
+   * writes to stores and those writes can re-enter and end the drag again.
+   */
+  function endSession(finish: (ended: TransformSession) => void): void {
+    if (!session) return;
+    const ended = session;
+    session = null;
+    finish(ended);
+    config.onPreviewEnded(ended.subjects.map((subject) => subject.instanceId));
+  }
+
   /** Push the current state of every subject into the live preview. */
   function previewAll(activeSession: TransformSession): void {
     config.onPreview(
@@ -490,33 +512,32 @@ export function createTransformController(
     },
 
     onPointerUp(): void {
-      if (!session) return;
-      // Frozen/degenerate drags end with current === start; committing
-      // those would push no-op transform commands into undo history.
-      const moved = session.subjects.filter(
-        (subject) =>
-          JSON.stringify(subject.current) !== JSON.stringify(subject.start)
-      );
-      if (moved.length > 0) {
+      endSession((ended) => {
+        // Frozen/degenerate drags end with current === start; committing
+        // those would push no-op transform commands into undo history.
+        const moved = ended.subjects.filter(
+          (subject) =>
+            JSON.stringify(subject.current) !== JSON.stringify(subject.start)
+        );
+        if (moved.length === 0) return;
         config.onCommit(
           moved.map((subject) => ({
             instanceId: subject.instanceId,
             values: subject.current
           }))
         );
-      }
-      session = null;
+      });
     },
 
     onCancel(): void {
-      if (!session) return;
-      config.onCancel(
-        session.subjects.map((subject) => ({
-          instanceId: subject.instanceId,
-          values: subject.start
-        }))
-      );
-      session = null;
+      endSession((ended) => {
+        config.onCancel(
+          ended.subjects.map((subject) => ({
+            instanceId: subject.instanceId,
+            values: subject.start
+          }))
+        );
+      });
     }
   };
 }

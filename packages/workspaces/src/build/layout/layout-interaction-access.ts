@@ -14,15 +14,37 @@ const layoutWorkspacesByViewport = new WeakMap<
   LayoutWorkspaceInstance
 >();
 
+/** The same workspaces again, in a form that can be walked. */
+const attachedLayoutWorkspaces = new Set<LayoutWorkspaceInstance>();
+
 export function setLayoutWorkspaceForViewport(
   viewportElement: HTMLElement,
   workspace: LayoutWorkspaceInstance | null
 ): void {
+  const previous = layoutWorkspacesByViewport.get(viewportElement);
+  if (previous) attachedLayoutWorkspaces.delete(previous);
   if (workspace) {
     layoutWorkspacesByViewport.set(viewportElement, workspace);
+    attachedLayoutWorkspaces.add(workspace);
     return;
   }
   layoutWorkspacesByViewport.delete(viewportElement);
+}
+
+/**
+ * Abandon any viewport drag in progress, and say whether there was one.
+ *
+ * An application-wide command -- undo is the first -- changes the document
+ * while a drag is holding transforms it read at pointer-down. The drag has to
+ * end before that happens, or releasing the pointer writes those stale values
+ * back over the change.
+ */
+export function cancelActiveViewportGesture(): boolean {
+  let cancelled = false;
+  for (const workspace of attachedLayoutWorkspaces) {
+    if (workspace.inputRouter.cancelActiveGesture()) cancelled = true;
+  }
+  return cancelled;
 }
 
 export function getLayoutWorkspaceForViewport(

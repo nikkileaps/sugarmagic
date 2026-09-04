@@ -1,9 +1,8 @@
 /**
  * Where viewport selection attaches, and what may be selected there.
  *
- * The composer lock shipped unreachable: it tested for the Scene Composer
- * inside a controller that only ever attached in Build. Opening the gate makes
- * it live, so both halves are pinned here.
+ * Both halves are pinned: the gate deciding where the gizmo attaches, and the
+ * lock deciding what the Scene Composer lets an author touch once it has.
  */
 
 import { describe, expect, it } from "vitest";
@@ -34,7 +33,13 @@ const COMPOSER = at({
 });
 const STORY_STRUCTURE = at({ activeProductMode: "story" });
 
-/** A region owning one asset, one NPC, one item and the player. */
+/**
+ * A region owning one asset, one NPC, one item and the player.
+ *
+ * `regionOwns` reads only these four collections, so the cast stands in for
+ * the rest of a RegionDocument that no code under test looks at; spelling out
+ * a whole document here would say less about what the rule depends on.
+ */
 const REGION = {
   placedAssets: [{ instanceId: "region:crate" }],
   npcPresences: [{ presenceId: "region:warden" }],

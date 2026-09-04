@@ -117,6 +117,13 @@ export interface ViewportOverlayContext {
     opts?: { equalityFn?: (left: T, right: T) => boolean }
   ): () => void;
   subscribeFrame(listener: () => void): () => void;
+  /**
+   * Fires when the drawn scene has finished settling after a load or a rebuild.
+   * Overlays that hold references to drawn objects re-resolve here: a reload
+   * detaches the old object and attaches a replacement later, and nothing in
+   * the authored documents changes to say so.
+   */
+  subscribeRenderablesSettled(listener: () => void): () => void;
 }
 
 export type ViewportOverlayFactory = (

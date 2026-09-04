@@ -35,7 +35,7 @@ export {
 
 export {
   applyDelta,
-  hasMixedRotations,
+  axisScaleWouldShear,
   medianPivot,
   type SelectionDelta,
   type Vector3Tuple

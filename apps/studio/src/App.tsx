@@ -266,7 +266,10 @@ import {
 } from "./plugins/catalog";
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
-import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
+import {
+  cancelActiveViewportGesture,
+  resolveNPCInteractionOptions
+} from "@sugarmagic/workspaces";
 import { UIPreviewSession } from "./preview/UIPreviewSession";
 
 function renderPluginSectionGroup(
@@ -3960,6 +3963,10 @@ export function App() {
       if (!action) return;
       // The browser would otherwise run its own undo over the top of ours.
       event.preventDefault();
+      // A drag in progress is holding the transforms it read at pointer-down.
+      // Undoing under it would leave those stale values to be written back on
+      // release, so the drag is abandoned first.
+      cancelActiveViewportGesture();
       if (action === "undo") handleUndo();
       else handleRedo();
     };

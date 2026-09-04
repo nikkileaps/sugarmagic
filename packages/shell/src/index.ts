@@ -10,10 +10,8 @@ import type { CommandSurfaceRegistration } from "./commands";
 import type { InspectorHostModel } from "./inspector-host";
 import type { NavigationModel } from "./navigation";
 import {
-  addToSelection,
   clearSelection,
   emptySelection,
-  removeFromSelection,
   replaceSelection,
   toggleSelection,
   type ShellSelectionState
@@ -173,10 +171,6 @@ export interface ShellActions {
   setActiveEnvironmentId: (environmentId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   setSelection: (entityIds: string[]) => void;
-  /** Add one entity to the selection and make it active. */
-  addSelection: (entityId: string) => void;
-  /** Take one entity out of the selection. It stays the active member. */
-  removeSelection: (entityId: string) => void;
   /** Shift-click: in if it was out, out if it was in. Either way it is active. */
   toggleSelection: (entityId: string) => void;
   /** Deselect everything in this workspace, keeping the active member. */
@@ -527,14 +521,6 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
     setSelection: (entityIds) =>
       set((state) => ({
         selection: replaceSelection(state.selection, entityIds)
-      })),
-    addSelection: (entityId) =>
-      set((state) => ({
-        selection: addToSelection(state.selection, entityId)
-      })),
-    removeSelection: (entityId) =>
-      set((state) => ({
-        selection: removeFromSelection(state.selection, entityId)
       })),
     toggleSelection: (entityId) =>
       set((state) => ({

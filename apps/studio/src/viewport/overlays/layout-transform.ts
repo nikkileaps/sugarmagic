@@ -127,14 +127,24 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     }
   });
 
+  // A reload detaches a selected object and attaches its replacement later,
+  // which drops the outline drawn around it. Nothing in the authored documents
+  // changes to say so, so the outlines are rebuilt when the scene settles.
+  const unsubscribeSettled = context.subscribeRenderablesSettled(() => {
+    if (attached) {
+      layout.syncOverlays();
+    }
+  });
+
   const unsubscribeProjection = context.subscribeToProjection(
     ({ project, shell, viewport }) => ({
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
-      regionId: project.session
-        ? (getActiveRegion(project.session)?.identity.id ?? null)
-        : null,
+      // The region document itself, not just its id: the overlays read
+      // transforms out of it, so an edit or an undo that changes a rotation
+      // without changing what is selected still has to redraw them.
+      region: project.session ? getActiveRegion(project.session) : null,
       selectionIds: shell.selection.entityIds,
       // The active object is outlined differently from the rest, so a change
       // in which one is active has to redraw even when the same set stays
@@ -157,6 +167,7 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
 
   return () => {
     unsubscribeFrame();
+    unsubscribeSettled();
     unsubscribeProjection();
     detachWorkspace();
     layout.dispose();

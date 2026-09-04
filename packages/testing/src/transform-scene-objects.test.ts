@@ -39,6 +39,12 @@ function placedAsset(instanceId: string, x: number) {
   };
 }
 
+/**
+ * The cast covers the parts of a RegionDocument the executor never reads for a
+ * transform: it walks the placed assets and the presences and rewrites their
+ * transforms, so filling in the rest would say nothing about what is under
+ * test. It mirrors the fixture the scatter-brush command tests use.
+ */
 function makeTestRegion(): RegionDocument {
   return {
     identity: { id: REGION_ID, schema: "RegionDocument", version: 1 },

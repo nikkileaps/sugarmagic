@@ -85,9 +85,9 @@ import { AssetCollisionSection } from "./AssetCollisionSection";
 import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
-import { hasMixedRotations } from "../../interaction/selection-transform";
+import { axisScaleWouldShear } from "../../interaction/selection-transform";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
-import { singleTransformCommand } from "./layout-workspace";
+import { markersStayAlone, singleTransformCommand } from "./layout-workspace";
 
 // Vertical side rail (the Design > Animation viewport pattern): the
 // rail sits below the options-bar row, so an armed tool's settings
@@ -646,65 +646,68 @@ export function useLayoutWorkspaceView(
   );
 
   /**
-   * What the author has selected, named, when there is more than one of them.
-   * Empty for a single selection, which gets its own full inspector instead.
+   * Every scene object in the composed region, resolved on demand.
    *
-   * Read through `resolveSceneObjects` so the names match what the rest of the
-   * app calls these objects, including its fallbacks for an agent with no
-   * definition behind it.
+   * One way for this view to turn an instance id into an object, so the name
+   * shown, the kind a command is built from and the rotation the shear rule
+   * reads all come from the same place. Resolving is a full rebuild, so this
+   * runs when something asks rather than on every render.
    */
-  const selectedObjects = useMemo<SceneObject[]>(() => {
-    if (!region || selectedIds.length < 2) return [];
-    const byId = new Map(
-      resolveSceneObjects(region, {
-        activeScene,
-        includeMarkers: true,
-        playerDefinition,
-        itemDefinitions,
-        npcDefinitions
-      }).map((object) => [object.instanceId, object])
-    );
-    return selectedIds.flatMap((instanceId) => {
-      const object = byId.get(instanceId);
-      return object ? [object] : [];
+  const resolveObjectsNow = useCallback((): SceneObject[] => {
+    const currentRegion = getRegion();
+    if (!currentRegion) return [];
+    return resolveSceneObjects(currentRegion, {
+      activeScene: getActiveScene(),
+      includeMarkers: true,
+      playerDefinition,
+      itemDefinitions,
+      npcDefinitions
     });
   }, [
-    region,
-    activeScene,
-    selectedIds,
+    getRegion,
+    getActiveScene,
     playerDefinition,
     itemDefinitions,
     npcDefinitions
   ]);
 
+  const findSceneObject = useCallback(
+    (instanceId: string): SceneObject | null =>
+      resolveObjectsNow().find((object) => object.instanceId === instanceId) ??
+      null,
+    [resolveObjectsNow]
+  );
+
+  /**
+   * What the author has selected, named, when there is more than one of them.
+   * Empty for a single selection, which gets its own full inspector instead.
+   */
+  const selectedObjects = useMemo<SceneObject[]>(() => {
+    // Reading `region` is what ties this list to the document it describes:
+    // resolving goes through it, so an edit to the region rebuilds the list.
+    if (!region || selectedIds.length < 2) return [];
+    const byId = new Map(
+      resolveObjectsNow().map((object) => [object.instanceId, object])
+    );
+    return selectedIds.flatMap((instanceId) => {
+      const object = byId.get(instanceId);
+      return object ? [object] : [];
+    });
+  }, [resolveObjectsNow, selectedIds, region]);
+
   /**
    * Whether scaling the selection along one axis would shear it. The same rule
    * greys the gizmo's axis scale handles; this is what tells the author why.
+   * Both read the rotations off the same resolved objects, so the greyed
+   * handles and the explanation cannot disagree about which objects count.
    */
-  const selectionShears = useMemo(() => {
-    const rotationById = new Map<string, [number, number, number]>();
-    for (const asset of regionContents.placedAssets) {
-      rotationById.set(asset.instanceId, asset.transform.rotation);
-    }
-    for (const presence of regionContents.npcPresences) {
-      rotationById.set(presence.presenceId, presence.transform.rotation);
-    }
-    for (const presence of regionContents.itemPresences) {
-      rotationById.set(presence.presenceId, presence.transform.rotation);
-    }
-    if (regionContents.playerPresence) {
-      rotationById.set(
-        regionContents.playerPresence.presenceId,
-        regionContents.playerPresence.transform.rotation
-      );
-    }
-    return hasMixedRotations(
-      selectedIds.flatMap((instanceId) => {
-        const rotation = rotationById.get(instanceId);
-        return rotation ? [rotation] : [];
-      })
-    );
-  }, [regionContents, selectedIds]);
+  const selectionShears = useMemo(
+    () =>
+      axisScaleWouldShear(
+        selectedObjects.map((object) => object.transform.rotation)
+      ),
+    [selectedObjects]
+  );
 
   const selectedAsset = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
@@ -806,28 +809,7 @@ export function useLayoutWorkspaceView(
     ) => {
       const currentRegion = getRegion();
       if (!currentRegion) return;
-      const currentContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
-      const asset = currentContents.placedAssets.find(
-        (candidate) => candidate.instanceId === instanceId
-      );
-      const playerPresence =
-        currentContents.playerPresence?.presenceId === instanceId
-          ? currentContents.playerPresence
-          : null;
-      const npcPresence =
-        currentContents.npcPresences.find(
-          (candidate) => candidate.presenceId === instanceId
-        ) ?? null;
-      const itemPresence =
-        currentContents.itemPresences.find(
-          (candidate) => candidate.presenceId === instanceId
-        ) ?? null;
-      const marker =
-        (currentRegion.markers ?? []).find(
-          (candidate) => candidate.markerId === instanceId
-        ) ?? null;
-      const source =
-        asset ?? playerPresence ?? npcPresence ?? itemPresence ?? marker;
+      const source = findSceneObject(instanceId);
       if (!source) return;
 
       const nextPosition: [number, number, number] = [
@@ -842,25 +824,20 @@ export function useLayoutWorkspaceView(
       if (transformKind === "rotation") nextRotation[axis] = value;
       if (transformKind === "scale") nextScale[axis] = value;
 
-      const kind = asset
-        ? ("asset" as const)
-        : marker
-          ? ("marker" as const)
-          : playerPresence
-            ? ("player" as const)
-            : itemPresence
-              ? ("item" as const)
-              : ("npc" as const);
-
       onCommand(
-        singleTransformCommand(kind, currentRegion.identity.id, instanceId, {
-          position: nextPosition,
-          rotation: nextRotation,
-          scale: nextScale
-        })
+        singleTransformCommand(
+          source.kind,
+          currentRegion.identity.id,
+          instanceId,
+          {
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        )
       );
     },
-    [getRegion, getRegionContents, onCommand]
+    [findSceneObject, getRegion, onCommand]
   );
 
   const handleSetNPCPresenceLabel = useCallback(
@@ -1305,52 +1282,47 @@ export function useLayoutWorkspaceView(
     [onCommand, onSelect, region]
   );
 
+  /**
+   * A click in the Scene Explorer, put through the same rules a viewport click
+   * goes through before it reaches the selection.
+   */
+  const selectFromTree = useCallback(
+    (instanceId: string, extend: boolean) => {
+      const intent = markersStayAlone(
+        { kind: extend ? "toggle" : "replace", instanceId },
+        selectedIds,
+        (id) => findSceneObject(id)?.kind ?? null
+      );
+      if (intent.kind === "toggle") {
+        onToggleSelect(intent.instanceId);
+        return;
+      }
+      onSelect(intent.kind === "replace" ? [intent.instanceId] : []);
+    },
+    [findSceneObject, onSelect, onToggleSelect, selectedIds]
+  );
+
   const handleSnapToOrigin = useCallback(() => {
     if (!region || !contextMenu) return;
 
-    const asset = regionContents.placedAssets.find(
-      (entry) => entry.instanceId === contextMenu.instanceId
-    );
-    const playerPresence =
-      regionContents.playerPresence?.presenceId === contextMenu.instanceId
-        ? regionContents.playerPresence
-        : null;
-    const npcPresence =
-      regionContents.npcPresences.find(
-        (entry) => entry.presenceId === contextMenu.instanceId
-      ) ?? null;
-    const itemPresence =
-      regionContents.itemPresences.find(
-        (entry) => entry.presenceId === contextMenu.instanceId
-      ) ?? null;
-    const marker =
-      (region.markers ?? []).find(
-        (entry) => entry.markerId === contextMenu.instanceId
-      ) ?? null;
-    const source =
-      asset ?? playerPresence ?? npcPresence ?? itemPresence ?? marker;
+    const source = findSceneObject(contextMenu.instanceId);
     if (!source) return;
 
-    const kind = asset
-      ? ("asset" as const)
-      : marker
-        ? ("marker" as const)
-        : playerPresence
-          ? ("player" as const)
-          : itemPresence
-            ? ("item" as const)
-            : ("npc" as const);
-
     onCommand(
-      singleTransformCommand(kind, region.identity.id, contextMenu.instanceId, {
-        position: [0, 0, 0],
-        rotation: source.transform.rotation,
-        scale: source.transform.scale
-      })
+      singleTransformCommand(
+        source.kind,
+        region.identity.id,
+        contextMenu.instanceId,
+        {
+          position: [0, 0, 0],
+          rotation: source.transform.rotation,
+          scale: source.transform.scale
+        }
+      )
     );
 
     setContextMenu(null);
-  }, [contextMenu, onCommand, region, regionContents]);
+  }, [contextMenu, findSceneObject, onCommand, region]);
 
   // Plan 058 §058.3 — classify the context-menu target for the
   // scope-conversion / cross-Scene-copy actions.
@@ -1483,13 +1455,11 @@ export function useLayoutWorkspaceView(
             selectedIds={selectedIds}
             activeInstanceId={activeSelectionId}
             selectedFolderId={selectedFolderId}
-            // Shift extends here exactly as it does in the viewport. Blender's
-            // own Outliner uses a different modifier from its viewport; one
-            // gesture meaning one thing throughout is worth more than matching
-            // that split.
-            onSelect={(id, { extend }) =>
-              extend ? onToggleSelect(id) : onSelect([id])
-            }
+            // Shift extends here, the same gesture the viewport uses, and
+            // through the same marker rule -- a marker that could join a
+            // selection from the tree but not from the viewport would still
+            // break the one-drag-one-undo-step guarantee.
+            onSelect={(id, { extend }) => selectFromTree(id, extend)}
             onSelectFolder={(folderId) => {
               setSelectedFolderState({
                 regionId: region.identity.id,
@@ -1737,7 +1707,7 @@ export function useLayoutWorkspaceView(
             </Stack>
             {selectionShears ? (
               <Text size="xs" c="var(--sm-color-overlay0)">
-                Axis scale unavailable: these objects face different ways. The
+                Axis scale unavailable: some of these objects are rotated. The
                 centre handle still scales them evenly.
               </Text>
             ) : null}

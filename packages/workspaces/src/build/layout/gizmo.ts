@@ -461,6 +461,8 @@ export interface ObjectHulls {
 }
 
 const HULL_SCALE = 1.035;
+/** Held rather than rebuilt: the sync below runs per outline per frame. */
+const HULL_SCALE_VECTOR = new THREE.Vector3(HULL_SCALE, HULL_SCALE, HULL_SCALE);
 
 /**
  * Outlines around scene objects: an enlarged back-face shell, done as geometry
@@ -562,22 +564,24 @@ export function createObjectHulls(name: string): ObjectHulls {
       this.syncTransform();
     },
     syncTransform() {
-      for (const [target, { group }] of [...hulls]) {
+      // This runs every frame per outlined object, so it collects the targets
+      // to drop rather than copying the whole map to iterate it safely.
+      let detached: THREE.Object3D[] | null = null;
+      for (const [target, { group }] of hulls) {
         // A target can leave the scene with no pointer move to re-aim the
         // outline (delete key, undo, representation swap). Drop it, or a ghost
         // outline follows a detached root with disposed geometries.
         if (!target.parent) {
-          dropHull(target);
+          (detached ??= []).push(target);
           continue;
         }
         target.updateWorldMatrix(true, false);
-        group.matrix
-          .copy(target.matrixWorld)
-          .scale(new THREE.Vector3(HULL_SCALE, HULL_SCALE, HULL_SCALE));
+        group.matrix.copy(target.matrixWorld).scale(HULL_SCALE_VECTOR);
         // The group keeps its own matrix, so three.js has to be told the world
         // matrix derived from it is stale.
         group.matrixWorldNeedsUpdate = true;
       }
+      if (detached) for (const target of detached) dropHull(target);
     },
     dispose() {
       root.clear();

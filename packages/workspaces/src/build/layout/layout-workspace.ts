@@ -27,7 +27,7 @@ import {
   createTransformController,
   gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
-  hasMixedRotations,
+  axisScaleWouldShear,
   medianPivot,
   type DraggedSubject,
   type InputRouter,
@@ -113,11 +113,9 @@ export interface LayoutWorkspaceInstance {
  * the transform itself; a marker carries a patch instead, which is why it
  * cannot ride along in a batch with the others.
  *
- * This used to be decided in several places, and one of them ended in an
- * unguarded "anything else is an NPC". That fired a presence command for a
- * marker: no NPC had that id, nothing changed, and the gizmo snapped back to
- * the authored position with no error anywhere. The exhaustive switch and the
- * `never` below are what stop a new kind from doing that again.
+ * The switch is exhaustive and the `never` below holds it that way: a kind
+ * with no answer here stops the build rather than falling through to whichever
+ * command happens to be last.
  */
 export type TransformCommit =
   | {
@@ -162,7 +160,7 @@ export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
     default: {
       const unhandled: never = kind;
       throw new Error(
-        `[layout-workspace] no transform command for scene object kind ${unhandled}`
+        `[layout-workspace] no transform command for scene object kind ${unhandled}; give it a case in transformCommitFor before it can be moved.`
       );
     }
   }
@@ -349,14 +347,13 @@ export function createLayoutWorkspace(
   }
 
   /**
-   * Whether scaling this selection along one axis would shear it, which a
-   * position/rotation/scale triple cannot record.
+   * Whether scaling these objects along one axis would shear them. Takes the
+   * objects rather than resolving them, so a caller that has already resolved
+   * the selection asks the question against that same snapshot.
    */
-  function axisScaleShears(): boolean {
-    return hasMixedRotations(
-      getSceneObjects(config.getSelectedIds()).map(
-        (object) => object.transform.rotation
-      )
+  function axisScaleShears(objects: readonly SceneObject[]): boolean {
+    return axisScaleWouldShear(
+      objects.map((object) => object.transform.rotation)
     );
   }
 
@@ -388,7 +385,8 @@ export function createLayoutWorkspace(
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedIds: config.getSelectedIds,
-      isAxisScaleAvailable: () => !axisScaleShears(),
+      isAxisScaleAvailable: () =>
+        !axisScaleShears(getSceneObjects(config.getSelectedIds())),
       isSelectable: config.isSelectable,
       getTransform,
       onPreview: showDrag,
@@ -400,16 +398,17 @@ export function createLayoutWorkspace(
           aggregateId: region.identity.id
         };
 
+        // One resolve for the whole drag. Asking per subject rebuilt every
+        // scene object in the region once per dragged object.
+        const kindById = new Map(
+          getSceneObjects(subjects.map((subject) => subject.instanceId)).map(
+            (object) => [object.instanceId, object.kind]
+          )
+        );
         const resolved = subjects.flatMap(({ instanceId, values }) => {
-          const sceneObject = getSceneObject(instanceId);
-          return sceneObject
-            ? [
-                {
-                  instanceId,
-                  values,
-                  commit: transformCommitFor(sceneObject.kind)
-                }
-              ]
+          const kind = kindById.get(instanceId);
+          return kind
+            ? [{ instanceId, values, commit: transformCommitFor(kind) }]
             : [];
         });
 
@@ -419,16 +418,14 @@ export function createLayoutWorkspace(
         for (const { instanceId, values } of resolved.filter(
           (entry) => entry.commit.via === "marker-patch"
         )) {
-          const { position, rotation, scale } = values;
-          config.onCommand({
-            kind: "UpdateRegionMarker",
-            target,
-            subject: { subjectKind: "region-marker", subjectId: instanceId },
-            payload: {
-              markerId: instanceId,
-              patch: { transform: { position, rotation, scale } }
-            }
-          });
+          config.onCommand(
+            singleTransformCommand(
+              "marker",
+              region.identity.id,
+              instanceId,
+              values
+            )
+          );
         }
 
         const transformed = resolved.flatMap((entry) =>
@@ -456,20 +453,13 @@ export function createLayoutWorkspace(
             payload: { subjects: transformed }
           });
         }
-
-        // The authored transforms now hold what the drag produced, so the
-        // drafts have done their job. Leaving them would keep overriding the
-        // authored values and a later undo would change nothing on screen.
-        config.onClearPreviewTransforms(
-          resolved.map((entry) => entry.instanceId)
-        );
+      },
+      onPreviewEnded(instanceIds) {
+        config.onClearPreviewTransforms([...instanceIds]);
       },
       onCancel(subjects) {
-        // Dropping the drafts is the whole of an abandoned drag: what is drawn
-        // falls back to the authored transforms, which never changed.
-        config.onClearPreviewTransforms(
-          subjects.map((subject) => subject.instanceId)
-        );
+        // The previews are dropped by onPreviewEnded; what is left is putting
+        // the gizmo back where the drag started.
         const pivot = medianPivot(
           subjects.map((subject) => subject.values.position)
         );
@@ -478,11 +468,21 @@ export function createLayoutWorkspace(
         originMarker.setPosition(pivot);
       },
       onSelect(intent) {
+        const selectedIds = config.getSelectedIds();
+        // One resolve for the click. Asking per id rebuilt the region's scene
+        // objects once for every already-selected object, on every click.
+        const kindById = new Map(
+          getSceneObjects(
+            intent.kind === "clear"
+              ? selectedIds
+              : [intent.instanceId, ...selectedIds]
+          ).map((object) => [object.instanceId, object.kind])
+        );
         config.onSelect(
           markersStayAlone(
             intent,
-            config.getSelectedIds(),
-            (instanceId) => getSceneObject(instanceId)?.kind ?? null
+            selectedIds,
+            (instanceId) => kindById.get(instanceId) ?? null
           )
         );
       },
@@ -492,6 +492,10 @@ export function createLayoutWorkspace(
         gizmo.setHoveredHandle(handleName);
       },
       onHoverTarget(object) {
+        // Hover fires on every pointer move, and re-syncing walks the scene
+        // graph once per selected object. Nothing changes while the cursor
+        // stays over the same thing.
+        if (object === hoveredObject) return;
         hoveredObject = object;
         syncHulls();
       }
@@ -597,7 +601,7 @@ export function createLayoutWorkspace(
       const selected = getSceneObjects(config.getSelectedIds());
       // One reading of the rule feeds both the greyed handles and the refusal
       // to drag them, so what is shown and what is allowed cannot disagree.
-      gizmo.setAxisScaleAvailable(!axisScaleShears());
+      gizmo.setAxisScaleAvailable(!axisScaleShears(selected));
       const pivot = medianPivot(selected.map((o) => o.transform.position));
       if (!pivot) {
         gizmo.setVisible(false);

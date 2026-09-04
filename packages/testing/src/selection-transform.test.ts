@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDelta,
-  hasMixedRotations,
+  axisScaleWouldShear,
   type Vector3Tuple
 } from "@sugarmagic/workspaces";
 
@@ -113,25 +113,26 @@ describe("applying a scale", () => {
   });
 });
 
-describe("mixed rotations", () => {
-  it("finds nothing mixed in an empty or single selection", () => {
-    expect(hasMixedRotations([])).toBe(false);
-    expect(hasMixedRotations([[0, 1, 0]])).toBe(false);
+describe("when axis scale would shear", () => {
+  it("allows a single object, rotated or not", () => {
+    // Its own origin is the pivot, so there is no spread to disagree with.
+    expect(axisScaleWouldShear([])).toBe(false);
+    expect(axisScaleWouldShear([[0, 1, 0]])).toBe(false);
   });
 
-  it("finds nothing mixed when every object faces the same way", () => {
+  it("allows several objects when none of them is rotated", () => {
     expect(
-      hasMixedRotations([
-        [0, 1, 0],
-        [0, 1, 0],
-        [0, 1, 0]
+      axisScaleWouldShear([
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
       ])
     ).toBe(false);
   });
 
-  it("spots one object facing a different way", () => {
+  it("refuses when one object is rotated", () => {
     expect(
-      hasMixedRotations([
+      axisScaleWouldShear([
         [0, 0, 0],
         [0, 0, 0],
         [0, 0.7, 0]
@@ -139,12 +140,33 @@ describe("mixed rotations", () => {
     ).toBe(true);
   });
 
-  it("treats a full turn as the same direction, not a different one", () => {
+  it("refuses when every object shares the SAME rotation", () => {
+    // The origins spread along world axes while each object scales along its
+    // own, so objects agreeing with each other does not make the result right.
     expect(
-      hasMixedRotations([
+      axisScaleWouldShear([
+        [0, Math.PI / 4, 0],
+        [0, Math.PI / 4, 0]
+      ])
+    ).toBe(true);
+  });
+
+  it("treats a full turn as unrotated, not as a rotation", () => {
+    expect(
+      axisScaleWouldShear([
         [0, 0, 0],
         [0, Math.PI * 2, 0]
       ])
     ).toBe(false);
+  });
+
+  it("spots a rotation about any axis", () => {
+    for (const rotation of [
+      [0.6, 0, 0],
+      [0, 0.6, 0],
+      [0, 0, 0.6]
+    ] as Vector3Tuple[]) {
+      expect(axisScaleWouldShear([[0, 0, 0], rotation])).toBe(true);
+    }
   });
 });

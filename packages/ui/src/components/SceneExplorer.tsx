@@ -521,7 +521,13 @@ function TreeNode({
         node={node}
         depth={depth}
         isSelected={selectedIds.includes(node.instanceId)}
-        isActive={activeInstanceId === node.instanceId}
+        // The active member outlives being deselected, so a row only wears the
+        // active mark while it is also selected -- otherwise the tree keeps
+        // highlighting a row after the author has cleared the selection.
+        isActive={
+          selectedIds.includes(node.instanceId) &&
+          activeInstanceId === node.instanceId
+        }
         onSelect={onSelect}
         onToggleVisibility={onToggleVisibility}
         onOpenContextMenu={onOpenContextMenu}

@@ -34,6 +34,7 @@ export {
 } from "./LayoutWorkspaceView";
 
 export {
+  cancelActiveViewportGesture,
   getLayoutWorkspaceForViewport,
   setLayoutWorkspaceForViewport
 } from "./layout-interaction-access";

@@ -216,6 +216,8 @@ export function createAuthoringViewport(
 
   let projectionMode: "perspective" | "orthographic-top" = "perspective";
   let activeCamera: THREE.Camera = perspectiveCamera;
+  /** Overlays waiting to hear that the drawn scene has settled. */
+  const renderablesSettledListeners = new Set<() => void>();
 
   const renderView: RenderView = createRenderView({
     engine: options.engine,
@@ -469,7 +471,10 @@ export function createAuthoringViewport(
         renderView.enableShadowsOnObject(renderableRoot),
       grouping: true,
       isInstanceable: assetObjectIsInstanceable,
-      onSettled: () => options.onRenderablesSettled?.(),
+      onSettled: () => {
+        options.onRenderablesSettled?.();
+        for (const listener of renderablesSettledListeners) listener();
+      },
       // Every authored renderable root carries the scene-object marker so the
       // single hit-test enforcer + surface painting can resolve it (was set by
       // the old createRenderableRoot; the reconciler doesn't know this key, so
@@ -797,7 +802,13 @@ export function createAuthoringViewport(
           texture.needsUpdate = true;
           renderView.markSceneMaterialsDirty();
         },
-        subscribeFrame: renderView.subscribeFrame
+        subscribeFrame: renderView.subscribeFrame,
+        subscribeRenderablesSettled: (listener: () => void) => {
+          renderablesSettledListeners.add(listener);
+          return () => {
+            renderablesSettledListeners.delete(listener);
+          };
+        }
       };
       overlayTeardowns = (options.overlays ?? []).map((overlay) =>
         overlay(overlayContext)
