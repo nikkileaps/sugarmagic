@@ -12,6 +12,7 @@ import {
   type RegionDocument,
   type RegionItemPresence,
   type PlacedAssetInstance,
+  type PlacedLight,
   type RegionNPCPresence,
   type RegionMarker,
   type RegionPlayerPresence,
@@ -60,7 +61,33 @@ export interface SceneObjectCapsuleSpec {
   color: number;
 }
 
-export type SceneObjectKind = "asset" | "player" | "npc" | "item" | "marker";
+export type SceneObjectKind =
+  | "asset"
+  | "player"
+  | "npc"
+  | "item"
+  | "marker"
+  | "light";
+
+/**
+ * Every scene-object kind, derived from the type rather than written out
+ * beside it. The record is keyed by the union, so leaving a kind out of it
+ * stops the build; a plain array of the same strings would not.
+ */
+const SCENE_OBJECT_KIND_PRESENT: Record<SceneObjectKind, true> = {
+  asset: true,
+  player: true,
+  npc: true,
+  item: true,
+  marker: true,
+  light: true
+};
+
+// Object.keys widens to string[]; the record above is what makes these
+// exactly the union's members.
+export const SCENE_OBJECT_KINDS = Object.keys(
+  SCENE_OBJECT_KIND_PRESENT
+) as SceneObjectKind[];
 
 export interface SceneObject {
   instanceId: string;
@@ -107,6 +134,12 @@ export interface SceneResolutionOptions {
    */
   includeMarkers?: boolean;
   /**
+   * Draw the region's placed lights as objects an author can click and drag.
+   * Studio passes true; the game leaves it false, because in play a light is
+   * something the world is lit by, not something standing in it.
+   */
+  includeLights?: boolean;
+  /**
    * Plan 058 §058.1 — the active narrative Scene whose overlay
    * composes onto the region base (Pattern 1: Base + Overlay).
    * Null/omitted composes base-only: placed assets from the
@@ -126,6 +159,7 @@ export function resolveSceneObjects(
     npcDefinitions = [],
     includePlayerPresence = true,
     includeMarkers = false,
+    includeLights = false,
     activeScene = null
   } = options;
   const contents = composeRegionContents(region, activeScene);
@@ -154,6 +188,15 @@ export function resolveSceneObjects(
   if (includeMarkers) {
     for (const marker of region.markers ?? []) {
       sceneObjects.push(createMarkerSceneObject(marker));
+    }
+  }
+
+  // Lights come out of the composed contents, unlike markers: a Scene can add
+  // its own lights, and reading the region alone would leave those invisible
+  // and unselectable while that Scene is active.
+  if (includeLights) {
+    for (const light of contents.placedLights) {
+      sceneObjects.push(createPlacedLightSceneObject(light));
     }
   }
 
@@ -424,6 +467,39 @@ function createMarkerSceneObject(marker: RegionMarker): SceneObject {
     representationKey: "marker",
     capsule: { height: 1.6, radius: 0.25, color: 0xf9e2af },
     // Nothing collides with a marker; it is a place, not a body.
+    collider: null
+  };
+}
+
+/**
+ * The handle an author grabs a placed light by. It carries no model and no
+ * body: what draws at this transform is the authoring viewport's business,
+ * and what the light actually lights is the render side's. This object exists
+ * so a light can be picked, selected and dragged like anything else.
+ *
+ * The kind rides in `representationKey` so changing a light from point to
+ * spot rebuilds what stands in for it, rather than leaving the old shape.
+ */
+function createPlacedLightSceneObject(light: PlacedLight): SceneObject {
+  return {
+    instanceId: light.instanceId,
+    kind: "light",
+    displayName: light.displayName,
+    assetDefinitionId: null,
+    assetKind: null,
+    modelSourcePath: null,
+    targetModelHeight: null,
+    effectiveShaders: { surface: null, deform: null, effect: null },
+    effectiveMaterialSlots: [],
+    effectiveShader: null,
+    transform: {
+      position: light.transform.position,
+      rotation: light.transform.rotation,
+      scale: light.transform.scale
+    },
+    representationKey: `light:${light.kind}`,
+    capsule: null,
+    // Nothing collides with a light.
     collider: null
   };
 }

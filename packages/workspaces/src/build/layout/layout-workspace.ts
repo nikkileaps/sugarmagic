@@ -109,9 +109,14 @@ export interface LayoutWorkspaceInstance {
 }
 
 /**
- * How a scene object of this kind records a new transform. Four kinds carry
+ * How a scene object of this kind records a new transform. Five kinds carry
  * the transform itself; a marker carries a patch instead, which is why it
  * cannot ride along in a batch with the others.
+ *
+ * `names` says which id the command's payload carries, so the caller reads it
+ * off the answer instead of comparing against a command name. Pairing
+ * `names: "instance"` with a presence command does not typecheck, so the two
+ * halves cannot drift apart.
  *
  * The switch is exhaustive and the `never` below holds it that way: a kind
  * with no answer here stops the build rather than falling through to whichever
@@ -120,8 +125,14 @@ export interface LayoutWorkspaceInstance {
 export type TransformCommit =
   | {
       via: "transform";
+      names: "instance";
+      commandKind: "TransformPlacedAsset" | "TransformPlacedLight";
+      subjectKind: TransformSubject["subjectKind"];
+    }
+  | {
+      via: "transform";
+      names: "presence";
       commandKind:
-        | "TransformPlacedAsset"
         | "TransformPlayerPresence"
         | "TransformNPCPresence"
         | "TransformItemPresence";
@@ -134,24 +145,35 @@ export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
     case "asset":
       return {
         via: "transform",
+        names: "instance",
         commandKind: "TransformPlacedAsset",
         subjectKind: "placed-asset"
+      };
+    case "light":
+      return {
+        via: "transform",
+        names: "instance",
+        commandKind: "TransformPlacedLight",
+        subjectKind: "placed-light"
       };
     case "player":
       return {
         via: "transform",
+        names: "presence",
         commandKind: "TransformPlayerPresence",
         subjectKind: "player-presence"
       };
     case "npc":
       return {
         via: "transform",
+        names: "presence",
         commandKind: "TransformNPCPresence",
         subjectKind: "npc-presence"
       };
     case "item":
       return {
         via: "transform",
+        names: "presence",
         commandKind: "TransformItemPresence",
         subjectKind: "item-presence"
       };
@@ -172,9 +194,34 @@ export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
  * whole selection and batches instead, but both go through
  * `transformCommitFor` so a kind cannot commit two different ways.
  *
- * A placed asset names the object `instanceId` while the three presences name
- * it `presenceId`; that is the only difference left between them.
+ * A placed asset and a placed light name the object `instanceId` while the
+ * three presences name it `presenceId`; that is the only difference left
+ * between them, and `commit.names` is what says which.
  */
+/** Why the gizmo withholds per-axis scale. */
+export type AxisScaleBlock = "light-has-no-size" | "rotated-selection";
+
+/**
+ * What stops this selection from scaling along one axis, or null when nothing
+ * does.
+ *
+ * A light has no size to scale -- an area light's size is two of its own
+ * fields, not the object's scale -- and rotated objects would shear. One
+ * reading answers both the greyed handles and the sentence explaining them, so
+ * what is shown and what is said cannot disagree.
+ */
+export function axisScaleBlockedBy(
+  objects: readonly SceneObject[]
+): AxisScaleBlock | null {
+  if (objects.some((object) => object.kind === "light")) {
+    return "light-has-no-size";
+  }
+  if (axisScaleWouldShear(objects.map((object) => object.transform.rotation))) {
+    return "rotated-selection";
+  }
+  return null;
+}
+
 export function singleTransformCommand(
   kind: SceneObject["kind"],
   regionId: string,
@@ -201,7 +248,7 @@ export function singleTransformCommand(
   }
 
   const subject = { subjectKind: commit.subjectKind, subjectId: instanceId };
-  return commit.commandKind === "TransformPlacedAsset"
+  return commit.names === "instance"
     ? {
         kind: commit.commandKind,
         target,
@@ -273,7 +320,8 @@ export function createLayoutWorkspace(
       activeScene: config.getActiveScene(),
       // The gizmo asks this for the object it is attaching to, so markers
       // have to be in the answer or selecting one finds nothing.
-      includeMarkers: true
+      includeMarkers: true,
+      includeLights: true
     });
   }
 
@@ -347,14 +395,13 @@ export function createLayoutWorkspace(
   }
 
   /**
-   * Whether scaling these objects along one axis would shear them. Takes the
-   * objects rather than resolving them, so a caller that has already resolved
-   * the selection asks the question against that same snapshot.
+   * Whether the gizmo offers per-axis scale for this selection.
+   *
+   * Takes the objects rather than resolving them, so a caller that has already
+   * resolved the selection asks the question against that same snapshot.
    */
-  function axisScaleShears(objects: readonly SceneObject[]): boolean {
-    return axisScaleWouldShear(
-      objects.map((object) => object.transform.rotation)
-    );
+  function axisScaleAvailable(objects: readonly SceneObject[]): boolean {
+    return axisScaleBlockedBy(objects) === null;
   }
 
   /**
@@ -386,7 +433,7 @@ export function createLayoutWorkspace(
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedIds: config.getSelectedIds,
       isAxisScaleAvailable: () =>
-        !axisScaleShears(getSceneObjects(config.getSelectedIds())),
+        axisScaleAvailable(getSceneObjects(config.getSelectedIds())),
       isSelectable: config.isSelectable,
       getTransform,
       onPreview: showDrag,
@@ -601,7 +648,7 @@ export function createLayoutWorkspace(
       const selected = getSceneObjects(config.getSelectedIds());
       // One reading of the rule feeds both the greyed handles and the refusal
       // to drag them, so what is shown and what is allowed cannot disagree.
-      gizmo.setAxisScaleAvailable(!axisScaleShears(selected));
+      gizmo.setAxisScaleAvailable(axisScaleAvailable(selected));
       const pivot = medianPivot(selected.map((o) => o.transform.position));
       if (!pivot) {
         gizmo.setVisible(false);

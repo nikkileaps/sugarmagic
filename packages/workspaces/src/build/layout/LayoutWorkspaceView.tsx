@@ -85,9 +85,13 @@ import { AssetCollisionSection } from "./AssetCollisionSection";
 import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
-import { axisScaleWouldShear } from "../../interaction/selection-transform";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
-import { markersStayAlone, singleTransformCommand } from "./layout-workspace";
+import {
+  axisScaleBlockedBy,
+  markersStayAlone,
+  singleTransformCommand,
+  type AxisScaleBlock
+} from "./layout-workspace";
 
 // Vertical side rail (the Design > Animation viewport pattern): the
 // rail sits below the options-bar row, so an armed tool's settings
@@ -181,13 +185,22 @@ export interface LayoutWorkspaceViewProps {
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
+/** Why the gizmo's axis-scale handles are greyed, in words. */
+const AXIS_SCALE_BLOCK_TEXT: Record<AxisScaleBlock, string> = {
+  "light-has-no-size":
+    "Axis scale unavailable: a light has no size. An area light's size is set in its own fields.",
+  "rotated-selection":
+    "Axis scale unavailable: some of these objects are rotated. The centre handle still scales them evenly."
+};
+
 /** What each scene-object kind is called where the author reads it. */
 const SCENE_OBJECT_KIND_LABELS: Record<SceneObject["kind"], string> = {
   asset: "Asset",
   player: "Player",
   npc: "NPC",
   item: "Item",
-  marker: "Marker"
+  marker: "Marker",
+  light: "Light"
 };
 
 const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
@@ -660,6 +673,7 @@ export function useLayoutWorkspaceView(
     return resolveSceneObjects(currentRegion, {
       activeScene: getActiveScene(),
       includeMarkers: true,
+      includeLights: true,
       playerDefinition,
       itemDefinitions,
       npcDefinitions
@@ -697,16 +711,11 @@ export function useLayoutWorkspaceView(
   }, [resolveObjectsNow, selectedIds, region]);
 
   /**
-   * Whether scaling the selection along one axis would shear it. The same rule
-   * greys the gizmo's axis scale handles; this is what tells the author why.
-   * Both read the rotations off the same resolved objects, so the greyed
-   * handles and the explanation cannot disagree about which objects count.
+   * What stops the selection scaling along one axis, from the same function
+   * that greys the gizmo's handles. This is what tells the author why.
    */
-  const selectionShears = useMemo(
-    () =>
-      axisScaleWouldShear(
-        selectedObjects.map((object) => object.transform.rotation)
-      ),
+  const axisScaleBlock = useMemo(
+    () => axisScaleBlockedBy(selectedObjects),
     [selectedObjects]
   );
 
@@ -1706,10 +1715,9 @@ export function useLayoutWorkspaceView(
                 </Group>
               ))}
             </Stack>
-            {selectionShears ? (
+            {axisScaleBlock ? (
               <Text size="xs" c="var(--sm-color-overlay0)">
-                Axis scale unavailable: some of these objects are rotated. The
-                centre handle still scales them evenly.
+                {AXIS_SCALE_BLOCK_TEXT[axisScaleBlock]}
               </Text>
             ) : null}
           </Stack>

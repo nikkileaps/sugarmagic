@@ -1054,6 +1054,18 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+/** A placed light names its target `instanceId`, the way a placed asset
+ *  does. */
+export type TransformPlacedLightCommand = SemanticCommandBase<
+  "TransformPlacedLight",
+  {
+    instanceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
 /**
  * One object moved by a transform that covered a whole selection, and where it
  * ended up.
@@ -1066,6 +1078,7 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
 export interface TransformSubject {
   subjectKind:
     | "placed-asset"
+    | "placed-light"
     | "player-presence"
     | "npc-presence"
     | "item-presence";
@@ -1275,6 +1288,7 @@ export type SemanticCommand =
   | UpdateLandscapeChannelCommand
   | DeleteLandscapeChannelCommand
   | TransformPlacedAssetCommand
+  | TransformPlacedLightCommand
   | TransformSceneObjectsCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand

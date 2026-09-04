@@ -571,7 +571,8 @@ export function createAuthoringViewport(
       // Scene-scoped placements must render in the viewport too.
       activeScene: projection.activeScene,
       // Studio only: an author has to see a marker to grab it.
-      includeMarkers: true
+      includeMarkers: true,
+      includeLights: true
     });
     const currentObjects = resolvedObjects.map((object) =>
       applyTransformOverride(

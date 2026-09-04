@@ -1,11 +1,10 @@
 /**
  * One place decides which command each scene-object kind commits a transform
- * through.
+ * through: `transformCommitFor`. A marker commits a patch, every other kind
+ * commits a transform, and a kind with no answer stops the build.
  *
- * This was decided in three places once, and the copy the context menu used
- * ended in an unguarded "anything else is an NPC". A marker reaching it would
- * have fired a presence command for an id no presence had: nothing changes,
- * nothing errors.
+ * The cases below run against every kind the type declares, not a list
+ * written out here, so a new kind cannot slip past them.
  */
 
 import { describe, expect, it } from "vitest";
@@ -13,7 +12,7 @@ import {
   singleTransformCommand,
   transformCommitFor
 } from "@sugarmagic/workspaces";
-import type { SceneObject } from "@sugarmagic/runtime-core";
+import { SCENE_OBJECT_KINDS } from "@sugarmagic/runtime-core";
 
 const VALUES = {
   position: [1, 2, 3] as [number, number, number],
@@ -21,33 +20,29 @@ const VALUES = {
   scale: [2, 2, 2] as [number, number, number]
 };
 
-const EVERY_KIND: SceneObject["kind"][] = [
-  "asset",
-  "player",
-  "npc",
-  "item",
-  "marker"
-];
+const EVERY_KIND_BUT_MARKER = SCENE_OBJECT_KINDS.filter(
+  (kind) => kind !== "marker"
+);
 
 describe("which command a kind commits through", () => {
   it("has an answer for every scene-object kind", () => {
-    for (const kind of EVERY_KIND) {
+    for (const kind of SCENE_OBJECT_KINDS) {
       expect(() => transformCommitFor(kind)).not.toThrow();
     }
   });
 
   it("sends a marker through a patch and everything else through a transform", () => {
     expect(transformCommitFor("marker")).toEqual({ via: "marker-patch" });
-    for (const kind of ["asset", "player", "npc", "item"] as const) {
+    for (const kind of EVERY_KIND_BUT_MARKER) {
       expect(transformCommitFor(kind).via).toBe("transform");
     }
   });
 
   it("gives each kind its own command, never sharing one", () => {
-    const commands = EVERY_KIND.map(
+    const commands = SCENE_OBJECT_KINDS.map(
       (kind) => singleTransformCommand(kind, "region-1", "thing-1", VALUES).kind
     );
-    expect(new Set(commands).size).toBe(EVERY_KIND.length);
+    expect(new Set(commands).size).toBe(SCENE_OBJECT_KINDS.length);
   });
 
   it("never calls a marker an NPC", () => {
@@ -66,6 +61,19 @@ describe("which command a kind commits through", () => {
     const npc = singleTransformCommand("npc", "region-1", "warden", VALUES);
     expect(asset.payload).toMatchObject({ instanceId: "crate" });
     expect(npc.payload).toMatchObject({ presenceId: "warden" });
+  });
+
+  it("names a placed light by instanceId, like a placed asset", () => {
+    const light = singleTransformCommand(
+      "light",
+      "region-1",
+      "placed-light:lantern",
+      VALUES
+    );
+    expect(light.kind).toBe("TransformPlacedLight");
+    expect(light.subject.subjectKind).toBe("placed-light");
+    expect(light.payload).toMatchObject({ instanceId: "placed-light:lantern" });
+    expect(light.payload).not.toHaveProperty("presenceId");
   });
 
   it("carries the transform it was given", () => {

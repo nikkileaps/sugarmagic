@@ -36,6 +36,7 @@ import type {
   SemanticCommand,
   MovePlacedAssetCommand,
   TransformPlacedAssetCommand,
+  TransformPlacedLightCommand,
   TransformSceneObjectsCommand,
   PlaceAssetInstanceCommand,
   BrushPlaceAssetsCommand,
@@ -340,6 +341,26 @@ function applyTransformPlacedAsset(
   );
 }
 
+function applyTransformPlacedLight(
+  context: CommandExecutionContext,
+  command: TransformPlacedLightCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedLightsEverywhere(context, (lights) =>
+    lights.map((light) =>
+      light.instanceId === command.payload.instanceId
+        ? {
+            ...light,
+            transform: {
+              position: command.payload.position,
+              rotation: command.payload.rotation,
+              scale: command.payload.scale
+            }
+          }
+        : light
+    )
+  );
+}
+
 /**
  * Move every object a gizmo drag covered.
  *
@@ -362,6 +383,13 @@ function applyTransformSceneObjects(
             kind: "TransformPlacedAsset",
             target,
             subject: { subjectKind: "placed-asset", subjectId },
+            payload: { instanceId: subjectId, position, rotation, scale }
+          });
+        case "placed-light":
+          return applyTransformPlacedLight(current, {
+            kind: "TransformPlacedLight",
+            target,
+            subject: { subjectKind: "placed-light", subjectId },
             payload: { instanceId: subjectId, position, rotation, scale }
           });
         case "player-presence":
@@ -1962,6 +1990,10 @@ export function executeCommand(
     case "TransformPlacedAsset":
       ({ region: updatedRegion, scene: updatedScene } =
         applyTransformPlacedAsset(context, command));
+      break;
+    case "TransformPlacedLight":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformPlacedLight(context, command));
       break;
     case "TransformSceneObjects":
       ({ region: updatedRegion, scene: updatedScene } =
