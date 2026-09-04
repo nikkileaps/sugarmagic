@@ -1,9 +1,16 @@
 /**
  * Where a gizmo sits for a selection, and how a drag applies to each object in
- * it. Pure geometry: no scene graph, no store, no three.js objects.
+ * it. Pure geometry: transforms in, transforms out, no scene graph and no
+ * store.
  */
 
+import * as THREE from "three";
+import type { TransformValues } from "./transform-controller";
+
 export type Vector3Tuple = [number, number, number];
+
+/** Scales below this collapse an object to nothing and cannot be undone by dragging back. */
+const MIN_SCALE = 0.01;
 
 /**
  * Where the gizmo sits for a selection: the mean of the selected objects'
@@ -36,4 +43,114 @@ export function medianPivot(
     sum[1] / origins.length,
     sum[2] / origins.length
   ];
+}
+
+/**
+ * What one drag did, stated once for the whole selection rather than per
+ * object. Each object then works out its own result from it, which is what
+ * lets a drag cover many objects without the maths running many times.
+ */
+export type SelectionDelta =
+  | { mode: "move"; translation: Vector3Tuple }
+  | { mode: "rotate"; axis: Vector3Tuple; angle: number }
+  | { mode: "scale"; factor: Vector3Tuple };
+
+/**
+ * Where one object ends up when a drag is applied to it about a pivot.
+ *
+ * Called once per selected object with the same pivot each time. Blender's
+ * Individual Origins mode passes each object its own origin instead, which is
+ * why the pivot is a parameter rather than something worked out in here -- the
+ * other pivot modes are then a different argument, not different code.
+ *
+ * Move is pivot-independent: a translation is the same vector wherever the
+ * gizmo sits. Rotate and scale change the object twice over, moving its origin
+ * relative to the pivot AND turning or resizing the object itself.
+ */
+export function applyDelta(
+  start: TransformValues,
+  pivot: Vector3Tuple,
+  delta: SelectionDelta
+): TransformValues {
+  if (delta.mode === "move") {
+    return {
+      ...start,
+      position: [
+        start.position[0] + delta.translation[0],
+        start.position[1] + delta.translation[1],
+        start.position[2] + delta.translation[2]
+      ]
+    };
+  }
+
+  const offset = new THREE.Vector3(
+    start.position[0] - pivot[0],
+    start.position[1] - pivot[1],
+    start.position[2] - pivot[2]
+  );
+
+  if (delta.mode === "scale") {
+    return {
+      ...start,
+      position: [
+        pivot[0] + offset.x * delta.factor[0],
+        pivot[1] + offset.y * delta.factor[1],
+        pivot[2] + offset.z * delta.factor[2]
+      ],
+      scale: [
+        Math.max(MIN_SCALE, start.scale[0] * delta.factor[0]),
+        Math.max(MIN_SCALE, start.scale[1] * delta.factor[1]),
+        Math.max(MIN_SCALE, start.scale[2] * delta.factor[2])
+      ]
+    };
+  }
+
+  const turn = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(...delta.axis).normalize(),
+    delta.angle
+  );
+  const orbited = offset.clone().applyQuaternion(turn);
+  // Composed as quaternions rather than added component by component: adding
+  // to one Euler component is only the same turn when the other two are zero.
+  const turned = new THREE.Euler().setFromQuaternion(
+    turn
+      .clone()
+      .multiply(
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(...start.rotation, "XYZ")
+        )
+      ),
+    "XYZ"
+  );
+  return {
+    ...start,
+    position: [
+      pivot[0] + orbited.x,
+      pivot[1] + orbited.y,
+      pivot[2] + orbited.z
+    ],
+    rotation: [turned.x, turned.y, turned.z]
+  };
+}
+
+/**
+ * Whether the selected objects point in more than one direction.
+ *
+ * Scaling such a selection along an axis about a shared pivot produces shear,
+ * and a position/rotation/scale triple has no way to hold a sheared matrix --
+ * the Blender manual puts it plainly: shear "can't be represented by location,
+ * scale and rotation". Rather than write a wrong answer the axis scale handles
+ * go unavailable, and uniform scale, which never shears, still works.
+ *
+ * Compared as quaternions so that two ways of writing the same turn count as
+ * the same direction.
+ */
+export function hasMixedRotations(rotations: readonly Vector3Tuple[]): boolean {
+  if (rotations.length < 2) return false;
+  const [first, ...rest] = rotations.map((rotation) =>
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation, "XYZ"))
+  );
+  // A quaternion and its negation are the same rotation, so compare the
+  // absolute dot product: 1 means identical, less means they differ.
+  return rest.some((other) => Math.abs(first.dot(other)) < 1 - 1e-6);
 }

@@ -25,7 +25,12 @@ import {
   planePointForRay,
   pointerRayFromCamera
 } from "./transform-math";
-import { medianPivot } from "./selection-transform";
+import {
+  applyDelta,
+  medianPivot,
+  type SelectionDelta,
+  type Vector3Tuple
+} from "./selection-transform";
 import {
   gizmoWorldScaleForCamera,
   parseGizmoHandleName,
@@ -76,8 +81,9 @@ export interface TransformSubjectSession {
 
 export interface TransformSession {
   /**
-   * Every object the drag moves, in selection order. The first one is what the
-   * drag maths runs on; the rest follow the change it produced.
+   * Every object the drag moves, in selection order. The drag produces one
+   * delta and each subject works out its own result from it, so no object is
+   * more the subject of the drag than any other.
    */
   subjects: TransformSubjectSession[];
   mode: TransformTool;
@@ -130,6 +136,14 @@ export interface TransformControllerConfig {
   onHoverTarget: (object: THREE.Object3D | null) => void;
   /** Everything selected, in selection order. A drag moves all of it. */
   getSelectedIds: () => string[];
+  /**
+   * Whether the axis scale handles may be dragged. They are unavailable for a
+   * selection whose objects point in different directions, because scaling
+   * that along one axis about a shared pivot shears, and a
+   * position/rotation/scale triple cannot hold a sheared matrix. Omitted means
+   * available.
+   */
+  isAxisScaleAvailable?: () => boolean;
   getTransform: (instanceId: string) => TransformValues | null;
 }
 
@@ -217,28 +231,19 @@ export function createTransformController(
     };
   }
 
-  function applyCenterDrag(
+  function centerDelta(
     activeSession: TransformSession,
     ray: ReturnType<typeof pointerRayFromCamera>
-  ): void {
+  ): SelectionDelta | null {
     const { cameraPlaneNormal, cameraPlanePoint, center } =
       activeSession.anchor;
-    if (!cameraPlaneNormal || !cameraPlanePoint) return;
+    if (!cameraPlaneNormal || !cameraPlanePoint) return null;
     const hit = planePointForRay(ray, center, cameraPlaneNormal);
-    if (!hit) return;
-    const primary = activeSession.subjects[0];
+    if (!hit) return null;
 
     if (activeSession.mode === "move") {
-      const delta = hit.clone().sub(cameraPlanePoint);
-      primary.current = {
-        ...primary.current,
-        position: [
-          primary.start.position[0] + delta.x,
-          primary.start.position[1] + delta.y,
-          primary.start.position[2] + delta.z
-        ]
-      };
-      return;
+      const moved = hit.clone().sub(cameraPlanePoint);
+      return { mode: "move", translation: [moved.x, moved.y, moved.z] };
     }
 
     if (activeSession.mode === "scale") {
@@ -251,19 +256,11 @@ export function createTransformController(
       // few pixels of shrink and the object grows again. Exponential
       // so one gizmo-width of drag doubles or halves symmetrically.
       const { screenDiagonal } = activeSession.anchor;
-      if (!screenDiagonal) return;
+      if (!screenDiagonal) return null;
       const gizmoScale = gizmoWorldScaleForCamera(config.getCamera(), center);
       const signedDrag = hit.clone().sub(cameraPlanePoint).dot(screenDiagonal);
       const factor = Math.pow(2, signedDrag / gizmoScale);
-      primary.current = {
-        ...primary.current,
-        scale: [
-          Math.max(MIN_SCALE, primary.start.scale[0] * factor),
-          Math.max(MIN_SCALE, primary.start.scale[1] * factor),
-          Math.max(MIN_SCALE, primary.start.scale[2] * factor)
-        ]
-      };
-      return;
+      return { mode: "scale", factor: [factor, factor, factor] };
     }
 
     // Free rotate (trackball): drag direction in the camera plane
@@ -274,59 +271,68 @@ export function createTransformController(
     // 2026-07-12 branch review; direction is pinned by a test now).
     const drag = hit.clone().sub(cameraPlanePoint);
     const dragLength = drag.length();
-    if (dragLength < 1e-6) return;
+    if (dragLength < 1e-6) return null;
     const rotationAxis = new THREE.Vector3()
       .crossVectors(drag, cameraPlaneNormal)
       .normalize();
     const trackballRadius =
       gizmoWorldScaleForCamera(config.getCamera(), center) *
       TRACKBALL_RADIUS_GIZMO_UNITS;
-    const angle = dragLength / trackballRadius;
-    const startQuaternion = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(...primary.start.rotation, "XYZ")
-    );
-    const deltaQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      rotationAxis,
-      angle
-    );
-    const nextEuler = new THREE.Euler().setFromQuaternion(
-      deltaQuaternion.multiply(startQuaternion),
-      "XYZ"
-    );
-    primary.current = {
-      ...primary.current,
-      rotation: [nextEuler.x, nextEuler.y, nextEuler.z]
+    return {
+      mode: "rotate",
+      axis: [rotationAxis.x, rotationAxis.y, rotationAxis.z],
+      angle: dragLength / trackballRadius
     };
   }
 
-  /**
-   * Spread the change the drag maths made to the first subject across the rest
-   * of the selection.
-   *
-   * Move is the pivot-independent transform: a translation is the same vector
-   * wherever the gizmo sits, so every object takes the delta unchanged and the
-   * selection keeps its spacing. Rotate and scale change each object's origin
-   * relative to the pivot as well as the object itself, so they are not spread
-   * here -- with more than one object selected they still move only the first.
-   */
-  function spreadToSelection(activeSession: TransformSession): void {
-    if (activeSession.mode !== "move") return;
-    const [primary, ...rest] = activeSession.subjects;
-    const delta = [
-      primary.current.position[0] - primary.start.position[0],
-      primary.current.position[1] - primary.start.position[1],
-      primary.current.position[2] - primary.start.position[2]
-    ];
-    for (const subject of rest) {
-      subject.current = {
-        ...subject.current,
-        position: [
-          subject.start.position[0] + delta[0],
-          subject.start.position[1] + delta[1],
-          subject.start.position[2] + delta[2]
-        ]
+  function axisDelta(
+    activeSession: TransformSession,
+    ray: ReturnType<typeof pointerRayFromCamera>
+  ): SelectionDelta | null {
+    const axis = activeSession.axis;
+    if (axis === "center") return null;
+    const axisVector = AXIS_VECTORS[axis];
+    const ai = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+    const { anchor } = activeSession;
+
+    if (activeSession.mode === "move") {
+      if (anchor.axisParameter === null) return null;
+      const parameter = axisParameterForRay(ray, anchor.center, axisVector);
+      if (parameter === null) return null;
+      const translation: Vector3Tuple = [0, 0, 0];
+      translation[ai] = parameter - anchor.axisParameter;
+      return { mode: "move", translation };
+    }
+
+    if (activeSession.mode === "rotate") {
+      if (!anchor.planeVector) return null;
+      const hit = planePointForRay(ray, anchor.center, axisVector);
+      if (!hit) return null;
+      return {
+        mode: "rotate",
+        axis: [axisVector.x, axisVector.y, axisVector.z],
+        angle: angleAroundAxis(
+          anchor.planeVector,
+          hit.sub(anchor.center),
+          axisVector
+        )
       };
     }
+
+    const anchorParameter = anchor.axisParameter;
+    if (
+      anchorParameter === null ||
+      Math.abs(anchorParameter) < MIN_SCALE_ANCHOR
+    ) {
+      return null;
+    }
+    const parameter = axisParameterForRay(ray, anchor.center, axisVector);
+    if (parameter === null) return null;
+    // Drag outward from center to grow, inward to shrink -- the ratio of the
+    // grab point's distance along the axis.
+    const factor: Vector3Tuple = [1, 1, 1];
+    factor[ai] = Math.max(MIN_SCALE, parameter / anchorParameter);
+    return { mode: "scale", factor };
   }
 
   /** Push the current state of every subject into the live preview. */
@@ -353,6 +359,14 @@ export function createTransformController(
       if (gizmoHit) {
         const parsed = parseGizmoHandleName(gizmoHit.objectName);
         if (parsed) {
+          // Greyed handles must also refuse the drag, or "unavailable" is only
+          // a colour.
+          const axisScaleRefused =
+            parsed.mode === "scale" &&
+            parsed.axis !== "center" &&
+            config.isAxisScaleAvailable?.() === false;
+          if (axisScaleRefused) return false;
+
           // Also here, not only at selection: a locked object must stay
           // undraggable however it came to be selected.
           const subjects = config
@@ -425,65 +439,24 @@ export function createTransformController(
         config.getCamera()
       );
 
-      if (session.axis === "center") {
-        applyCenterDrag(session, ray);
-        spreadToSelection(session);
-        previewAll(session);
-        return;
+      const delta =
+        session.axis === "center"
+          ? centerDelta(session, ray)
+          : axisDelta(session, ray);
+      // A degenerate drag -- an axis viewed edge-on, a grab point too close to
+      // the centre -- yields no delta, and the selection stays where it is.
+      if (!delta) return;
+
+      // The same pivot goes to every object. That is what makes this one
+      // shared-pivot mode rather than a rule per object.
+      const pivot: Vector3Tuple = [
+        session.anchor.center.x,
+        session.anchor.center.y,
+        session.anchor.center.z
+      ];
+      for (const subject of session.subjects) {
+        subject.current = applyDelta(subject.start, pivot, delta);
       }
-
-      const axisVector = AXIS_VECTORS[session.axis];
-      const ai = session.axis === "x" ? 0 : session.axis === "y" ? 1 : 2;
-      const primary = session.subjects[0];
-
-      if (session.mode === "move") {
-        if (session.anchor.axisParameter === null) return;
-        const parameter = axisParameterForRay(
-          ray,
-          session.anchor.center,
-          axisVector
-        );
-        if (parameter === null) return;
-        const pos: [number, number, number] = [...primary.start.position];
-        pos[ai] =
-          primary.start.position[ai] +
-          (parameter - session.anchor.axisParameter);
-        primary.current = { ...primary.current, position: pos };
-      } else if (session.mode === "rotate") {
-        if (!session.anchor.planeVector) return;
-        const hit = planePointForRay(ray, session.anchor.center, axisVector);
-        if (!hit) return;
-        const angle = angleAroundAxis(
-          session.anchor.planeVector,
-          hit.sub(session.anchor.center),
-          axisVector
-        );
-        const rot: [number, number, number] = [...primary.start.rotation];
-        rot[ai] = primary.start.rotation[ai] + angle;
-        primary.current = { ...primary.current, rotation: rot };
-      } else if (session.mode === "scale") {
-        const anchorParameter = session.anchor.axisParameter;
-        if (
-          anchorParameter === null ||
-          Math.abs(anchorParameter) < MIN_SCALE_ANCHOR
-        ) {
-          return;
-        }
-        const parameter = axisParameterForRay(
-          ray,
-          session.anchor.center,
-          axisVector
-        );
-        if (parameter === null) return;
-        // Drag outward from center to grow, inward to shrink -- the
-        // ratio of the grab point's distance along the axis.
-        const factor = Math.max(MIN_SCALE, parameter / anchorParameter);
-        const scl: [number, number, number] = [...primary.start.scale];
-        scl[ai] = Math.max(MIN_SCALE, primary.start.scale[ai] * factor);
-        primary.current = { ...primary.current, scale: scl };
-      }
-
-      spreadToSelection(session);
       previewAll(session);
     },
 

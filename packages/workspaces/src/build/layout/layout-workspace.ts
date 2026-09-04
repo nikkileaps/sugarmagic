@@ -27,6 +27,7 @@ import {
   createTransformController,
   gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
+  hasMixedRotations,
   medianPivot,
   type DraggedSubject,
   type InputRouter,
@@ -274,6 +275,18 @@ export function createLayoutWorkspace(
   }
 
   /**
+   * Whether scaling this selection along one axis would shear it, which a
+   * position/rotation/scale triple cannot record.
+   */
+  function axisScaleShears(): boolean {
+    return hasMixedRotations(
+      getSceneObjects(config.getSelectedIds()).map(
+        (object) => object.transform.rotation
+      )
+    );
+  }
+
+  /**
    * Show where a drag has put the selection, without committing it: a draft
    * per object, and the gizmo back at the pivot of where they now sit.
    * Cancelling uses the same path with the transforms the drag started from.
@@ -301,6 +314,7 @@ export function createLayoutWorkspace(
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedIds: config.getSelectedIds,
+      isAxisScaleAvailable: () => !axisScaleShears(),
       isSelectable: config.isSelectable,
       getTransform,
       onPreview: showDrag,
@@ -507,6 +521,9 @@ export function createLayoutWorkspace(
     syncOverlays() {
       syncHulls();
       const selected = getSceneObjects(config.getSelectedIds());
+      // One reading of the rule feeds both the greyed handles and the refusal
+      // to drag them, so what is shown and what is allowed cannot disagree.
+      gizmo.setAxisScaleAvailable(!axisScaleShears());
       const pivot = medianPivot(selected.map((o) => o.transform.position));
       if (!pivot) {
         gizmo.setVisible(false);

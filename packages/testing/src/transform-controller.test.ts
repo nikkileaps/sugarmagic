@@ -271,7 +271,10 @@ describe("dragging many objects", () => {
     prop_c: { position: [20, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
   };
 
-  function rowHarness(handle: string) {
+  function rowHarness(
+    handle: string,
+    options: { axisScaleAvailable?: boolean } = {}
+  ) {
     const previews: Array<
       Array<{ instanceId: string; values: TransformValues }>
     > = [];
@@ -308,6 +311,7 @@ describe("dragging many objects", () => {
       onHoverHandle: () => {},
       onHoverTarget: () => {},
       getSelectedIds: () => ["prop_a", "prop_b", "prop_c"],
+      isAxisScaleAvailable: () => options.axisScaleAvailable ?? true,
       getTransform: (instanceId) => {
         const found = ROW[instanceId];
         return found
@@ -367,6 +371,49 @@ describe("dragging many objects", () => {
 
     expect(h.cancels).toHaveLength(1);
     expect(h.cancels[0].map((s) => s.values.position[0])).toEqual([0, 5, 20]);
+  });
+
+  it("rotates the row as a unit and turns each object in it", () => {
+    const h = rowHarness("gizmo-rotate-center");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.2, 0.2));
+
+    const last = h.previews.at(-1)!;
+    // The three origins are collinear on x. Orbiting about the pivot lifts
+    // them off that line...
+    const movedOffTheRow = last.some(
+      (subject) => Math.abs(subject.values.position[2]) > 1e-6
+    );
+    expect(movedOffTheRow).toBe(true);
+    // ...and each object turns by the same amount as well as moving.
+    const turns = last.map((subject) => subject.values.rotation);
+    expect(turns[1]).toEqual(turns[0]);
+    expect(turns[2]).toEqual(turns[0]);
+    expect(turns[0].some((angle) => Math.abs(angle) > 1e-6)).toBe(true);
+  });
+
+  it("keeps the object sitting nearest the pivot closest to it", () => {
+    const h = rowHarness("gizmo-scale-center");
+    h.controller.onPointerDown!(pointer(0, 0));
+    h.controller.onPointerMove!(pointer(0.15, 0.15));
+
+    const last = h.previews.at(-1)!;
+    // Scaling about the pivot spreads the row out and grows each object.
+    const spread = last[2].values.position[0] - last[0].values.position[0];
+    expect(spread).toBeGreaterThan(20);
+    expect(last[0].values.scale[0]).toBeGreaterThan(1);
+  });
+
+  it("refuses an axis scale drag when that would shear the selection", () => {
+    const h = rowHarness("gizmo-scale-x", { axisScaleAvailable: false });
+    expect(h.controller.onPointerDown!(pointer(0, 0))).toBe(false);
+    h.controller.onPointerMove!(pointer(0.3, 0));
+    expect(h.previews).toHaveLength(0);
+  });
+
+  it("still allows uniform scale when axis scale is unavailable", () => {
+    const h = rowHarness("gizmo-scale-center", { axisScaleAvailable: false });
+    expect(h.controller.onPointerDown!(pointer(0, 0))).toBe(true);
   });
 
   it("anchors the drag at the pivot, not at the first object", () => {

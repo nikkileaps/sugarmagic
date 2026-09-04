@@ -204,6 +204,12 @@ export interface LayoutGizmo {
   setScale: (scale: number) => void;
   setVisible: (visible: boolean) => void;
   setActiveTool: (tool: TransformTool) => void;
+  /**
+   * Grey the per-axis scale handles out when the selection cannot be scaled
+   * along one axis without shearing. The centre handle, which scales
+   * uniformly, is unaffected.
+   */
+  setAxisScaleAvailable: (available: boolean) => void;
   /** Brighten the handle under the cursor (null = clear). */
   setHoveredHandle: (handleName: string | null) => void;
   dispose: () => void;
@@ -265,6 +271,29 @@ export function createLayoutGizmo(): LayoutGizmo {
     handleMaterials.set(object.name, entries);
   });
   let hoveredHandle: string | null = null;
+  let axisScaleEnabled = true;
+
+  const AXIS_SCALE_HANDLES = AXES.map((axis) => gizmoHandleName("scale", axis));
+  const HOVER_TINT = new THREE.Color(0xffffff);
+  const UNAVAILABLE_TINT = new THREE.Color(0x6c7086);
+
+  /**
+   * One place decides what colour a handle is, from its own colour and the two
+   * things that change it: the cursor being over it, and it being unavailable.
+   * An unavailable handle does not brighten under the cursor.
+   */
+  function paintHandle(handleName: string): void {
+    const unavailable =
+      !axisScaleEnabled && AXIS_SCALE_HANDLES.includes(handleName);
+    for (const entry of handleMaterials.get(handleName) ?? []) {
+      entry.material.color.copy(entry.baseColor);
+      if (unavailable) {
+        entry.material.color.lerp(UNAVAILABLE_TINT, 0.75);
+      } else if (handleName === hoveredHandle) {
+        entry.material.color.lerp(HOVER_TINT, 0.45);
+      }
+    }
+  }
 
   return {
     root,
@@ -280,21 +309,17 @@ export function createLayoutGizmo(): LayoutGizmo {
     setActiveTool(tool) {
       showOnly(tool);
     },
+    setAxisScaleAvailable(available) {
+      if (available === axisScaleEnabled) return;
+      axisScaleEnabled = available;
+      for (const handleName of AXIS_SCALE_HANDLES) paintHandle(handleName);
+    },
     setHoveredHandle(handleName) {
       if (handleName === hoveredHandle) return;
-      if (hoveredHandle) {
-        for (const entry of handleMaterials.get(hoveredHandle) ?? []) {
-          entry.material.color.copy(entry.baseColor);
-        }
-      }
+      const previous = hoveredHandle;
       hoveredHandle = handleName;
-      if (handleName) {
-        for (const entry of handleMaterials.get(handleName) ?? []) {
-          entry.material.color
-            .copy(entry.baseColor)
-            .lerp(new THREE.Color(0xffffff), 0.45);
-        }
-      }
+      if (previous) paintHandle(previous);
+      if (handleName) paintHandle(handleName);
     },
     dispose() {
       root.traverse((object) => {

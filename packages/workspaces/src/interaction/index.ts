@@ -33,7 +33,13 @@ export {
   type TransformTool
 } from "./tool-state";
 
-export { medianPivot, type Vector3Tuple } from "./selection-transform";
+export {
+  applyDelta,
+  hasMixedRotations,
+  medianPivot,
+  type SelectionDelta,
+  type Vector3Tuple
+} from "./selection-transform";
 
 export {
   createTransformController,
