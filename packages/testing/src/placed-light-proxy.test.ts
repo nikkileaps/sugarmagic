@@ -8,17 +8,11 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  createPlacedLightProxy,
-  PLACED_LIGHT_WIRE_COLOR
-} from "@sugarmagic/render-web";
+import { createPlacedLightProxy } from "@sugarmagic/render-web";
 import { createPlacedLight } from "@sugarmagic/domain";
 
 function wireOf(proxy: THREE.Object3D): THREE.Object3D {
-  const wire = proxy.children.find(
-    (child) =>
-      child instanceof THREE.LineSegments || child instanceof THREE.LineLoop
-  );
+  const wire = proxy.children.find((child) => child instanceof THREE.Line);
   expect(wire).toBeTruthy();
   return wire!;
 }
@@ -40,13 +34,60 @@ describe("the proxy Studio draws for a placed light", () => {
     expect(dot!.geometry).toBeInstanceOf(THREE.SphereGeometry);
   });
 
-  it("draws one colour, whatever the kind", () => {
+  it("draws every wire with something the renderer can actually draw", () => {
+    // The WebGPU renderer refuses a LineLoop and logs instead of drawing. A
+    // closed rectangle has to be a Line whose last point repeats its first.
     for (const kind of ["point", "spot", "area"] as const) {
-      const proxy = createPlacedLightProxy(createPlacedLight({ kind }));
+      const wire = wireOf(createPlacedLightProxy(createPlacedLight({ kind })));
+      expect(wire).not.toBeInstanceOf(THREE.LineLoop);
+      expect(wire).toBeInstanceOf(THREE.Line);
+    }
+  });
+
+  it("closes the area light's rectangle, since a Line does not close itself", () => {
+    const proxy = createPlacedLightProxy(
+      createPlacedLight({ kind: "area", area: { width: 4, height: 2 } })
+    );
+
+    const points = (wireOf(proxy) as THREE.Line).geometry.getAttribute(
+      "position"
+    );
+    expect(points.count).toBe(5);
+    expect([points.getX(0), points.getY(0), points.getZ(0)]).toEqual([
+      points.getX(4),
+      points.getY(4),
+      points.getZ(4)
+    ]);
+  });
+
+  it("draws the wire in the light's own colour, whatever the kind", () => {
+    // Studio never builds the light, so the wire is the only place a colour
+    // choice shows before previewing the game.
+    for (const kind of ["point", "spot", "area"] as const) {
+      const proxy = createPlacedLightProxy(
+        createPlacedLight({ kind, color: 0x3366ff })
+      );
       const material = (wireOf(proxy) as THREE.Line)
         .material as THREE.LineBasicMaterial;
-      expect(material.color.getHex()).toBe(PLACED_LIGHT_WIRE_COLOR);
+      expect(material.color.getHex()).toBe(0x3366ff);
     }
+  });
+
+  it("dims a switched-off light without hiding it", () => {
+    const on = createPlacedLightProxy(
+      createPlacedLight({ color: 0xffffff, enabled: true })
+    );
+    const off = createPlacedLightProxy(
+      createPlacedLight({ color: 0xffffff, enabled: false })
+    );
+
+    const brightness = (proxy: THREE.Object3D) =>
+      ((wireOf(proxy) as THREE.Line).material as THREE.LineBasicMaterial).color
+        .r;
+    // Dimmer, so off reads at a glance; still drawn, so it can be found and
+    // switched back on.
+    expect(brightness(off)).toBeLessThan(brightness(on));
+    expect(brightness(off)).toBeGreaterThan(0);
   });
 
   it("draws a point light's reach as a sphere of its radius", () => {

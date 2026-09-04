@@ -308,9 +308,16 @@ describe("when Studio rebuilds a light's proxy", () => {
     );
   });
 
-  it("keeps the wire it has when only colour or intensity changes", () => {
-    expect(keyFor({ color: 0x00ff00, intensity: 40 })).toBe(
-      keyFor({ color: 0xff0000, intensity: 2 })
-    );
+  it("redraws when the colour changes, because the wire wears it", () => {
+    expect(keyFor({ color: 0x00ff00 })).not.toBe(keyFor({ color: 0xff0000 }));
+  });
+
+  it("redraws when the light is switched off, because the wire dims", () => {
+    expect(keyFor({ enabled: true })).not.toBe(keyFor({ enabled: false }));
+  });
+
+  it("keeps the wire it has when only intensity changes", () => {
+    // Nothing about the wire shows brightness, so a slider drag costs nothing.
+    expect(keyFor({ intensity: 40 })).toBe(keyFor({ intensity: 2 }));
   });
 });

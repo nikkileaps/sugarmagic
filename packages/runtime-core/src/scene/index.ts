@@ -477,12 +477,11 @@ function createMarkerSceneObject(marker: RegionMarker): SceneObject {
  * and what the light actually lights is the render side's. This object exists
  * so a light can be picked, selected and dragged like anything else.
  *
- * `representationKey` carries every number that decides the SHAPE of what
- * Studio draws for a light -- its kind, its reach, its cone angle, its panel
- * size -- so widening a spot rebuilds the wire that shows the throw. Colour
- * and intensity are deliberately absent: they change nothing about the shape,
- * and a rebuild for them would be wasted. Anything the authoring proxy draws
- * belongs in this key.
+ * `representationKey` carries everything the authoring proxy draws -- kind,
+ * reach, cone angle, panel size, colour, and whether the light is switched on
+ * -- so widening a spot or warming its colour redraws the wire. Intensity is
+ * deliberately absent: the wire does not show it, and rebuilding for a slider
+ * drag would be wasted work. Anything a proxy renders belongs in this key.
  */
 function createPlacedLightSceneObject(light: PlacedLight): SceneObject {
   return {
@@ -507,7 +506,9 @@ function createPlacedLightSceneObject(light: PlacedLight): SceneObject {
       light.radius ?? 0,
       light.spot?.angleDeg ?? 0,
       light.area?.width ?? 0,
-      light.area?.height ?? 0
+      light.area?.height ?? 0,
+      light.color,
+      light.enabled ? "on" : "off"
     ].join(":"),
     capsule: null,
     // Nothing collides with a light.

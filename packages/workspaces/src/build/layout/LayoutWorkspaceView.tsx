@@ -21,6 +21,8 @@ import {
   ActionIcon,
   Box,
   Button,
+  Checkbox,
+  ColorInput,
   Group,
   Menu,
   Modal,
@@ -54,6 +56,7 @@ import {
   createRegionMarker,
   createSceneFolderId,
   type ComposedRegionContents,
+  type PlacedLight,
   type PlacedLightKind,
   type Scene,
   sceneOverlayForRegion
@@ -88,6 +91,7 @@ import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
+import { hexColorNumber, hexColorString } from "../hex-color";
 import {
   axisScaleBlockedBy,
   markersStayAlone,
@@ -186,6 +190,24 @@ export interface LayoutWorkspaceViewProps {
 }
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
+
+/** The three light kinds, as the Inspector's dropdown offers them. */
+const PLACED_LIGHT_KIND_OPTIONS: { value: PlacedLightKind; label: string }[] = [
+  { value: "point", label: "Point" },
+  { value: "spot", label: "Spot" },
+  { value: "area", label: "Area" }
+];
+
+/**
+ * Intensity is not one unit. three.js reads candela for a point or spot light
+ * and nits for an area light, so the field says which rather than showing a
+ * bare number that means two different things.
+ */
+const PLACED_LIGHT_INTENSITY_LABEL: Record<PlacedLightKind, string> = {
+  point: "Intensity (candela)",
+  spot: "Intensity (candela)",
+  area: "Intensity (nits)"
+};
 
 /** Why the gizmo's axis-scale handles are greyed, in words. */
 const AXIS_SCALE_BLOCK_TEXT: Record<AxisScaleBlock, string> = {
@@ -553,6 +575,16 @@ export function useLayoutWorkspaceView(
     );
   }, [region, activeScene]);
 
+  const overlayLightIds = useMemo(() => {
+    if (!region || !activeScene) return new Set<string>();
+    return new Set(
+      (
+        sceneOverlayForRegion(activeScene, region.identity.id)?.placedLights ??
+        []
+      ).map((light) => light.instanceId)
+    );
+  }, [region, activeScene]);
+
   useEffect(() => {
     if (!isActive) return;
     getLayoutWorkspaceForViewport(
@@ -746,6 +778,39 @@ export function useLayoutWorkspaceView(
     );
   }, [region, selectedIds]);
 
+  const selectedLight = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      regionContents.placedLights.find(
+        (light) => light.instanceId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, regionContents, selectedIds]);
+
+  /**
+   * Change one thing about the selected light. The executor re-runs the whole
+   * light through its factory, so a patch that changes the kind arrives with
+   * the old kind's fields already dropped.
+   */
+  const patchSelectedLight = useCallback(
+    (patch: Partial<Omit<PlacedLight, "instanceId">>) => {
+      if (!region || !selectedLight) return;
+      onCommand({
+        kind: "UpdatePlacedLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-light",
+          subjectId: selectedLight.instanceId
+        },
+        payload: { instanceId: selectedLight.instanceId, patch }
+      });
+    },
+    [onCommand, region, selectedLight]
+  );
+
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
@@ -795,16 +860,33 @@ export function useLayoutWorkspaceView(
     );
   }, [documentDefinitions, selectedAsset]);
 
+  /**
+   * What the Inspector's header calls the selection -- and, because the
+   * Inspector renders nothing at all without a label, what decides whether the
+   * sections below are reachable.
+   *
+   * A kind with no answer here does not look broken: its section is written,
+   * the gizmo attaches to it in the viewport, and the panel still says
+   * "Nothing selected". So the last resort resolves the selected object and
+   * takes the name it carries -- anything the viewport can draw is a scene
+   * object with a display name, which makes this list complete for kinds
+   * nobody has thought of yet. The entries above it exist only where a kind
+   * wants a different name than its scene object carries.
+   */
   const selectedSceneLabel =
     (selectedIds.length === 0 && selectedFolderId === SCENE_ROOT_FOLDER_ID
       ? (region?.displayName ?? null)
       : null) ??
+    (selectedIds.length > 1 ? `${selectedIds.length} objects` : null) ??
     selectedAsset?.displayName ??
     (selectedPlayerPresence
       ? (playerDefinition?.displayName ?? "Player")
       : null) ??
     selectedNPCDefinition?.displayName ??
     selectedItemDefinition?.displayName ??
+    (selectedIds.length === 1
+      ? (findSceneObject(selectedIds[0]!)?.displayName ?? null)
+      : null) ??
     null;
 
   const isRegionRootSelected =
@@ -1648,7 +1730,10 @@ export function useLayoutWorkspaceView(
     ) : null,
 
     rightPanel: region ? (
-      <Inspector selectionLabel={selectedSceneLabel}>
+      <Inspector
+        selectionLabel={selectedSceneLabel}
+        hasSelection={selectedIds.length > 0 || isRegionRootSelected}
+      >
         {isRegionRootSelected ? (
           <Stack gap="md">
             <Text size="sm" fw={600}>
@@ -2040,6 +2125,177 @@ export function useLayoutWorkspaceView(
               onChange={(axis, value) =>
                 handleTransformChange(
                   selectedMarker.markerId,
+                  "rotation",
+                  axis,
+                  value
+                )
+              }
+            />
+          </Stack>
+        ) : selectedLight ? (
+          <Stack gap="md">
+            <Stack gap={4}>
+              <FactRow label="Type" value="Light" />
+              <FactRow
+                label="Scope"
+                value={
+                  overlayLightIds.has(selectedLight.instanceId)
+                    ? `\u{1F3AC} ${activeScene?.displayName ?? "Scene"}`
+                    : "Base \u2014 always visible"
+                }
+              />
+            </Stack>
+            <TextInput
+              label="Name"
+              size="xs"
+              value={selectedLight.displayName}
+              onChange={(event) =>
+                patchSelectedLight({ displayName: event.currentTarget.value })
+              }
+            />
+            <Select
+              label="Kind"
+              size="xs"
+              allowDeselect={false}
+              data={PLACED_LIGHT_KIND_OPTIONS}
+              value={selectedLight.kind}
+              onChange={(value) =>
+                value
+                  ? patchSelectedLight({ kind: value as PlacedLightKind })
+                  : undefined
+              }
+            />
+            <Checkbox
+              size="xs"
+              label="On"
+              description="Off is dark in the game too, not just here."
+              checked={selectedLight.enabled}
+              onChange={(event) =>
+                patchSelectedLight({ enabled: event.currentTarget.checked })
+              }
+            />
+            <ColorInput
+              label="Colour"
+              size="xs"
+              format="hex"
+              withEyeDropper={false}
+              value={hexColorString(selectedLight.color)}
+              onChange={(value) =>
+                patchSelectedLight({
+                  color: hexColorNumber(value, selectedLight.color)
+                })
+              }
+            />
+            <NumberInput
+              label={PLACED_LIGHT_INTENSITY_LABEL[selectedLight.kind]}
+              size="xs"
+              min={0}
+              step={1}
+              value={selectedLight.intensity}
+              onChange={(value) =>
+                typeof value === "number"
+                  ? patchSelectedLight({ intensity: value })
+                  : undefined
+              }
+            />
+            {selectedLight.radius !== null ? (
+              <NumberInput
+                label="Reach (metres)"
+                size="xs"
+                min={0}
+                step={0.5}
+                value={selectedLight.radius}
+                onChange={(value) =>
+                  typeof value === "number"
+                    ? patchSelectedLight({ radius: value })
+                    : undefined
+                }
+              />
+            ) : null}
+            {selectedLight.spot ? (
+              <>
+                <NumberInput
+                  label="Cone angle (degrees)"
+                  size="xs"
+                  min={1}
+                  max={89}
+                  step={1}
+                  value={selectedLight.spot.angleDeg}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: { ...selectedLight.spot, angleDeg: value }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Edge softness"
+                  size="xs"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.spot.penumbra}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: { ...selectedLight.spot, penumbra: value }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            {selectedLight.area ? (
+              <>
+                <NumberInput
+                  label="Width (metres)"
+                  size="xs"
+                  min={0}
+                  step={0.25}
+                  value={selectedLight.area.width}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.area
+                      ? patchSelectedLight({
+                          area: { ...selectedLight.area, width: value }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Height (metres)"
+                  size="xs"
+                  min={0}
+                  step={0.25}
+                  value={selectedLight.area.height}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.area
+                      ? patchSelectedLight({
+                          area: { ...selectedLight.area, height: value }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            <TransformInspector
+              label="Position"
+              value={selectedLight.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedLight.instanceId,
+                  "position",
+                  axis,
+                  value
+                )
+              }
+            />
+            <TransformInspector
+              label="Facing"
+              value={selectedLight.transform.rotation}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedLight.instanceId,
                   "rotation",
                   axis,
                   value
