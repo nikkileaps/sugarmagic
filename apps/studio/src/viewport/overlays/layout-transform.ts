@@ -63,8 +63,8 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
         scale
       });
     },
-    getSelectedId() {
-      return context.stateAccess.getSelectionIds()[0] ?? null;
+    getSelectedIds() {
+      return context.stateAccess.getSelectionIds();
     },
     getActiveId() {
       return context.stateAccess.getActiveSelectionId();

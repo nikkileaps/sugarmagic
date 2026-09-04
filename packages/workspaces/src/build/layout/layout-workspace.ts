@@ -45,6 +45,7 @@ import {
   type OriginMarker,
   type WorldCursor
 } from "./gizmo";
+import { medianPivot } from "./selection-transform";
 
 export interface LayoutWorkspaceConfig {
   onCommand: (command: SemanticCommand) => void;
@@ -55,10 +56,11 @@ export interface LayoutWorkspaceConfig {
     rotation: [number, number, number],
     scale: [number, number, number]
   ) => void;
-  getSelectedId: () => string | null;
+  /** Everything selected, in selection order. */
+  getSelectedIds: () => string[];
   /**
    * The selected object the author touched last. It is outlined more brightly
-   * than the rest, and later work reads it for the pivot and axis orientation.
+   * than the rest, and later work reads it for the axis orientation.
    */
   getActiveId: () => string | null;
   getRegion: () => RegionDocument | null;
@@ -104,19 +106,16 @@ export interface LayoutWorkspaceInstance {
  * commit. Shift-clicking a marker, or shift-clicking anything while a marker is
  * selected, starts a fresh selection instead of extending one.
  *
- * Reading the one selected id is enough to spot a selected marker: because this
- * rule never lets a marker join a larger selection, a selected marker is always
- * the only thing selected.
  */
 export function markersStayAlone(
   intent: SelectionIntent,
-  selectedId: string | null,
+  selectedIds: readonly string[],
   kindOf: (instanceId: string) => SceneObject["kind"] | null
 ): SelectionIntent {
   if (intent.kind !== "toggle") return intent;
   const touchesAMarker =
     kindOf(intent.instanceId) === "marker" ||
-    (selectedId !== null && kindOf(selectedId) === "marker");
+    selectedIds.some((instanceId) => kindOf(instanceId) === "marker");
   return touchesAMarker
     ? { kind: "replace", instanceId: intent.instanceId }
     : intent;
@@ -151,18 +150,38 @@ export function createLayoutWorkspace(
     };
   }
 
-  function getSceneObject(instanceId: string): SceneObject | null {
+  function resolveObjects(): SceneObject[] {
     const region = config.getRegion();
-    if (!region) return null;
-    const objects = resolveSceneObjects(region, {
+    if (!region) return [];
+    return resolveSceneObjects(region, {
       activeScene: config.getActiveScene(),
       // The gizmo asks this for the object it is attaching to, so markers
       // have to be in the answer or selecting one finds nothing.
       includeMarkers: true
     });
+  }
+
+  function getSceneObject(instanceId: string): SceneObject | null {
     return (
-      objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null
+      resolveObjects().find((o: SceneObject) => o.instanceId === instanceId) ??
+      null
     );
+  }
+
+  /**
+   * The scene objects for a set of ids, in selection order. Resolving the
+   * region's objects is a full rebuild, so this does it once and matches the
+   * whole set against it rather than once per id.
+   */
+  function getSceneObjects(instanceIds: readonly string[]): SceneObject[] {
+    const wanted = new Set(instanceIds);
+    const found = new Map<string, SceneObject>();
+    for (const object of resolveObjects()) {
+      if (wanted.has(object.instanceId)) found.set(object.instanceId, object);
+    }
+    return instanceIds
+      .map((instanceId) => found.get(instanceId))
+      .filter((object): object is SceneObject => object !== undefined);
   }
 
   let transformController: ReturnType<typeof createTransformController> | null =
@@ -191,8 +210,7 @@ export function createLayoutWorkspace(
   function syncHulls(): void {
     const selectedTargets: HullTarget[] = [];
     const activeId = config.getActiveId();
-    const selectedId = config.getSelectedId();
-    for (const instanceId of selectedId ? [selectedId] : []) {
+    for (const instanceId of config.getSelectedIds()) {
       const object = getObject(instanceId);
       if (!object) continue;
       selectedTargets.push({
@@ -217,7 +235,11 @@ export function createLayoutWorkspace(
       hitTestService,
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
-      getSelectedId: config.getSelectedId,
+      // A drag still moves one object: the first selected. The gizmo already
+      // sits at the pivot of the whole selection, so with more than one
+      // selected the drag and the gizmo disagree until the drag session
+      // carries every selected object.
+      getSelectedId: () => config.getSelectedIds()[0] ?? null,
       isSelectable: config.isSelectable,
       getTransform,
       onPreview(instanceId, values) {
@@ -323,7 +345,7 @@ export function createLayoutWorkspace(
         config.onSelect(
           markersStayAlone(
             intent,
-            config.getSelectedId(),
+            config.getSelectedIds(),
             (instanceId) => getSceneObject(instanceId)?.kind ?? null
           )
         );
@@ -436,25 +458,19 @@ export function createLayoutWorkspace(
 
     syncOverlays() {
       syncHulls();
-      const selectedId = config.getSelectedId();
-      if (!selectedId) {
+      const selected = getSceneObjects(config.getSelectedIds());
+      const pivot = medianPivot(selected.map((o) => o.transform.position));
+      if (!pivot) {
         gizmo.setVisible(false);
         originMarker.setVisible(false);
         return;
       }
 
-      const transform = getTransform(selectedId);
-      if (!transform) {
-        gizmo.setVisible(false);
-        originMarker.setVisible(false);
-        return;
-      }
-
-      gizmo.setPosition(transform.position);
+      gizmo.setPosition(pivot);
       // Size comes from camera distance (updateForCamera), not the
       // object's scale -- the gizmo reads constant on screen.
       gizmo.setVisible(true);
-      originMarker.setPosition(transform.position);
+      originMarker.setPosition(pivot);
       originMarker.setVisible(true);
     }
   };
