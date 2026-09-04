@@ -14,10 +14,19 @@ export interface SceneExplorerEntity {
   type: "entity";
   instanceId: string;
   displayName: string;
-  entityKind: "asset" | "player" | "npc" | "item" | "marker";
+  entityKind: "asset" | "player" | "npc" | "item" | "marker" | "light";
   assetKind: string;
   assetDefinitionId: string | null;
   visible: boolean;
+  /**
+   * Whether this row offers an on/off control at all. The ROW decides, not the
+   * explorer: a callback handed to the whole component would put a control on
+   * every entity, and a control that does nothing looks like a working one.
+   *
+   * Absent means no. Today only a placed light says yes, because only a light
+   * carries visibility the author saved rather than the viewport's own.
+   */
+  canToggleVisibility?: boolean;
 }
 
 export interface SceneExplorerFolder {
@@ -269,10 +278,16 @@ function EntityRow({
           {node.displayName}
         </Text>
       </Group>
-      {onToggleVisibility && (
+      {onToggleVisibility && node.canToggleVisibility && (
         <ActionIcon
           variant="subtle"
           size="xs"
+          // Deliberately not the folder eye. A folder's eye hides things while
+          // you work and is forgotten on reload; this one saves into the region
+          // and ships, so it reads as a lamp lit or out rather than as
+          // something hidden from view.
+          title={node.visible ? "On, in the game too" : "Off, in the game too"}
+          aria-label={node.visible ? "Switch off" : "Switch on"}
           onClick={(e) => {
             e.stopPropagation();
             onToggleVisibility(node.instanceId);
@@ -286,7 +301,7 @@ function EntityRow({
             }
           }}
         >
-          {node.visible ? "👁" : "👁‍🗨"}
+          {node.visible ? "🔆" : "🌑"}
         </ActionIcon>
       )}
     </Box>

@@ -31,6 +31,7 @@ export {
 } from "./gizmo";
 
 export {
+  buildSceneTree,
   useLayoutWorkspaceView,
   type LayoutWorkspaceViewProps
 } from "./LayoutWorkspaceView";

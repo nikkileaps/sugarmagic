@@ -259,10 +259,18 @@ function FactRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function buildSceneTree(
+/**
+ * The Scene Explorer's rows for one region, composed with its active Scene.
+ *
+ * Exported so the row rules can be checked without a browser -- above all,
+ * which rows offer an on/off control. A control that appears where nothing
+ * handles it looks exactly like one that works.
+ */
+export function buildSceneTree(
   region: RegionDocument,
   regionContents: ComposedRegionContents,
   overlayAssetIds: Set<string>,
+  overlayLightIds: Set<string>,
   assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
@@ -295,6 +303,15 @@ function buildSceneTree(
     const siblings = assetsByParent.get(asset.parentFolderId) ?? [];
     siblings.push(asset);
     assetsByParent.set(asset.parentFolderId, siblings);
+  }
+
+  // Lights sit in the folder tree like props: both carry a parentFolderId, and
+  // an author who groups a shrine's props wants its candles in there too.
+  const lightsByParent = new Map<string | null, PlacedLight[]>();
+  for (const light of regionContents.placedLights) {
+    const siblings = lightsByParent.get(light.parentFolderId) ?? [];
+    siblings.push(light);
+    lightsByParent.set(light.parentFolderId, siblings);
   }
 
   const buildChildren = (
@@ -341,7 +358,24 @@ function buildSceneTree(
       }
     );
 
-    return [...childFolders, ...childAssets];
+    const childLights = (lightsByParent.get(parentFolderId) ?? []).map(
+      (light) => ({
+        type: "entity" as const,
+        instanceId: light.instanceId,
+        displayName: overlayLightIds.has(light.instanceId)
+          ? `${light.displayName} \u{1F3AC}`
+          : light.displayName,
+        entityKind: "light" as const,
+        assetKind: "light",
+        assetDefinitionId: null,
+        // The saved state, not the viewport's: this row's control writes the
+        // region, so what it shows has to be what the region says.
+        visible: light.enabled,
+        canToggleVisibility: true
+      })
+    );
+
+    return [...childFolders, ...childAssets, ...childLights];
   };
 
   const markerNodes = (region.markers ?? []).map((marker) => ({
@@ -672,6 +706,7 @@ export function useLayoutWorkspaceView(
             region,
             regionContents,
             overlayAssetIds,
+            overlayLightIds,
             assetDefinitions,
             playerDefinition,
             itemDefinitions,
@@ -687,6 +722,7 @@ export function useLayoutWorkspaceView(
       itemDefinitions,
       npcDefinitions,
       overlayAssetIds,
+      overlayLightIds,
       playerDefinition,
       region,
       regionContents
@@ -1067,6 +1103,33 @@ export function useLayoutWorkspaceView(
     [onCommand, onSelect, region]
   );
 
+  /**
+   * The light row's on/off control. Writes the region, so it survives a reload
+   * and the game reads the same answer -- unlike a folder's eye, which hides
+   * things in the viewport and is forgotten.
+   */
+  const handleToggleEntityVisibility = useCallback(
+    (instanceId: string) => {
+      if (!region) return;
+      const light = regionContents.placedLights.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      // Only light rows offer the control, so a miss means the row named
+      // something already deleted. Nothing to switch.
+      if (!light) return;
+      onCommand({
+        kind: "UpdatePlacedLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "placed-light", subjectId: instanceId },
+        payload: { instanceId, patch: { enabled: !light.enabled } }
+      });
+    },
+    [onCommand, region, regionContents]
+  );
+
   const handleDeleteEntityFromScene = useCallback(
     (instanceId: string) => {
       if (!region) return;
@@ -1085,6 +1148,10 @@ export function useLayoutWorkspaceView(
         regionContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
+      const light =
+        regionContents.placedLights.find(
+          (candidate) => candidate.instanceId === instanceId
+        ) ?? null;
 
       const label =
         asset?.displayName ??
@@ -1100,7 +1167,9 @@ export function useLayoutWorkspaceView(
               (definition) =>
                 definition.definitionId === itemPresence.itemDefinitionId
             )?.displayName ?? "Item")
-          : null);
+          : null) ??
+        light?.displayName ??
+        null;
 
       if (!label) return;
       if (!window.confirm(`Remove ${label} from this scene?`)) return;
@@ -1163,6 +1232,21 @@ export function useLayoutWorkspaceView(
           },
           payload: {
             presenceId: itemPresence.presenceId
+          }
+        });
+      } else if (light) {
+        onCommand({
+          kind: "RemovePlacedLight",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "placed-light",
+            subjectId: light.instanceId
+          },
+          payload: {
+            instanceId: light.instanceId
           }
         });
       }
@@ -1620,6 +1704,7 @@ export function useLayoutWorkspaceView(
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
+            onToggleVisibility={handleToggleEntityVisibility}
             onMoveEntityToFolder={handleMoveEntityToFolder}
           />
         </Stack>
