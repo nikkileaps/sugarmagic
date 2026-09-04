@@ -4,10 +4,10 @@
  * Mounts the shared layout interaction controller into the viewport-owned
  * scene roots and connects its state/command edges to shell stores.
  *
- * Gated on `activeBuildWorkspaceKind === "layout"`: the gizmo, pointer
- * handlers, and selection hit-test attach only while the author is in the
- * Layout workspace and detach otherwise, so clicks in the Landscape or
- * Spatial workspaces can't accidentally drag placed assets.
+ * The gizmo, pointer handlers and selection hit-test attach only where
+ * `transformOverlayAttaches` says they belong -- Build > Layout and the Scene
+ * Composer -- and detach otherwise, so clicks in the Landscape or Spatial
+ * workspaces can't accidentally drag placed assets.
  */
 
 import {
@@ -23,6 +23,10 @@ import {
   type SelectionIntent
 } from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "../overlay-context";
+import {
+  isSelectableHere,
+  transformOverlayAttaches
+} from "./transform-overlay-gates";
 
 export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
   const layout = createLayoutWorkspace({
@@ -81,26 +85,12 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       const session = context.stateAccess.getSession();
       return session ? getActiveScene(session) : null;
     },
-    /**
-     * In the scene composer the region is shown but not edited: an
-     * author sees where the station is while placing what this Scene
-     * adds to it (epic #226). Everywhere else -- Build -- every drawn
-     * object is editable, which is what returning true means.
-     */
     isSelectable(instanceId: string) {
-      const shell = context.stateAccess.getShellState?.();
-      const inComposer =
-        shell?.activeProductMode === "story" &&
-        shell?.activeStoryWorkspaceKind === "composer";
-      if (!inComposer) return true;
-      const region = context.stateAccess.getActiveRegion();
-      if (!region) return true;
-      const regionOwned =
-        region.placedAssets.some((asset) => asset.instanceId === instanceId) ||
-        region.npcPresences.some((p) => p.presenceId === instanceId) ||
-        region.itemPresences.some((p) => p.presenceId === instanceId) ||
-        region.playerPresence?.presenceId === instanceId;
-      return !regionOwned;
+      return isSelectableHere(
+        context.stateAccess.getShellState(),
+        context.stateAccess.getActiveRegion(),
+        instanceId
+      );
     }
   });
 
@@ -141,6 +131,7 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     ({ project, shell, viewport }) => ({
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
+      activeStoryWorkspaceKind: shell.activeStoryWorkspaceKind,
       regionId: project.session
         ? (getActiveRegion(project.session)?.identity.id ?? null)
         : null,
@@ -152,10 +143,7 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
       activeTool: viewport.activeTransformTool
     }),
     (slice) => {
-      const isActive =
-        slice.activeProductMode === "build" &&
-        slice.activeBuildWorkspaceKind === "layout";
-      if (!isActive) {
+      if (!transformOverlayAttaches(slice)) {
         detachWorkspace();
         return;
       }
