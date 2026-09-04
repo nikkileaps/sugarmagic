@@ -43,6 +43,8 @@ import type {
 } from "@sugarmagic/domain";
 import {
   type AssetColliderShape,
+  assetDefinitionsNeedingColliderBake,
+  classifyAssetColliderBake,
   getAssetDefinition,
   getMaskTextureDefinition,
   getSurfaceDefinition,
@@ -234,7 +236,6 @@ import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { correctAssetOriginToBottomCenter } from "./asset-pipeline/origin-correct";
-import { computeAssetColliderBounds } from "./asset-pipeline/collider-bounds";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import {
@@ -245,6 +246,7 @@ import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 import {
   clearLivePaintedMasks,
+  computeAssetColliderBounds,
   createWebRenderEngine
 } from "@sugarmagic/render-web";
 import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
@@ -3096,13 +3098,10 @@ export function App() {
       if (!current || !handle) {
         return;
       }
-      const pending = current.contentLibrary.assetDefinitions.filter(
-        (def) =>
-          def.collider &&
-          def.collider.shape !== "none" &&
-          !def.collider.localBounds
+      const pending = assetDefinitionsNeedingColliderBake(
+        current.contentLibrary
       );
-      for (const def of pending) {
+      for (const { definition: def } of pending) {
         if (cancelled) {
           return;
         }
@@ -3124,13 +3123,15 @@ export function App() {
           const target = latest
             ? getAssetDefinition(latest.contentLibrary, def.definitionId)
             : null;
-          // Re-check: still needs bounds, and nothing raced us to it.
-          if (!latest || !target?.collider || target.collider.localBounds) {
+          // Re-check through the same rule that selected it: the collider
+          // may have been edited while the GLB was being read.
+          const recheck = target ? classifyAssetColliderBake(target) : null;
+          if (!latest || recheck?.kind !== "pending") {
             continue;
           }
           projectStore.getState().updateSession(
             updateAssetDefinitionInSession(latest, def.definitionId, {
-              collider: { ...target.collider, localBounds }
+              collider: { ...recheck.collider, localBounds }
             })
           );
         } catch (error) {

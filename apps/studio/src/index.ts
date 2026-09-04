@@ -18,4 +18,3 @@ export {
   correctAssetOriginToBottomCenter,
   type OriginCorrectResult
 } from "./asset-pipeline/origin-correct";
-export { computeAssetColliderBounds } from "./asset-pipeline/collider-bounds";

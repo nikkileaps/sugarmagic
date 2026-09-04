@@ -223,6 +223,65 @@ export function normalizeAssetCollider(
   };
 }
 
+/** An asset definition whose collider still needs `localBounds` measured
+ *  from its GLB. Carries the NORMALIZED collider so the caller writes the
+ *  measurement back onto the same shape the classification was made on. */
+export interface PendingColliderBake {
+  kind: "pending";
+  definition: AssetDefinition;
+  collider: AssetCollider;
+}
+
+/**
+ * Where an asset definition stands with respect to baking collider
+ * `localBounds`: it needs no collider at all, it already has bounds, or it
+ * is waiting for a measurement.
+ *
+ * [LAW:types-are-the-program] Three states, not a boolean. A predicate
+ * answering "does this need baking" cannot say WHY it said no -- a
+ * walk-through asset and one already measured both answer the same -- so
+ * every caller that wants to report counts re-derives the rule. Two of
+ * them did, and one had already drifted: the studio's own race re-check
+ * had dropped the `"none"` test, so a collider switched to walk-through
+ * mid-backfill still got bounds written onto it.
+ */
+export type AssetColliderBakeState =
+  | { kind: "walk-through"; definition: AssetDefinition }
+  | { kind: "already-baked"; definition: AssetDefinition }
+  | PendingColliderBake;
+
+/**
+ * The one rule for whether an asset needs its collider bounds measured.
+ *
+ * Normalizes first: a definition read from a file written before colliders
+ * existed carries none at all, and the kind-aware default is what decides
+ * whether it is walk-through.
+ */
+export function classifyAssetColliderBake(
+  definition: AssetDefinition
+): AssetColliderBakeState {
+  const collider = normalizeAssetCollider(
+    definition.collider,
+    definition.assetKind
+  );
+  if (collider.shape === "none") {
+    return { kind: "walk-through", definition };
+  }
+  if (collider.localBounds) {
+    return { kind: "already-baked", definition };
+  }
+  return { kind: "pending", definition, collider };
+}
+
+/** Every definition in the library still waiting on a measurement. */
+export function assetDefinitionsNeedingColliderBake(
+  library: ContentLibrarySnapshot
+): PendingColliderBake[] {
+  return library.assetDefinitions
+    .map(classifyAssetColliderBake)
+    .filter((entry): entry is PendingColliderBake => entry.kind === "pending");
+}
+
 /**
  * Character model `.glb` bound to exactly one Player or NPC
  * definition. Lives in the project file (asset-resolved,

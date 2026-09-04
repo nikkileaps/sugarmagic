@@ -8,6 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  assetDefinitionsNeedingColliderBake,
+  classifyAssetColliderBake,
   createEmptyContentLibrarySnapshot,
   defaultAssetColliderForKind,
   getAssetDefinition,
@@ -101,5 +103,74 @@ describe("normalizeContentLibrarySnapshot — collider backfill", () => {
       once.definitionId
     );
     expect(twice!.collider).toEqual(once.collider);
+  });
+});
+
+describe("which assets still need collider bounds baked", () => {
+  const BOUNDS = { min: [-1, 0, -1] as [number, number, number], max: [1, 2, 1] as [number, number, number] };
+
+  it("a shaped collider with no bounds is pending, and carries its collider", () => {
+    // The caller writes the measurement back onto this collider, so the
+    // classification hands over the one it judged rather than making the
+    // caller re-read a field that may have changed underneath it.
+    const state = classifyAssetColliderBake(
+      assetDef({ collider: { shape: "auto-box", localBounds: null } })
+    );
+
+    expect(state.kind).toBe("pending");
+    expect(state.kind === "pending" && state.collider.shape).toBe("auto-box");
+  });
+
+  it("a none-shaped collider is walk-through, not pending", () => {
+    expect(
+      classifyAssetColliderBake(
+        assetDef({ collider: { shape: "none", localBounds: null } })
+      ).kind
+    ).toBe("walk-through");
+  });
+
+  it("bounds already measured read as already-baked", () => {
+    expect(
+      classifyAssetColliderBake(
+        assetDef({ collider: { shape: "auto-box", localBounds: BOUNDS } })
+      ).kind
+    ).toBe("already-baked");
+  });
+
+  it("no collider at all falls to the kind default", () => {
+    // A file written before colliders existed. The definition's kind is
+    // what decides, so a model is pending and foliage walks through.
+    expect(classifyAssetColliderBake(assetDef({ assetKind: "model" })).kind).toBe(
+      "pending"
+    );
+    expect(
+      classifyAssetColliderBake(assetDef({ assetKind: "foliage" })).kind
+    ).toBe("walk-through");
+  });
+
+  it("never reports bounds as pending on a walk-through collider", () => {
+    // The drift this replaced: the studio's race re-check tested only for
+    // absent bounds and had dropped the shape test, so a collider switched
+    // to "none" mid-backfill still got bounds written onto it.
+    expect(
+      classifyAssetColliderBake(
+        assetDef({ collider: { shape: "none", localBounds: null } })
+      ).kind
+    ).not.toBe("pending");
+  });
+
+  it("selects only the pending ones out of a library", () => {
+    const library = createEmptyContentLibrarySnapshot("proj");
+    library.assetDefinitions.push(
+      assetDef({ definitionId: "a:pending", collider: { shape: "auto-box", localBounds: null } }),
+      assetDef({ definitionId: "a:walk", collider: { shape: "none", localBounds: null } }),
+      assetDef({ definitionId: "a:done", collider: { shape: "auto-box", localBounds: BOUNDS } })
+    );
+
+    expect(
+      assetDefinitionsNeedingColliderBake(library).map(
+        (entry) => entry.definition.definitionId
+      )
+    ).toEqual(["a:pending"]);
   });
 });

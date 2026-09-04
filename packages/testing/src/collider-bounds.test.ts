@@ -43,10 +43,8 @@ if (typeof globalThis.FileReader === "undefined") {
   (globalThis as Record<string, unknown>).FileReader = NodeFileReader;
 }
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
-import {
-  computeAssetColliderBounds,
-  correctAssetOriginToBottomCenter
-} from "@sugarmagic/studio";
+import { computeAssetColliderBounds } from "@sugarmagic/render-web";
+import { correctAssetOriginToBottomCenter } from "@sugarmagic/studio";
 
 /** A GLB with a single unit box centered at `position`. */
 async function makeBoxGlb(

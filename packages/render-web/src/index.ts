@@ -36,5 +36,6 @@ export * from "./landscape";
 export * from "./render";
 export * from "./renderableFallbacks";
 export * from "./renderableTransforms";
+export * from "./colliderBounds";
 export * from "./scatter";
 export * from "./view/RenderView";
