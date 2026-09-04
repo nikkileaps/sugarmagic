@@ -33,11 +33,15 @@ export {
   type TransformTool
 } from "./tool-state";
 
+export { medianPivot, type Vector3Tuple } from "./selection-transform";
+
 export {
   createTransformController,
+  type DraggedSubject,
   type SelectionIntent,
   type TransformControllerConfig,
   type TransformSession,
+  type TransformSubjectSession,
   type TransformAxis,
   type TransformValues
 } from "./transform-controller";

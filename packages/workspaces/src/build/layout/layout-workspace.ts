@@ -13,7 +13,8 @@ import * as THREE from "three";
 import type {
   RegionDocument,
   Scene,
-  SemanticCommand
+  SemanticCommand,
+  TransformSubject
 } from "@sugarmagic/domain";
 import {
   resolveSceneObjects,
@@ -26,6 +27,8 @@ import {
   createTransformController,
   gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
+  medianPivot,
+  type DraggedSubject,
   type InputRouter,
   type HitTestService,
   type SelectionIntent,
@@ -45,7 +48,6 @@ import {
   type OriginMarker,
   type WorldCursor
 } from "./gizmo";
-import { medianPivot } from "./selection-transform";
 
 export interface LayoutWorkspaceConfig {
   onCommand: (command: SemanticCommand) => void;
@@ -56,6 +58,12 @@ export interface LayoutWorkspaceConfig {
     rotation: [number, number, number],
     scale: [number, number, number]
   ) => void;
+  /**
+   * Forget the drafts for these objects. A draft outranks the authored
+   * transform wherever it is drawn, so one left behind after a drag pins the
+   * object to where that drag ended and later undo appears to do nothing.
+   */
+  onClearPreviewTransforms: (instanceIds: string[]) => void;
   /** Everything selected, in selection order. */
   getSelectedIds: () => string[];
   /**
@@ -100,12 +108,47 @@ export interface LayoutWorkspaceInstance {
 }
 
 /**
+ * How a scene object of this kind records a new transform. Four kinds carry
+ * the transform itself; a marker carries a patch instead, which is why it
+ * cannot ride along in a batch with the others.
+ *
+ * This used to be decided in several places, and one of them ended in an
+ * unguarded "anything else is an NPC". That fired a presence command for a
+ * marker: no NPC had that id, nothing changed, and the gizmo snapped back to
+ * the authored position with no error anywhere. The exhaustive switch and the
+ * `never` below are what stop a new kind from doing that again.
+ */
+export type TransformCommit =
+  | { via: "transform"; subjectKind: TransformSubject["subjectKind"] }
+  | { via: "marker-patch" };
+
+export function transformCommitFor(kind: SceneObject["kind"]): TransformCommit {
+  switch (kind) {
+    case "asset":
+      return { via: "transform", subjectKind: "placed-asset" };
+    case "player":
+      return { via: "transform", subjectKind: "player-presence" };
+    case "npc":
+      return { via: "transform", subjectKind: "npc-presence" };
+    case "item":
+      return { via: "transform", subjectKind: "item-presence" };
+    case "marker":
+      return { via: "marker-patch" };
+    default: {
+      const unhandled: never = kind;
+      throw new Error(
+        `[layout-workspace] no transform command for scene object kind ${unhandled}`
+      );
+    }
+  }
+}
+
+/**
  * A marker never shares a selection with anything else. Markers commit through
  * `UpdateRegionMarker` with a patch while every other kind commits through a
  * `Transform*` command, so a mixed selection would have no single shape to
  * commit. Shift-clicking a marker, or shift-clicking anything while a marker is
  * selected, starts a fresh selection instead of extending one.
- *
  */
 export function markersStayAlone(
   intent: SelectionIntent,
@@ -230,116 +273,121 @@ export function createLayoutWorkspace(
     );
   }
 
+  /**
+   * Show where a drag has put the selection, without committing it: a draft
+   * per object, and the gizmo back at the pivot of where they now sit.
+   * Cancelling uses the same path with the transforms the drag started from.
+   */
+  function showDrag(subjects: readonly DraggedSubject[]): void {
+    for (const { instanceId, values } of subjects) {
+      config.onPreviewTransform(
+        instanceId,
+        values.position,
+        values.rotation,
+        values.scale
+      );
+    }
+    const pivot = medianPivot(
+      subjects.map((subject) => subject.values.position)
+    );
+    if (!pivot) return;
+    gizmo.setPosition(pivot);
+    originMarker.setPosition(pivot);
+  }
+
   function buildTransformController(initialCamera: THREE.Camera) {
     return createTransformController({
       hitTestService,
       getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
-      // A drag still moves one object: the first selected. The gizmo already
-      // sits at the pivot of the whole selection, so with more than one
-      // selected the drag and the gizmo disagree until the drag session
-      // carries every selected object.
-      getSelectedId: () => config.getSelectedIds()[0] ?? null,
+      getSelectedIds: config.getSelectedIds,
       isSelectable: config.isSelectable,
       getTransform,
-      onPreview(instanceId, values) {
-        gizmo.setPosition(values.position);
-        originMarker.setPosition(values.position);
-        config.onPreviewTransform(
-          instanceId,
-          values.position,
-          values.rotation,
-          values.scale
-        );
-      },
-      onCommit(instanceId, values) {
+      onPreview: showDrag,
+      onCommit(subjects) {
         const region = config.getRegion();
         if (!region) return;
-        const sceneObject = getSceneObject(instanceId);
-        if (!sceneObject) return;
-
         const target = {
           aggregateKind: "region-document" as const,
           aggregateId: region.identity.id
         };
-        const { position, rotation, scale } = values;
 
-        // [LAW:types-are-the-program] Exhaustive over the kind, with the
-        // `never` check below. This used to end in an unguarded "anything
-        // else is an NPC", which silently fired a presence command for a
-        // marker: no NPC had that id, nothing changed, and the gizmo
-        // snapped back to the authored position with no error anywhere.
-        switch (sceneObject.kind) {
-          case "asset":
-            config.onCommand({
-              kind: "TransformPlacedAsset",
-              target,
-              subject: { subjectKind: "placed-asset", subjectId: instanceId },
-              payload: { instanceId, position, rotation, scale }
-            });
-            return;
+        const resolved = subjects.flatMap(({ instanceId, values }) => {
+          const sceneObject = getSceneObject(instanceId);
+          return sceneObject
+            ? [
+                {
+                  instanceId,
+                  values,
+                  commit: transformCommitFor(sceneObject.kind)
+                }
+              ]
+            : [];
+        });
 
-          case "player":
-            config.onCommand({
-              kind: "TransformPlayerPresence",
-              target,
-              subject: {
-                subjectKind: "player-presence",
-                subjectId: instanceId
-              },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
-
-          case "item":
-            config.onCommand({
-              kind: "TransformItemPresence",
-              target,
-              subject: { subjectKind: "item-presence", subjectId: instanceId },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
-
-          case "npc":
-            config.onCommand({
-              kind: "TransformNPCPresence",
-              target,
-              subject: { subjectKind: "npc-presence", subjectId: instanceId },
-              payload: { presenceId: instanceId, position, rotation, scale }
-            });
-            return;
-
-          case "marker":
-            config.onCommand({
-              kind: "UpdateRegionMarker",
-              target,
-              subject: { subjectKind: "region-marker", subjectId: instanceId },
-              payload: {
-                markerId: instanceId,
-                patch: { transform: { position, rotation, scale } }
-              }
-            });
-            return;
-
-          default: {
-            const unhandled: never = sceneObject.kind;
-            console.warn(
-              "[layout-workspace] no transform command for scene object kind",
-              unhandled,
-              instanceId
-            );
-          }
+        // Markers carry a patch and everything else carries a transform, so
+        // they go out as different commands. Each group is sent over its own
+        // list rather than one being treated as the special case.
+        for (const { instanceId, values } of resolved.filter(
+          (entry) => entry.commit.via === "marker-patch"
+        )) {
+          const { position, rotation, scale } = values;
+          config.onCommand({
+            kind: "UpdateRegionMarker",
+            target,
+            subject: { subjectKind: "region-marker", subjectId: instanceId },
+            payload: {
+              markerId: instanceId,
+              patch: { transform: { position, rotation, scale } }
+            }
+          });
         }
-      },
-      onCancel(instanceId, values) {
-        gizmo.setPosition(values.position);
-        originMarker.setPosition(values.position);
-        config.onPreviewTransform(
-          instanceId,
-          values.position,
-          values.rotation,
-          values.scale
+
+        const transformed = resolved.flatMap((entry) =>
+          entry.commit.via === "transform"
+            ? [
+                {
+                  subjectKind: entry.commit.subjectKind,
+                  subjectId: entry.instanceId,
+                  position: entry.values.position,
+                  rotation: entry.values.rotation,
+                  scale: entry.values.scale
+                }
+              ]
+            : []
         );
+        if (transformed.length > 0) {
+          // One drag, one command, so one undo puts the whole selection back.
+          config.onCommand({
+            kind: "TransformSceneObjects",
+            target,
+            subject: {
+              subjectKind: transformed[0].subjectKind,
+              subjectId: transformed[0].subjectId
+            },
+            payload: { subjects: transformed }
+          });
+        }
+
+        // The authored transforms now hold what the drag produced, so the
+        // drafts have done their job. Leaving them would keep overriding the
+        // authored values and a later undo would change nothing on screen.
+        config.onClearPreviewTransforms(
+          resolved.map((entry) => entry.instanceId)
+        );
+      },
+      onCancel(subjects) {
+        // Dropping the drafts is the whole of an abandoned drag: what is drawn
+        // falls back to the authored transforms, which never changed.
+        config.onClearPreviewTransforms(
+          subjects.map((subject) => subject.instanceId)
+        );
+        const pivot = medianPivot(
+          subjects.map((subject) => subject.values.position)
+        );
+        if (!pivot) return;
+        gizmo.setPosition(pivot);
+        originMarker.setPosition(pivot);
       },
       onSelect(intent) {
         config.onSelect(

@@ -69,6 +69,8 @@ export interface ViewportOverlayStateAccess {
   /** Deselect everything without leaving the workspace. */
   clearSelection(): void;
   setTransformDraft(instanceId: string, transform: TransformDraft): void;
+  /** Forget one object's draft so the authored transform is drawn again. */
+  clearTransformDraft(instanceId: string): void;
   getLandscapeDraft(): RegionLandscapeState | null;
   setLandscapeDraft(landscape: RegionLandscapeState | null): void;
   paintLandscape(

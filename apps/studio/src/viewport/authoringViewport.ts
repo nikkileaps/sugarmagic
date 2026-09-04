@@ -684,6 +684,11 @@ export function createAuthoringViewport(
           clearSelection() {
             options.stores.shellStore.getState().clearSelection();
           },
+          clearTransformDraft(instanceId: string) {
+            options.stores.viewportStore
+              .getState()
+              .clearTransformDraft(instanceId);
+          },
           setTransformDraft(instanceId: string, transform: TransformDraft) {
             options.stores.viewportStore
               .getState()

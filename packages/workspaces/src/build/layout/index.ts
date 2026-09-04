@@ -25,8 +25,6 @@ export {
   type WorldCursor
 } from "./gizmo";
 
-export { medianPivot, type Vector3Tuple } from "./selection-transform";
-
 export {
   useLayoutWorkspaceView,
   type LayoutWorkspaceViewProps
