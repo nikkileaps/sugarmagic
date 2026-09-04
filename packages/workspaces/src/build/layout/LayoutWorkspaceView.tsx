@@ -49,10 +49,12 @@ import {
   createItemPresenceId,
   createNPCPresenceId,
   createPlacedAssetInstanceId,
+  createPlacedLight,
   createPlayerPresenceId,
   createRegionMarker,
   createSceneFolderId,
   type ComposedRegionContents,
+  type PlacedLightKind,
   type Scene,
   sceneOverlayForRegion
 } from "@sugarmagic/domain";
@@ -1233,6 +1235,40 @@ export function useLayoutWorkspaceView(
     onSelect([marker.markerId]);
   }, [onCommand, onSelect, region]);
 
+  const handleAddLight = useCallback(
+    (kind: PlacedLightKind) => {
+      if (!region) return;
+      // Dropped at the origin at the height every other add uses, then
+      // dragged into place with the gizmo. Numbered so two lights are
+      // distinguishable before either has been named. Colour, reach and cone
+      // come from the factory's defaults -- a warm lamp a few metres across.
+      const light = createPlacedLight({
+        kind,
+        displayName: `Light ${regionContents.placedLights.length + 1}`,
+        parentFolderId:
+          selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
+        transform: {
+          position: [0, 0.5, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      });
+      onCommand({
+        kind: "PlaceLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "placed-light", subjectId: light.instanceId },
+        // Build authors the world at rest, so a light placed here belongs to
+        // the region, the same rule a placed asset follows.
+        payload: { light, scope: "base" as const }
+      });
+      onSelect([light.instanceId]);
+    },
+    [onCommand, onSelect, region, regionContents, selectedFolderId]
+  );
+
   const handleAddNPCPresence = useCallback(
     (definition: NPCDefinition) => {
       if (!region) return;
@@ -1419,6 +1455,22 @@ export function useLayoutWorkspaceView(
                     Player
                   </Menu.Item>
                   <Menu.Item onClick={handleAddMarker}>Marker</Menu.Item>
+                  <Menu.Sub>
+                    <Menu.Sub.Target>
+                      <Menu.Sub.Item>Light</Menu.Sub.Item>
+                    </Menu.Sub.Target>
+                    <Menu.Sub.Dropdown>
+                      <Menu.Item onClick={() => handleAddLight("point")}>
+                        Point
+                      </Menu.Item>
+                      <Menu.Item onClick={() => handleAddLight("spot")}>
+                        Spot
+                      </Menu.Item>
+                      <Menu.Item onClick={() => handleAddLight("area")}>
+                        Area
+                      </Menu.Item>
+                    </Menu.Sub.Dropdown>
+                  </Menu.Sub>
                   <Menu.Item
                     onClick={() => {
                       setAddNPCOpen(true);

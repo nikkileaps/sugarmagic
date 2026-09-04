@@ -4,6 +4,7 @@ import {
   createCapsuleFallback,
   registerLivePaintedMask,
   createFallbackMesh,
+  createPlacedLightProxy,
   createRenderView,
   createRenderableReconciler,
   disposeRenderableObject,
@@ -22,6 +23,7 @@ import {
   resolveHiddenAssetInstanceIds,
   resolveRegionVolumes,
   type MaskTextureDefinition,
+  type PlacedLight,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -441,6 +443,9 @@ export function createAuthoringViewport(
   scene.add(overlayRoot);
 
   let currentAssetSources: Record<string, string> = {};
+  /** The placed lights this pass is drawing, by instanceId, so the renderable
+   *  factory can build a proxy the right size. Refreshed on every sync. */
+  let currentPlacedLights = new Map<string, PlacedLight>();
   // Plan 070.2/070.6 — the shared reconciler owns the authored renderables.
   // Grouping is now ON in the studio too (070.6): brushed placements batch
   // into InstancedMeshes (fast meadows in the editor), and picking + the
@@ -455,12 +460,17 @@ export function createAuthoringViewport(
             null)
           : null,
       loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
-      createFallback: (object) =>
-        object.kind === "asset"
+      createFallback: (object) => {
+        const light = currentPlacedLights.get(object.instanceId);
+        if (object.kind === "light" && light) {
+          return createPlacedLightProxy(light);
+        }
+        return object.kind === "asset"
           ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
           : createCapsuleFallback(object, {
               fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
-            }),
+            });
+      },
       createErrorFallback: (object, error) => {
         reportRenderableError(object, "load", error);
         return createErrorFallbackMesh();
@@ -589,8 +599,13 @@ export function createAuthoringViewport(
     // `region.placedAssets` — else scene-scoped items in a hidden folder render
     // but never hide.
     const composed = composeRegionContents(region, projection.activeScene);
-    // The same lights the running game gets, from the same composed list.
-    renderView.placedLightController.apply(composed.placedLights);
+    // Studio draws a light's coverage, never the light. Every real light in
+    // the scene costs every lit pixel and recompiles every material when it
+    // arrives, which is a price to pay while playing, not while placing.
+    // Preview the game to see what a light actually does.
+    currentPlacedLights = new Map(
+      composed.placedLights.map((light) => [light.instanceId, light])
+    );
     const hidden = resolveHiddenAssetInstanceIds(
       composed,
       projection.hiddenFolderIds

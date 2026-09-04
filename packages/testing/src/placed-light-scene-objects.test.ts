@@ -275,3 +275,42 @@ describe("whether the gizmo offers axis scale", () => {
     expect(axisScaleBlockedBy([upright, rotated])).toBe("rotated-selection");
   });
 });
+
+describe("when Studio rebuilds a light's proxy", () => {
+  function keyFor(overrides: Partial<PlacedLight>): string | undefined {
+    const light = createPlacedLight({ instanceId: "l", ...overrides });
+    return resolveSceneObjects(regionWith([light]), {
+      includeLights: true
+    }).find((object) => object.kind === "light")?.representationKey;
+  }
+
+  it("rebuilds when the reach changes, because the wire is that size", () => {
+    expect(keyFor({ radius: 5 })).not.toBe(keyFor({ radius: 9 }));
+  });
+
+  it("rebuilds when a spot's cone widens", () => {
+    expect(
+      keyFor({
+        kind: "spot",
+        spot: { angleDeg: 20, penumbra: 0, projectedTextureId: null }
+      })
+    ).not.toBe(
+      keyFor({
+        kind: "spot",
+        spot: { angleDeg: 60, penumbra: 0, projectedTextureId: null }
+      })
+    );
+  });
+
+  it("rebuilds when an area light is resized", () => {
+    expect(keyFor({ kind: "area", area: { width: 2, height: 2 } })).not.toBe(
+      keyFor({ kind: "area", area: { width: 4, height: 2 } })
+    );
+  });
+
+  it("keeps the wire it has when only colour or intensity changes", () => {
+    expect(keyFor({ color: 0x00ff00, intensity: 40 })).toBe(
+      keyFor({ color: 0xff0000, intensity: 2 })
+    );
+  });
+});

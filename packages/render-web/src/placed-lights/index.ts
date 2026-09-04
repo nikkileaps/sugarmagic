@@ -6,3 +6,4 @@
  */
 
 export * from "./PlacedLightController";
+export * from "./placedLightProxy";
