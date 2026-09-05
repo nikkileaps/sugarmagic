@@ -240,6 +240,12 @@ export function migrateToScenes(input: {
     const base: RegionDocument = {
       ...(regionRest as RegionDocument),
       placedAssets: region.placedAssets ?? [],
+      // Every collection composition reads has to exist by the time this
+      // returns. This is the ONLY normalization a shipped game runs on its
+      // regions -- Studio's loader never runs in play -- so a boot.json baked
+      // before a collection existed arrives here missing it, and composing
+      // would throw rather than degrade.
+      placedLights: region.placedLights ?? [],
       folders: region.folders ?? []
     };
     if (!legacy) {

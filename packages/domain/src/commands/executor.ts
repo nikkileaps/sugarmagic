@@ -1557,8 +1557,10 @@ function applyDeleteSceneFolder(
     return { region: context.region, scene: context.scene };
   }
 
-  // Reparent children (folders + assets) onto the deleted
-  // folder's parent, in whichever store they live.
+  // Reparent children (folders, assets and lights) onto the deleted folder's
+  // parent, in whichever store they live. Anything left pointing at the
+  // deleted folder is still in the region and still in the world, but the
+  // explorer only walks folders that exist, so it would never show it again.
   const withReparentedFolders = mapFoldersEverywhere(context, (folders) =>
     folders
       .filter((candidate) => candidate.folderId !== command.payload.folderId)
@@ -1571,7 +1573,7 @@ function applyDeleteSceneFolder(
           : candidate
       )
   );
-  return mapPlacedAssetsEverywhere(
+  const withReparentedAssets = mapPlacedAssetsEverywhere(
     {
       region: withReparentedFolders.region,
       scene: withReparentedFolders.scene
@@ -1584,6 +1586,21 @@ function applyDeleteSceneFolder(
               parentFolderId: folder.parentFolderId
             }
           : asset
+      )
+  );
+  return mapPlacedLightsEverywhere(
+    {
+      region: withReparentedAssets.region,
+      scene: withReparentedAssets.scene
+    },
+    (lights) =>
+      lights.map((light) =>
+        light.parentFolderId === command.payload.folderId
+          ? {
+              ...light,
+              parentFolderId: folder.parentFolderId
+            }
+          : light
       )
   );
 }

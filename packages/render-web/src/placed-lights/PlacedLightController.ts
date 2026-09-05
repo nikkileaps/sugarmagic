@@ -6,8 +6,10 @@
  * rim light and ambient; this one owns everything an author placed by hand. A
  * placed light adds to the sun, never replaces it.
  *
- * Studio and the published game both drive this, so a lantern lights the Build
- * viewport and the running game identically.
+ * The GAME drives this. Studio does not: it draws a light's coverage as a wire
+ * proxy instead, because every real light costs every lit pixel and recompiles
+ * every material when it arrives -- a price worth paying while playing, not
+ * while placing. Previewing the game is how an author sees what a light does.
  *
  * WHY THIS RECONCILES IN PLACE. three.js bakes the number of lights into the
  * shader cache key, so adding a light to the scene or taking one out
@@ -84,6 +86,19 @@ interface LiveLight {
  * Y-up world, so a Blender author's rotations mean what they expect.
  */
 const UNROTATED_DIRECTION = new THREE.Vector3(0, -1, 0);
+
+/**
+ * The turn from three's own convention for a rect light -- which emits along
+ * its local -Z -- to ours, where an unrotated light points down.
+ *
+ * Composed with the authored rotation rather than replaced by a `lookAt`: a
+ * lookAt only fixes which way the panel faces and picks the roll itself, so a
+ * 4x2 panel turned on its own axis to become 2x4 would silently snap back.
+ */
+const RECT_LIGHT_TO_DOWN = new THREE.Quaternion().setFromUnitVectors(
+  new THREE.Vector3(0, 0, -1),
+  UNROTATED_DIRECTION
+);
 
 /** Physically based falloff. Intensity is candela for point and spot lights,
  *  so this is pinned rather than authored. */
@@ -213,8 +228,20 @@ export function createPlacedLightController(
     // Area. No reach cutoff and no decay in three.js; intensity is nits.
     entry.light.width = authored.area?.width ?? 0;
     entry.light.height = authored.area?.height ?? 0;
-    // A rect light emits from one face and is aimed by its own rotation.
-    entry.light.lookAt(aimPoint(authored));
+    // A rect light emits from one face and is aimed by its own rotation, so
+    // the authored turn is composed onto three's convention -- which keeps the
+    // roll the author dialled in, and with it the difference between a wide
+    // panel and a tall one.
+    entry.light.quaternion
+      .setFromEuler(
+        new THREE.Euler(
+          authored.transform.rotation[0],
+          authored.transform.rotation[1],
+          authored.transform.rotation[2],
+          "XYZ"
+        )
+      )
+      .multiply(RECT_LIGHT_TO_DOWN);
   }
 
   function apply(lights: readonly PlacedLight[]): void {

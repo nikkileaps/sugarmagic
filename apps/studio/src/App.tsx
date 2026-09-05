@@ -146,8 +146,7 @@ import {
   sceneOverlayForRegion,
   getAllScenes,
   type Scene,
-  getActiveRegionContents,
-  placedLightBudgetWarning
+  getActiveRegionContents
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -196,7 +195,8 @@ import {
   bakeNavMesh,
   buildRegionNavMeshInput,
   computeNavMeshInputHash,
-  registerActiveGameId
+  registerActiveGameId,
+  placedLightBudgetWarning
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -3992,10 +3992,11 @@ export function App() {
     if (phase === "no-project") return "No project open";
     if (phase === "error") return "Error loading project";
     // A budget the author has exceeded outranks "ready", which is true but
-    // not what they need to know.
-    if (lightBudgetWarning) return lightBudgetWarning;
+    // not what they need to know. Whether the project is saved is true either
+    // way, so it rides along rather than being displaced.
     const dirty = isDirty ? " (unsaved)" : "";
-    return `${activeProductMode} workspace ready${dirty}`;
+    const state = lightBudgetWarning ?? `${activeProductMode} workspace ready`;
+    return `${state}${dirty}`;
   }, [phase, isDirty, activeProductMode, lightBudgetWarning]);
 
   // The shared definition catalogs every surface editor consumes

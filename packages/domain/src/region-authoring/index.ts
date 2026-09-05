@@ -164,8 +164,9 @@ export interface PlacedLight {
    * and the Inspector labels it per kind rather than pretending otherwise.
    */
   intensity: number;
-  /** How far the light reaches, in metres. Null for `area`, which has no
-   *  reach cutoff in three.js. */
+  /** How far the light reaches, in metres. Never zero -- three.js reads a
+   *  distance of zero as no limit at all. Null for `area`, which genuinely
+   *  has no reach cutoff. */
   radius: number | null;
   spot: PlacedLightSpotConfig | null;
   area: PlacedLightAreaConfig | null;
@@ -630,6 +631,12 @@ function createPlacedLightIdValue(): string {
   return createScopedId("placed-light");
 }
 
+/** A fresh placed-light id, for a caller minting one before it has a light --
+ *  a duplicate has to name its copy in the command. */
+export function createPlacedLightId(): string {
+  return createPlacedLightIdValue();
+}
+
 function createSceneFolderIdValue(): string {
   return createScopedId("scene-folder");
 }
@@ -976,6 +983,13 @@ export const DEFAULT_PLACED_LIGHT_COLOR = 0xffd9a0;
 export const DEFAULT_PLACED_LIGHT_INTENSITY = 8;
 /** Metres. About one room's worth of reach. */
 export const DEFAULT_PLACED_LIGHT_RADIUS = 6;
+/**
+ * The smallest reach a light may carry. three.js reads a distance of zero as
+ * NO limit, so a light dialled down to nothing would light the whole world --
+ * the opposite of what the number says. Anything at or below this is treated
+ * as this.
+ */
+export const MIN_PLACED_LIGHT_RADIUS = 0.1;
 export const DEFAULT_PLACED_LIGHT_SPOT_ANGLE_DEG = 35;
 export const DEFAULT_PLACED_LIGHT_SPOT_PENUMBRA = 0.4;
 /** Metres, square. */
@@ -1055,7 +1069,10 @@ export function createPlacedLight(
     radius:
       kind === "area"
         ? null
-        : (overrides.radius ?? DEFAULT_PLACED_LIGHT_RADIUS),
+        : Math.max(
+            MIN_PLACED_LIGHT_RADIUS,
+            overrides.radius ?? DEFAULT_PLACED_LIGHT_RADIUS
+          ),
     spot: kind === "spot" ? createPlacedLightSpotConfig(overrides.spot) : null,
     area: kind === "area" ? createPlacedLightAreaConfig(overrides.area) : null,
     modulation: createPlacedLightModulation(
@@ -1071,15 +1088,18 @@ export function createPlacedLight(
 }
 
 /**
- * Placed-asset instanceIds hidden by folder visibility (Plan 070.3, #349).
- * The Scene Explorer's per-folder eye is EPHEMERAL authoring visibility (like
- * the Spatial volume eye) — it never touches the saved region. Hiding a folder
- * hides its whole subtree, so descendant folders expand first, then every
- * placed asset parented anywhere under a hidden folder is collected. Only
- * `placedAssets` carry `parentFolderId`, so presences are unaffected. Total by
- * construction: an empty `hiddenFolderIds` returns an empty set.
+ * Instance ids hidden by folder visibility (Plan 070.3, #349). The Scene
+ * Explorer's per-folder eye is EPHEMERAL authoring visibility (like the
+ * Spatial volume eye) — it never touches the saved region. Hiding a folder
+ * hides its whole subtree, so descendant folders expand first, then everything
+ * parented anywhere under a hidden folder is collected.
  *
- * Takes `folders` + `placedAssets` STRUCTURALLY (not a RegionDocument) so the
+ * EVERYTHING THAT CARRIES A `parentFolderId` BELONGS HERE. Placed assets and
+ * placed lights both do; presences do not, and are unaffected. A kind left out
+ * keeps drawing inside a folder the author has hidden. Total by construction:
+ * an empty `hiddenFolderIds` returns an empty set.
+ *
+ * Takes the collections STRUCTURALLY (not a RegionDocument) so the
  * caller passes the SAME set the viewport renders — i.e. the COMPOSED base +
  * active-Scene overlay (`composeRegionContents`), not base alone. A base region
  * satisfies the shape too, so base-only callers/tests are unchanged. This is
@@ -1090,6 +1110,7 @@ export function resolveHiddenAssetInstanceIds(
   contents: {
     folders: readonly RegionSceneFolder[];
     placedAssets: readonly PlacedAssetInstance[];
+    placedLights?: readonly PlacedLight[];
   },
   hiddenFolderIds: Iterable<string>
 ): Set<string> {
@@ -1114,6 +1135,11 @@ export function resolveHiddenAssetInstanceIds(
     }
   }
   const instanceIds = new Set<string>();
+  for (const light of contents.placedLights ?? []) {
+    if (light.parentFolderId && hidden.has(light.parentFolderId)) {
+      instanceIds.add(light.instanceId);
+    }
+  }
   for (const asset of contents.placedAssets ?? []) {
     if (asset.parentFolderId && hidden.has(asset.parentFolderId)) {
       instanceIds.add(asset.instanceId);

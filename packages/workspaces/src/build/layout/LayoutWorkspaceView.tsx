@@ -22,7 +22,6 @@ import {
   Box,
   Button,
   Checkbox,
-  ColorInput,
   Group,
   Menu,
   Modal,
@@ -53,6 +52,7 @@ import {
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlacedLight,
+  createPlacedLightId,
   createPlayerPresenceId,
   createRegionMarker,
   createSceneFolderId,
@@ -64,6 +64,7 @@ import {
   sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import {
+  ColorField,
   PanelSection,
   SceneExplorer,
   Inspector,
@@ -93,7 +94,6 @@ import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
-import { hexColorNumber, hexColorString } from "../hex-color";
 import {
   axisScaleBlockedBy,
   markersStayAlone,
@@ -1087,9 +1087,38 @@ export function useLayoutWorkspaceView(
     [getRegion, onCommand]
   );
 
+  /**
+   * Copy whatever the explorer row names. A second candle is a copy of the
+   * first rather than a light authored again from scratch, which is the whole
+   * reason the duplicate command takes a source.
+   */
   const handleDuplicateAsset = useCallback(
     (instanceId: string) => {
       if (!region) return;
+      const light = regionContents.placedLights.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      if (light) {
+        const duplicatedInstanceId = createPlacedLightId();
+        onCommand({
+          kind: "DuplicatePlacedLight",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "placed-light",
+            subjectId: duplicatedInstanceId
+          },
+          payload: {
+            sourceInstanceId: light.instanceId,
+            duplicatedInstanceId,
+            positionOffset: [1, 0, 1]
+          }
+        });
+        onSelect([duplicatedInstanceId]);
+        return;
+      }
       const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
@@ -2275,17 +2304,10 @@ export function useLayoutWorkspaceView(
                 patchSelectedLight({ enabled: event.currentTarget.checked })
               }
             />
-            <ColorInput
+            <ColorField
               label="Colour"
-              size="xs"
-              format="hex"
-              withEyeDropper={false}
-              value={hexColorString(selectedLight.color)}
-              onChange={(value) =>
-                patchSelectedLight({
-                  color: hexColorNumber(value, selectedLight.color)
-                })
-              }
+              value={selectedLight.color}
+              onChange={(color) => patchSelectedLight({ color })}
             />
             <NumberInput
               label={PLACED_LIGHT_INTENSITY_LABEL[selectedLight.kind]}

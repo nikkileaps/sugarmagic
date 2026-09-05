@@ -169,8 +169,10 @@ async function run(): Promise<{ rows: LightBudgetRow[]; table: string }> {
     rows.push(await measureAt(count));
   }
   const baseline = rows[0]!.medianMs;
+  // Named after the row it actually divides by: a sweep started at 18 has no
+  // zero-light row, and a header claiming otherwise misreads by a lot.
   const table = [
-    "lights  median ms  worst ms  vs 0 lights",
+    `lights  median ms  worst ms  vs ${rows[0]!.lights} lights`,
     ...rows.map(
       (row) =>
         `${String(row.lights).padStart(6)}  ${String(row.medianMs).padStart(9)}  ${String(

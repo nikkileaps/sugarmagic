@@ -318,3 +318,44 @@ describe("a light moving over time", () => {
     expect(onlyLight(scene).intensity).toBe(atMoment);
   });
 });
+
+describe("a light whose reach was dialled to nothing", () => {
+  it("never carries a distance of zero, which three reads as no limit", () => {
+    const light = createPlacedLight({ kind: "point", radius: 0 });
+    expect(light.radius).toBeGreaterThan(0);
+
+    const scene = new THREE.Scene();
+    createPlacedLightController(scene).apply([light]);
+
+    // Zero would light the whole world, which is the opposite of what an
+    // author dialling reach down to nothing is asking for.
+    expect((onlyLight(scene) as THREE.PointLight).distance).toBeGreaterThan(0);
+  });
+});
+
+describe("an area light turned on its own axis", () => {
+  it("keeps its roll, so a wide panel can be made a tall one", () => {
+    const scene = new THREE.Scene();
+    const controller = createPlacedLightController(scene);
+    const flat = lantern({ kind: "area", area: { width: 4, height: 1 } });
+    const rolled = lantern({
+      kind: "area",
+      area: { width: 4, height: 1 },
+      transform: {
+        position: [0, 0, 0],
+        rotation: [0, 0, Math.PI / 2],
+        scale: [1, 1, 1]
+      }
+    });
+
+    controller.apply([flat]);
+    const flatQuaternion = onlyLight(scene).quaternion.clone();
+    controller.apply([rolled]);
+
+    // A lookAt would pick the roll itself and snap both to the same
+    // orientation, quietly discarding the turn the author made.
+    expect(onlyLight(scene).quaternion.angleTo(flatQuaternion)).toBeGreaterThan(
+      0.1
+    );
+  });
+});

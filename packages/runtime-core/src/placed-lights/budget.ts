@@ -5,9 +5,14 @@
  * every lit pixel, however far away it is. So the cost is not "a light in the
  * corner nobody looks at" -- it is paid across the whole screen, by every
  * light, on every frame.
+ *
+ * Here rather than in the domain: this is what a renderer costs, not a rule
+ * about what a region may contain. A region with thirty lights is valid
+ * content that runs badly, and the number moves when the renderer or the
+ * hardware does.
  */
 
-import type { PlacedLight } from "./index";
+import type { PlacedLight } from "@sugarmagic/domain";
 
 /**
  * The most lights a region can hold before frame time leaves the floor.

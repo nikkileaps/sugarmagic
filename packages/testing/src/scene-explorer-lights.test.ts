@@ -16,6 +16,7 @@ import {
   createPlacedAssetInstance,
   createPlacedLight,
   createRegionMarker,
+  resolveHiddenAssetInstanceIds,
   type RegionDocument
 } from "@sugarmagic/domain";
 
@@ -147,5 +148,37 @@ describe("which rows offer an on/off control", () => {
     for (const row of others) {
       expect(row.canToggleVisibility ?? false).toBe(false);
     }
+  });
+});
+
+describe("a folder the author has hidden", () => {
+  it("hides the lights inside it, not only the props", () => {
+    const region = regionWith({
+      folders: [
+        {
+          folderId: "folder:shrine",
+          displayName: "Shrine",
+          parentFolderId: null
+        }
+      ],
+      placedAssets: [
+        createPlacedAssetInstance({
+          instanceId: "a1",
+          assetDefinitionId: "asset:crate",
+          parentFolderId: "folder:shrine"
+        })
+      ],
+      placedLights: [
+        createPlacedLight({ instanceId: "l1", parentFolderId: "folder:shrine" })
+      ]
+    });
+
+    const hidden = resolveHiddenAssetInstanceIds(
+      composeRegionContents(region, null),
+      ["folder:shrine"]
+    );
+
+    // A light left out would keep drawing inside a folder the author closed.
+    expect([...hidden].sort()).toEqual(["a1", "l1"]);
   });
 });

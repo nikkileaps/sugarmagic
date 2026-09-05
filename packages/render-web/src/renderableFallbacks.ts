@@ -78,7 +78,14 @@ export function createCapsuleFallback(
 export function disposeRenderableObject(root: THREE.Object3D) {
   const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
   root.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
+    // Meshes, lines and point clouds all own a geometry and a material, and
+    // all three appear in authored renderables -- a light's coverage wire is
+    // LineSegments. Checking only for Mesh silently leaked every one of them.
+    const drawable =
+      child instanceof THREE.Mesh ||
+      child instanceof THREE.Line ||
+      child instanceof THREE.Points;
+    if (!drawable) return;
     child.geometry.dispose();
     if (Array.isArray(child.material)) {
       for (const material of child.material) {

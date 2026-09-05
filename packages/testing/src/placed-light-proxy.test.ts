@@ -6,9 +6,12 @@
  * that is easy to get backwards -- which way they point.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { createPlacedLightProxy } from "@sugarmagic/render-web";
+import {
+  createPlacedLightProxy,
+  disposeRenderableObject
+} from "@sugarmagic/render-web";
 import { createPlacedLight } from "@sugarmagic/domain";
 
 function wireOf(proxy: THREE.Object3D): THREE.Object3D {
@@ -129,5 +132,25 @@ describe("the proxy Studio draws for a placed light", () => {
     // Flat: a panel has no thickness, and it faces the way the light emits.
     expect(bounds.max.y).toBeCloseTo(0, 5);
     expect(bounds.min.y).toBeCloseTo(0, 5);
+  });
+});
+
+describe("tearing a proxy down", () => {
+  it("frees the wire, not just the dot", () => {
+    const proxy = createPlacedLightProxy(createPlacedLight({ kind: "point" }));
+    const wire = wireOf(proxy) as THREE.Line;
+    const geometry = vi.spyOn(wire.geometry, "dispose");
+    const material = vi.spyOn(
+      wire.material as THREE.LineBasicMaterial,
+      "dispose"
+    );
+
+    disposeRenderableObject(proxy);
+
+    // A wire is a Line, not a Mesh. Freeing only meshes leaked one geometry
+    // and one material per rebuild -- and the proxy rebuilds on every colour
+    // drag, because colour is part of its representation key.
+    expect(geometry).toHaveBeenCalled();
+    expect(material).toHaveBeenCalled();
   });
 });

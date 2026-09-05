@@ -11,10 +11,15 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { createPlacedLightController } from "@sugarmagic/render-web";
 import {
+  createAuthoringSession,
+  createDefaultEpisode,
   createDefaultGameProject,
+  createDefaultScene,
+  createRegionSceneOverlay,
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
   createPlacedLight,
+  textureDefinitionHasReferences,
   validateProjectContent,
   type ContentLibrarySnapshot,
   type PlacedLight,
@@ -173,5 +178,65 @@ describe("what the save gate says about a missing texture", () => {
         createEmptyContentLibrarySnapshot("project:test")
       )
     ).toHaveLength(0);
+  });
+});
+
+describe("whether the Library will let a texture go", () => {
+  function sessionWithLight(light: PlacedLight) {
+    const session = createAuthoringSession(
+      { ...createDefaultGameProject("Test", "test") },
+      [regionWith([light])]
+    );
+    return {
+      ...session,
+      contentLibrary: libraryWithWindowTexture()
+    };
+  }
+
+  it("holds on to a texture a spot light shines through", () => {
+    // The delete affordance reads this. Saying "unreferenced" here is what
+    // creates the dangling id the save-time check later complains about.
+    expect(
+      textureDefinitionHasReferences(
+        sessionWithLight(spotThrough(WINDOW_TEXTURE_ID)),
+        WINDOW_TEXTURE_ID
+      )
+    ).toBe(true);
+  });
+
+  it("lets go of one nothing points at", () => {
+    expect(
+      textureDefinitionHasReferences(
+        sessionWithLight(spotThrough(null)),
+        WINDOW_TEXTURE_ID
+      )
+    ).toBe(false);
+  });
+});
+
+describe("a Scene's own lights", () => {
+  it("are checked for dangling textures too, not just the region's", () => {
+    const scene = createDefaultScene({
+      sceneId: "scene:night",
+      regionId: "region:hollow",
+      overlay: createRegionSceneOverlay({
+        placedLights: [spotThrough(WINDOW_TEXTURE_ID)]
+      })
+    });
+    const project = {
+      ...createDefaultGameProject("Test", "test"),
+      episodes: [createDefaultEpisode({ scenes: [scene] })]
+    };
+
+    const issues = validateProjectContent(
+      project,
+      [regionWith([])],
+      createEmptyContentLibrarySnapshot("project:test")
+    ).issues.filter((issue) => issue.message.includes("texture"));
+
+    // A Scene-scoped light is the easiest one to forget: it is only visible
+    // while that Scene is staged.
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.severity).toBe("warning");
   });
 });

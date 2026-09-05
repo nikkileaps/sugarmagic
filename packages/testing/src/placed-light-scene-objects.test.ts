@@ -14,11 +14,13 @@ import {
 } from "@sugarmagic/runtime-core";
 import { axisScaleBlockedBy } from "@sugarmagic/workspaces";
 import {
+  composeRegionContents,
   createDefaultRegion,
   createDefaultScene,
   createPlacedLight,
   createRegionSceneOverlay,
   executeCommand,
+  migrateToScenes,
   type PlacedLight,
   type RegionDocument,
   type Scene,
@@ -319,5 +321,58 @@ describe("when Studio rebuilds a light's proxy", () => {
   it("keeps the wire it has when only intensity changes", () => {
     // Nothing about the wire shows brightness, so a slider drag costs nothing.
     expect(keyFor({ intensity: 40 })).toBe(keyFor({ intensity: 2 }));
+  });
+});
+
+describe("a region baked before lights existed", () => {
+  it("boots instead of throwing, since the game runs no other normalizer", () => {
+    // A published boot.json is handed to migrateToScenes and nothing else --
+    // Studio's loader never runs in play. A collection that arrives missing
+    // has to be filled in here or composing dies on the first read.
+    const { placedLights: _absent, ...beforeLights } = regionWith([]);
+
+    const migrated = migrateToScenes({
+      scenes: [],
+      regions: [beforeLights as RegionDocument]
+    });
+
+    expect(migrated.regions[0]?.placedLights).toEqual([]);
+    expect(() =>
+      composeRegionContents(migrated.regions[0]!, null)
+    ).not.toThrow();
+  });
+});
+
+describe("deleting a folder that holds lights", () => {
+  it("reparents them rather than stranding them outside the explorer", () => {
+    const region = {
+      ...regionWith([
+        createPlacedLight({ instanceId: "l1", parentFolderId: "folder:shrine" })
+      ]),
+      folders: [
+        {
+          folderId: "folder:shrine",
+          displayName: "Shrine",
+          parentFolderId: null
+        }
+      ]
+    };
+
+    const result = executeCommand(
+      { region, scene: sceneWith([]) },
+      {
+        kind: "DeleteSceneFolder",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: REGION_ID
+        },
+        subject: { subjectKind: "scene-folder", subjectId: "folder:shrine" },
+        payload: { folderId: "folder:shrine" }
+      }
+    );
+
+    // Pointing at a folder that no longer exists would leave the light lit,
+    // selectable in the viewport, and invisible in the explorer for good.
+    expect(result.region.placedLights[0]?.parentFolderId).toBeNull();
   });
 });

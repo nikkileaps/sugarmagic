@@ -498,7 +498,10 @@ function createPlacedLightSceneObject(light: PlacedLight): SceneObject {
     transform: {
       position: light.transform.position,
       rotation: light.transform.rotation,
-      scale: light.transform.scale
+      // A light has no size to scale: the gizmo's centre handle still drags,
+      // and nothing on the render side reads scale, so reporting the authored
+      // value would grow the proxy while the game stayed put.
+      scale: [1, 1, 1]
     },
     representationKey: [
       "light",

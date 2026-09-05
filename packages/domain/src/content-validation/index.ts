@@ -18,6 +18,7 @@
 import { tasksAreAmbiguous } from "../behavior-specificity";
 import { getAllQuestDefinitionsInEpisodes, getAllScenes } from "../episodes";
 import type { ContentLibrarySnapshot } from "../content-library";
+import type { PlacedLight } from "../region-authoring";
 import type { GameProject } from "../game-project";
 import type {
   QuestConditionDefinition,
@@ -447,7 +448,9 @@ export function validateProjectContent(
   }
 
   issues.push(...findMissingPlaceReferences(regions));
-  issues.push(...findMissingTextureReferences(regions, contentLibrary));
+  issues.push(
+    ...findMissingTextureReferences(gameProject, regions, contentLibrary)
+  );
   issues.push(...findAmbiguousBehaviorTasks(gameProject, regions));
 
   return {
@@ -467,6 +470,7 @@ export function validateProjectContent(
  * worth telling them about and not worth stopping them for.
  */
 function findMissingTextureReferences(
+  gameProject: GameProject,
   regions: readonly RegionDocument[],
   contentLibrary: ContentLibrarySnapshot
 ): ContentValidationIssue[] {
@@ -477,17 +481,27 @@ function findMissingTextureReferences(
   );
   const issues: ContentValidationIssue[] = [];
 
-  for (const region of regions) {
-    for (const light of region.placedLights ?? []) {
+  const check = (at: string, lights: readonly PlacedLight[]): void => {
+    for (const light of lights) {
       const textureId = light.spot?.projectedTextureId;
       if (!textureId || textureIds.has(textureId)) continue;
       issues.push(
         warning(
-          `region "${region.displayName}" light "${light.displayName}"`,
+          `${at} light "${light.displayName}"`,
           `Shines through texture "${textureId}", which is not in the library. The light still works; it just projects nothing.`
         )
       );
     }
+  };
+
+  for (const region of regions) {
+    check(`region "${region.displayName}"`, region.placedLights ?? []);
+  }
+  // A Scene's own lights name a texture just as firmly as the region's, and
+  // are the ones most likely to be forgotten -- they are only visible while
+  // that Scene is staged.
+  for (const scene of getAllScenes(gameProject.episodes)) {
+    check(`scene "${scene.displayName}"`, scene.overlay.placedLights ?? []);
   }
 
   return issues;

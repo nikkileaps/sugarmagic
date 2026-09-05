@@ -9,11 +9,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  createPlacedLight,
   MAX_COMFORTABLE_PLACED_LIGHTS,
-  placedLightBudgetWarning,
-  type PlacedLight
-} from "@sugarmagic/domain";
+  placedLightBudgetWarning
+} from "@sugarmagic/runtime-core";
+import { createPlacedLight, type PlacedLight } from "@sugarmagic/domain";
 
 function lights(count: number, enabled = true): PlacedLight[] {
   return Array.from({ length: count }, (_, index) =>
