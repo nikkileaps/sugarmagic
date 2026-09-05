@@ -2960,7 +2960,14 @@ export function addSeasonToSession(
   session: AuthoringSession,
   options: { displayName: string }
 ): AuthoringSession {
-  const scene = createDefaultScene({ displayName: "Scene 1" });
+  // A Scene has to happen somewhere: content validation makes a Scene with
+  // no region an ERROR, and errors block save and deploy. Seeding it with
+  // the region the author has open is what `addSceneToSession` does, and
+  // for the same reason.
+  const scene = createDefaultScene({
+    displayName: "Scene 1",
+    regionId: session.activeRegionId ?? ""
+  });
   const season = createDefaultSeason({
     displayName: options.displayName.trim() || "Untitled Season",
     episodes: [
@@ -3102,15 +3109,20 @@ export function addEpisodeToSession(
   options: { displayName: string; seasonId?: string }
 ): AuthoringSession {
   // Which Season it lands in: the one named, else the last, which is
-  // where "append to the end of the story" puts it. Studio has no
-  // Season control yet, so today every call takes the default.
+  // where "append to the end of the story" puts it. Studio names one --
+  // each Season's group has its own Episode input.
   const seasons = session.gameProject.seasons;
   const target =
     findSeasonById(seasons, options.seasonId ?? null) ??
     seasons[seasons.length - 1];
   if (!target) return session;
 
-  const scene = createDefaultScene({ displayName: "Scene 1" });
+  // Same reason as `addSeasonToSession`: a region-less Scene is a
+  // validation error and blocks save.
+  const scene = createDefaultScene({
+    displayName: "Scene 1",
+    regionId: session.activeRegionId ?? ""
+  });
   const episode = createDefaultEpisode({
     displayName: options.displayName.trim() || "Untitled Episode",
     scenes: [scene]

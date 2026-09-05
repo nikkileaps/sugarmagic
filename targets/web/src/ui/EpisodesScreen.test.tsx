@@ -83,10 +83,15 @@ describe("the Episodes screen", () => {
   it("restarts the card ordinal inside each Season", () => {
     // Season two's only Episode is the third in the story. It must
     // read 1, not 3, or the number contradicts the heading above it.
+    //
+    // Read off the ordinal's own element rather than every digits-only
+    // div on the page: any other number the card grows -- a count, a
+    // percentage -- would otherwise join the list and this would fail
+    // for a reason that has nothing to do with ordinals.
     const html = render(TWO_SEASONS);
-    const ordinals = [...html.matchAll(/>(\d+)<\/div>/g)].map(
-      (match) => match[1]
-    );
+    const ordinals = [
+      ...html.matchAll(/<div style="font-size:22px[^"]*">(\d+)<\/div>/g)
+    ].map((match) => match[1]);
     expect(ordinals).toEqual(["1", "2", "1"]);
   });
 

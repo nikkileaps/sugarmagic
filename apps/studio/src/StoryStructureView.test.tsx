@@ -116,6 +116,21 @@ describe("the structure workspace shows Seasons", () => {
     expect(html).toContain("Delete this Season and every Episode in it");
   });
 
+  it("keeps + Add Scene usable while a Season row is selected", () => {
+    // Clicking into a Season's name field to rename it selects that Season,
+    // which clears the selected Episode on purpose. Without a target of its
+    // own the button would sit enabled and do nothing.
+    const html = render([
+      seasonWith("season:one", ["e:a"]),
+      seasonWith("season:two", ["e:c"])
+    ]);
+    expect(html).toContain("+ Add Scene");
+    // The placeholder names the Episode the Scene will land in, so an
+    // enabled button always has a target to name.
+    expect(html).toContain("New Scene in ");
+    expect(html).not.toContain("New Scene name");
+  });
+
   it("guards Episode delete on the OWNING Season, not the project", () => {
     // Season two holds one Episode while the project holds three. A
     // project-wide count would offer the delete and leave Season two

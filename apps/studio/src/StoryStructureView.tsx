@@ -295,8 +295,24 @@ export function StoryStructureView(props: StoryStructureViewProps) {
   /** The Scene the right pane edits, or null when an Episode row
    *  is selected. Falls back to the ambient Scene so opening the
    *  modal always lands somewhere. */
+  /**
+   * The Season the right pane edits, when a Season row is selected.
+   *
+   * Resolved before the other two because a selection can name a
+   * Season that has since been deleted. Finding nothing here makes
+   * the rows below fall back to their defaults, the same as a fresh
+   * panel -- otherwise deleting the selected Season leaves all three
+   * panes empty until the author clicks something.
+   */
+  const selectedSeason =
+    selection?.kind === "season"
+      ? (seasons.find((season) => season.seasonId === selection.seasonId) ??
+        null)
+      : null;
+  const seasonRowSelected = selectedSeason !== null;
+
   const selectedScene =
-    selection?.kind === "episode" || selection?.kind === "season"
+    selection?.kind === "episode" || seasonRowSelected
       ? null
       : (scenes.find(
           (scene) =>
@@ -309,20 +325,17 @@ export function StoryStructureView(props: StoryStructureViewProps) {
   /** The Episode the right pane edits: the selected one, or the
    *  one holding the selected Scene. Null while a Season row is
    *  selected — that row has its own pane. */
-  const selectedEpisode =
-    selection?.kind === "season"
-      ? null
-      : ((selection?.kind === "episode"
-          ? episodes.find(
-              (episode) => episode.episodeId === selection.episodeId
+  const selectedEpisode = seasonRowSelected
+    ? null
+    : ((selection?.kind === "episode"
+        ? episodes.find((episode) => episode.episodeId === selection.episodeId)
+        : episodes.find((episode) =>
+            episode.scenes.some(
+              (scene) => scene.sceneId === selectedScene?.sceneId
             )
-          : episodes.find((episode) =>
-              episode.scenes.some(
-                (scene) => scene.sceneId === selectedScene?.sceneId
-              )
-            )) ??
-        episodes[0] ??
-        null);
+          )) ??
+      episodes[0] ??
+      null);
 
   /** The Season holding the Episode the right pane edits. */
   const selectedEpisodeSeason =
@@ -332,12 +345,15 @@ export function StoryStructureView(props: StoryStructureViewProps) {
       )
     ) ?? null;
 
-  /** The Season the right pane edits, when a Season row is selected. */
-  const selectedSeason =
-    selection?.kind === "season"
-      ? (seasons.find((season) => season.seasonId === selection.seasonId) ??
-        null)
-      : null;
+  /**
+   * Where "+ Add Scene" puts the Scene. Selecting a Season clears
+   * `selectedEpisode` on purpose, so without a target of its own the
+   * button would silently do nothing the moment an author clicked
+   * into a Season's name field -- which is also how that field is
+   * renamed.
+   */
+  const newSceneEpisode =
+    selectedEpisode ?? selectedSeason?.episodes[0] ?? episodes[0] ?? null;
 
   const commitRename = (scene: Scene) => {
     const draft = renameDrafts[scene.sceneId];
@@ -352,8 +368,8 @@ export function StoryStructureView(props: StoryStructureViewProps) {
 
   const submitNewScene = () => {
     const name = newSceneName.trim();
-    if (!name || !selectedEpisode) return;
-    onAddScene(name, selectedEpisode.episodeId);
+    if (!name || !newSceneEpisode) return;
+    onAddScene(name, newSceneEpisode.episodeId);
     setNewSceneName("");
   };
 

@@ -17,10 +17,7 @@
  * Status: active
  */
 
-import {
-  normalizeEpisodes,
-  wrapEpisodesInDefaultSeason
-} from "@sugarmagic/domain";
+import { resolveStorySeasons } from "@sugarmagic/domain";
 import type { WebRuntimeStartState } from "./runtimeHost";
 
 /**
@@ -35,12 +32,8 @@ interface RawBootStory {
 /**
  * Read the fetched payload into the shape the runtime takes.
  *
- * Story precedence matches the project loader's: a non-EMPTY
- * `seasons` wins; else a non-empty pre-Seasons `episodes` list is
- * wrapped in one Season. Testing for non-empty rather than present
- * matters — a payload carrying `seasons: []` beside a real
- * `episodes` list has to fall through, or a half-migrated bundle
- * boots as an empty story.
+ * Which of the two stored shapes wins is `resolveStorySeasons`,
+ * shared with the project loader so the rule has one home.
  *
  * A payload carrying NEITHER is left empty rather than given a
  * synthesized Season. Studio has a floor because an author always
@@ -51,11 +44,11 @@ interface RawBootStory {
  * bundle that looks empty on purpose.
  */
 export function normalizeBootPayload(raw: unknown): WebRuntimeStartState {
-  const payload = (raw ?? {}) as WebRuntimeStartState & RawBootStory;
-  const authored = Array.isArray(payload.seasons) ? payload.seasons : [];
-  if (authored.length > 0) return payload;
-
-  const legacyEpisodes = normalizeEpisodes(payload.episodes);
-  if (legacyEpisodes.length === 0) return payload;
-  return { ...payload, seasons: wrapEpisodesInDefaultSeason(legacyEpisodes) };
+  // `episodes` is pulled off rather than spread through: it is the
+  // superseded key, `resolveStorySeasons` has already read whatever it
+  // held, and leaving it on the object would hand every reader below a
+  // second story to choose from.
+  const stored = (raw ?? {}) as WebRuntimeStartState & RawBootStory;
+  const { episodes: _legacyEpisodes, ...payload } = stored;
+  return { ...payload, seasons: resolveStorySeasons(stored) };
 }

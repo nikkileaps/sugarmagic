@@ -24,7 +24,6 @@ import {
   findEpisodeBySceneId,
   findSceneById,
   getAllScenes,
-  mapScenesInEpisodes,
   normalizeEpisode,
   normalizeEpisodeEndRouting,
   normalizeEpisodes,
@@ -413,18 +412,5 @@ describe("Scene lookup across Episodes", () => {
     expect(findEpisodeBySceneId(episodes, "s:3")?.episodeId).toBe("e:2");
     expect(findSceneById(episodes, "s:missing")).toBeNull();
     expect(findEpisodeBySceneId(episodes, null)).toBeNull();
-  });
-
-  it("mapScenesInEpisodes rewrites Scenes without moving them between Episodes", () => {
-    const mapped = mapScenesInEpisodes(episodes, (scene) => ({
-      ...scene,
-      displayName: `renamed ${scene.sceneId}`
-    }));
-    expect(mapped[0]!.scenes.map((scene) => scene.sceneId)).toEqual(["s:1"]);
-    expect(mapped[1]!.scenes.map((scene) => scene.sceneId)).toEqual([
-      "s:2",
-      "s:3"
-    ]);
-    expect(mapped[1]!.scenes[1]!.displayName).toBe("renamed s:3");
   });
 });

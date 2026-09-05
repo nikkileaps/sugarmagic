@@ -97,22 +97,3 @@ export function createStoryProgressionParticipant(
     }
   };
 }
-
-/**
- * The former names, kept so anything still importing them keeps
- * working while the rename spreads. Nothing in this repo uses
- * them; they exist for a consumer outside it and go away with
- * #313.
- *
- * @deprecated Use the `StoryProgression` names above.
- */
-export const CAMPAIGN_PROGRESSION_PARTICIPANT_ID =
-  STORY_PROGRESSION_PARTICIPANT_ID;
-/** @deprecated Use `STORY_PROGRESSION_SLICE_SCHEMA_VERSION`. */
-export const CAMPAIGN_PROGRESSION_SLICE_SCHEMA_VERSION =
-  STORY_PROGRESSION_SLICE_SCHEMA_VERSION;
-/** @deprecated Use `StoryProgressionSlice`. */
-export type CampaignProgressionSlice = StoryProgressionSlice;
-/** @deprecated Use `createStoryProgressionParticipant`. */
-export const createCampaignProgressionParticipant =
-  createStoryProgressionParticipant;

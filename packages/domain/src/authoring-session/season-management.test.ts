@@ -132,13 +132,11 @@ describe("Season CRUD", () => {
     const swapped = reorderSeasonInSession(session, second!, "up");
     expect(seasonIds(swapped)).toEqual([second, first]);
 
-    expect(seasonIds(reorderSeasonInSession(session, first!, "up"))).toEqual([
-      first,
-      second
-    ]);
-    expect(seasonIds(reorderSeasonInSession(session, second!, "down"))).toEqual(
-      [first, second]
-    );
+    // Identity, not value: a guard that has stopped guarding still
+    // returns a list in the same order, so comparing ids passes either
+    // way. Returning the SAME session is what says nothing happened.
+    expect(reorderSeasonInSession(session, first!, "up")).toBe(session);
+    expect(reorderSeasonInSession(session, second!, "down")).toBe(session);
   });
 
   it("edits a Season's own fields without touching its Episodes", () => {

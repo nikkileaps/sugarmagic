@@ -163,8 +163,9 @@ function assetDirectories(assetSources: Record<string, string>): string[] {
 /**
  * Build the boot.json payload from a game project + the in-memory
  * runtime snapshot Studio has loaded. The shape mirrors
- * `WebRuntimeStartState`; mismatches between this shape and the
- * runtime's expectation are guarded by `BOOT_JSON_SCHEMA_VERSION`.
+ * `WebRuntimeStartState` and is stamped with
+ * `BOOT_JSON_SCHEMA_VERSION`, which nothing reads yet -- see the
+ * note on that constant, and #312.
  */
 function buildBootJsonPayload(
   gameProject: GameProject,

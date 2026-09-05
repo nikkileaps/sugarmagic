@@ -92,7 +92,7 @@ has nowhere to live.
 erDiagram
     GAME_PROJECT ||--|| CONTENT_LIBRARY : owns
     GAME_PROJECT ||--o{ REGION : registers
-    GAME_PROJECT ||--o{ SEASON : "sequences (campaign)"
+    GAME_PROJECT ||--o{ SEASON : "sequences (the story)"
     SEASON ||--o{ EPISODE : orders
     EPISODE ||--o{ SCENE : orders
 
@@ -135,8 +135,8 @@ erDiagram
     SAVE_PARTICIPANT }o--|| GAMEPLAY_SESSION : "captures slices of"
 ```
 
-Read the labels as sentences: *a Region places NPC Presences*, *the Quest
-Manager projects quest facts into the Runtime Blackboard*.
+Read the labels as sentences: _a Region places NPC Presences_, _the Quest
+Manager projects quest facts into the Runtime Blackboard_.
 
 ---
 
@@ -147,7 +147,7 @@ Manager projects quest facts into the Runtime Blackboard*.
 `GameProject` (`packages/domain/src/game-project`) is the authored root: on
 disk it is `project.sgrmagic` + `content-library.sgrmagic` +
 `regions/*.json` + assets. It owns project settings, sound-event and music
-bindings, credits, and the campaign (the `Season` list -- see Ordered and
+bindings, credits, and the story (the `Season` list -- see Ordered and
 gated below).
 
 `ContentLibrary` (`packages/domain/src/content-library`) owns every reusable
@@ -176,7 +176,7 @@ separate: a thing can be ordered without being gated, which is exactly what a
 Season and a Scene are. "Locked", "unlocked", "available" and "sequenced" are
 not loose synonyms for either.
 
-**A Season needs no gate of its own.** Narrative order across the campaign is
+**A Season needs no gate of its own.** Narrative order across the story is
 the concatenation of each Season's Episode list, in Season order; gating and
 routing read that flat run and cannot see the grouping. Holding Season 2 back
 until Season 1 finishes is done by gating Season 2's first Episode.
@@ -205,7 +205,7 @@ belongs to exactly one Season by construction. Code that wants every Episode
 without caring which Season owns it uses `getAllEpisodes(seasons)`;
 `findSeasonById` and `findSeasonByEpisodeId` answer the lookup the other way.
 Code that REWRITES Episodes or Scenes uses `mapEpisodes` or `mapScenes`,
-which put every entry back where it came from -- rebuilding a campaign from a
+which put every entry back where it came from -- rebuilding a story from a
 flat Episode list is how Season membership gets silently collapsed.
 
 **A Season is never empty.** Three authoring-session operations make that
@@ -217,14 +217,14 @@ Episode moves it inside its Season and stops at the Season's edges; changing
 which Season owns an Episode is its own operation,
 `moveEpisodeToSeasonInSession`.
 
-A project file that carries no Seasons still loads as a campaign.
+A project file that carries no Seasons still loads as a story.
 `normalizeGameProject` takes the first of these that is a NON-EMPTY list: the
 authored `seasons`; else a flat `episodes` list from before Seasons existed,
 wrapped in one Season with the fixed id `season:default`; else one
 synthesized Season holding one Episode holding one Scene, so Studio always
 has a Scene to author against. Non-empty rather than merely present is the
 load-bearing part: a file carrying `seasons: []` beside a real `episodes`
-list has to fall through to the wrap, or it would load as an empty campaign.
+list has to fall through to the wrap, or it would load as an empty story.
 
 `Episode` (`packages/domain/src/episodes`) holds an ordered run of Scenes plus
 the gate that decides when the player may enter it (`always`, `manual`,
@@ -234,7 +234,7 @@ Scene lookups take an Episode list, so a caller holding a project reaches
 them through `getAllEpisodes`: `getAllScenes(getAllEpisodes(project.seasons))`
 and `findSceneById(getAllEpisodes(project.seasons), id)`.
 `mapScenesInEpisodes` rewrites the Scenes inside one Episode list; a
-campaign-wide rewrite wants `mapScenes` above, which keeps every Episode in
+story-wide rewrite wants `mapScenes` above, which keeps every Episode in
 the Season that owns it.
 
 `Region` (`packages/domain/src/region-authoring`) is the authored place:
@@ -464,20 +464,20 @@ Per-player runtime state persists as `SaveParticipant` slices (Plan 055
 memento pattern). **This table is the canonical list; other docs link here
 rather than restating it.**
 
-| participant id | what it holds | owner |
-|---|---|---|
-| `quest.manager` | active + completed quests, completed nodes, tracked quest | runtime-core |
-| `world.flags` | the world flag store | runtime-core |
-| `world.time` | clock band + day | runtime-core |
-| `world.presence` | which item presences the player has collected, keyed region -> scene | runtime-core |
-| `player.known-facts` | facts the player has learned | runtime-core |
-| `inventory.player` | the player's inventory | runtime-core |
-| `npc.behavior` | per-NPC behavior state | runtime-core |
-| `npc.interaction-mode` | quest-set overrides of an NPC's scripted/agent mode | runtime-core |
-| `caster.stats` | caster stats | runtime-core |
-| `playthrough.identity` | which playthrough this save is | runtime-core |
-| `host.player` | current region + player position | web host |
-| `campaign.progression` | current Episode and Scene, manually unlocked Episodes | web host |
+| participant id         | what it holds                                                        | owner        |
+| ---------------------- | -------------------------------------------------------------------- | ------------ |
+| `quest.manager`        | active + completed quests, completed nodes, tracked quest            | runtime-core |
+| `world.flags`          | the world flag store                                                 | runtime-core |
+| `world.time`           | clock band + day                                                     | runtime-core |
+| `world.presence`       | which item presences the player has collected, keyed region -> scene | runtime-core |
+| `player.known-facts`   | facts the player has learned                                         | runtime-core |
+| `inventory.player`     | the player's inventory                                               | runtime-core |
+| `npc.behavior`         | per-NPC behavior state                                               | runtime-core |
+| `npc.interaction-mode` | quest-set overrides of an NPC's scripted/agent mode                  | runtime-core |
+| `caster.stats`         | caster stats                                                         | runtime-core |
+| `playthrough.identity` | which playthrough this save is                                       | runtime-core |
+| `host.player`          | current region + player position                                     | web host     |
+| `campaign.progression` | current Episode and Scene, manually unlocked Episodes                | web host     |
 
 Plugins contribute their own participants on top (sugarlang's target
 language, for example).
@@ -495,7 +495,7 @@ per-slice: **upgrade in place** when the old shape still means something
 (`world.presence` v1 -> v2 wraps pre-Scenes collections under the default
 Scene), or **discard** when it does not (`campaign.progression` v1 was
 Scene-gated, and Scenes stopped being gated, so there is nothing to convert
--- a v1 save keeps every other slice and restarts the campaign).
+-- a v1 save keeps every other slice and restarts the story).
 
 The blackboard itself is never persisted; participant stores re-project
 their facts into it on restore. Quest restore drops quests whose

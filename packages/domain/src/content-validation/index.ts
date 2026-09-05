@@ -367,10 +367,30 @@ export function validateProjectContent(
     }
   }
 
-  for (const quest of getAllQuestDefinitionsInEpisodes(
-    getAllEpisodes(gameProject.seasons)
-  )) {
+  const storyEpisodes = getAllEpisodes(gameProject.seasons);
+  const storyQuests = getAllQuestDefinitionsInEpisodes(storyEpisodes);
+
+  for (const quest of storyQuests) {
     issues.push(...validateQuest(quest));
+  }
+
+  // An Episode gated on a quest that no longer exists never opens, and
+  // nothing at runtime says why -- the gate simply evaluates false at every
+  // boot. Deleting the Season or Episode that held the quest is the ordinary
+  // way to get here, and neither delete can check on its own: the quest may
+  // legitimately live anywhere in the story, so only a whole-project pass
+  // knows it is gone.
+  const questIds = new Set(storyQuests.map((quest) => quest.definitionId));
+  for (const episode of storyEpisodes) {
+    const gate = episode.unlockCondition;
+    if (gate === "always" || gate.kind !== "questComplete") continue;
+    if (questIds.has(gate.questDefinitionId)) continue;
+    issues.push(
+      error(
+        `episode.${episode.episodeId}.unlockCondition`,
+        `Episode "${episode.displayName}" unlocks when quest "${gate.questDefinitionId}" completes, and no such quest exists. Pick a quest that does, or change how it unlocks.`
+      )
+    );
   }
 
   // The name is the runtime store key. A blank one is a key nothing can write

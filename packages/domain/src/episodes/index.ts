@@ -463,22 +463,3 @@ export function findEpisodeBySceneId(
     ) ?? null
   );
 }
-
-/**
- * Rewrite every Scene in one Episode list, preserving which
- * Episode owns which.
- *
- * Story-wide code wants `mapScenes` in `seasons/` instead:
- * that one preserves Season ownership too, and rebuilding a
- * story from a flat Episode list is how Season membership gets
- * silently collapsed.
- */
-export function mapScenesInEpisodes(
-  episodes: readonly Episode[],
-  transform: (scene: Scene, episode: Episode) => Scene
-): Episode[] {
-  return episodes.map((episode) => ({
-    ...episode,
-    scenes: episode.scenes.map((scene) => transform(scene, episode))
-  }));
-}

@@ -34,8 +34,7 @@ import {
   createDefaultSeasons,
   getAllEpisodes,
   mapEpisodes,
-  normalizeSeasons,
-  wrapEpisodesInDefaultSeason,
+  resolveStorySeasons,
   type Season
 } from "../seasons";
 import {
@@ -717,16 +716,11 @@ function resolveSeasons(gameProject: {
   episodes?: unknown;
   questDefinitions?: unknown;
 }): Season[] {
-  const authored = normalizeSeasons(gameProject.seasons);
-  if (authored.length > 0) return containLegacyQuests(gameProject, authored);
-
-  const legacyEpisodes = normalizeEpisodes(gameProject.episodes);
-  if (legacyEpisodes.length > 0) {
-    return containLegacyQuests(
-      gameProject,
-      wrapEpisodesInDefaultSeason(legacyEpisodes)
-    );
-  }
+  // Precedence between the two stored shapes lives in `seasons/`, shared
+  // with the boot payload's seam so the rule cannot drift between them.
+  // What this path adds is the authoring floor and the legacy quest move.
+  const stored = resolveStorySeasons(gameProject);
+  if (stored.length > 0) return containLegacyQuests(gameProject, stored);
 
   return containLegacyQuests(
     gameProject,

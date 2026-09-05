@@ -156,6 +156,34 @@ export function wrapEpisodesInDefaultSeason(episodes: Episode[]): Season[] {
   ];
 }
 
+/**
+ * Read whatever a stored document carries into Seasons, newest
+ * shape first: authored `seasons`, else a pre-Seasons flat
+ * `episodes` list wrapped in one Season. Returns an empty list
+ * when there is neither; a caller that needs a floor supplies it.
+ *
+ * Every boundary that reads a stored story goes through here --
+ * the project file and the baked boot payload both do -- so the
+ * precedence lives in one place. Written twice it would drift, and
+ * the drift would only show as a story that loads empty.
+ *
+ * Each test is for a NON-EMPTY list rather than a present key. A
+ * document carrying `seasons: []` beside a real `episodes` list
+ * has to fall through to the wrap, or a half-migrated file loads
+ * as an empty story.
+ */
+export function resolveStorySeasons(input: {
+  seasons?: unknown;
+  episodes?: unknown;
+}): Season[] {
+  const authored = normalizeSeasons(input.seasons);
+  if (authored.length > 0) return authored;
+
+  const legacyEpisodes = normalizeEpisodes(input.episodes);
+  if (legacyEpisodes.length === 0) return [];
+  return wrapEpisodesInDefaultSeason(legacyEpisodes);
+}
+
 /** Every Episode in the project, in narrative order across Seasons. */
 export function getAllEpisodes(seasons: readonly Season[]): Episode[] {
   return seasons.flatMap((season) => season.episodes);

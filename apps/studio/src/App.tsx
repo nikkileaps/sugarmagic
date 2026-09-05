@@ -1331,6 +1331,15 @@ export function App() {
     return getAllRegions(session);
   }, [session]);
 
+  // Flattened once per project change, not per render. Several workspaces
+  // take this list straight into a `useMemo` dependency, so a fresh array
+  // each render recomputes all of them every time anything on this screen
+  // moves.
+  const storyEpisodes = useMemo(
+    () => getAllEpisodes(session?.gameProject.seasons ?? []),
+    [session]
+  );
+
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
@@ -3472,7 +3481,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     gameProject: session?.gameProject ?? null,
     regions: regionDocuments,
-    episodes: getAllEpisodes(session?.gameProject.seasons ?? []),
+    episodes: storyEpisodes,
     soundCueDefinitions,
     creditsDefinition: session?.gameProject.creditsDefinition ?? {
       sections: []
@@ -3717,7 +3726,7 @@ export function App() {
       gameProjectId: session?.gameProject.identity.id ?? null,
       questDefinitions: session ? getAllQuestDefinitions(session) : [],
       regions: regionDocuments,
-      episodes: getAllEpisodes(session?.gameProject.seasons ?? []),
+      episodes: storyEpisodes,
       soundCueDefinitions,
       dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
       itemDefinitions: session?.gameProject.itemDefinitions ?? [],
