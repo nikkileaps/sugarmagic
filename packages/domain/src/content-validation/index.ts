@@ -16,10 +16,8 @@
  */
 
 import { tasksAreAmbiguous } from "../behavior-specificity";
-import {
-  getAllQuestDefinitionsInEpisodes,
-  getAllScenes
-} from "../episodes";
+import { getAllQuestDefinitionsInEpisodes, getAllScenes } from "../episodes";
+import type { ContentLibrarySnapshot } from "../content-library";
 import type { GameProject } from "../game-project";
 import type {
   QuestConditionDefinition,
@@ -115,10 +113,14 @@ function worldFlagConditions(
  * half-authored for most of its life, and a save that refused an unfinished
  * talk node would make the editor unusable.
  */
-export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] {
+export function validateQuest(
+  quest: QuestDefinition
+): ContentValidationIssue[] {
   const path = `quest "${quest.displayName}"`;
   const issues: ContentValidationIssue[] = [];
-  const stageIds = new Set(quest.stageDefinitions.map((stage) => stage.stageId));
+  const stageIds = new Set(
+    quest.stageDefinitions.map((stage) => stage.stageId)
+  );
 
   if (!stageIds.has(quest.startStageId)) {
     issues.push(warning(path, "Start stage is missing."));
@@ -132,7 +134,10 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
   for (const flagCondition of worldFlagConditions(quest.startCondition)) {
     if (!flagCondition.worldFlagId) {
       issues.push(
-        warning(path, "Start condition has a flag condition with no flag picked.")
+        warning(
+          path,
+          "Start condition has a flag condition with no flag picked."
+        )
       );
     } else if (isBlankWorldFlagValue(flagCondition.value)) {
       issues.push(
@@ -147,7 +152,10 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
   for (const stage of quest.stageDefinitions) {
     if (stage.nextStageId && !stageIds.has(stage.nextStageId)) {
       issues.push(
-        warning(path, `Stage "${stage.displayName}" points to a missing next stage.`)
+        warning(
+          path,
+          `Stage "${stage.displayName}" points to a missing next stage.`
+        )
       );
     }
     if (stage.nodeDefinitions.length === 0) {
@@ -162,7 +170,10 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
       for (const prerequisiteNodeId of node.prerequisiteNodeIds) {
         if (!nodeIds.has(prerequisiteNodeId)) {
           issues.push(
-            warning(at, `Node "${node.displayName}" has a missing prerequisite.`)
+            warning(
+              at,
+              `Node "${node.displayName}" has a missing prerequisite.`
+            )
           );
         }
       }
@@ -198,7 +209,10 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
           );
         }
       }
-      for (const action of [...node.onEnterActions, ...node.onCompleteActions]) {
+      for (const action of [
+        ...node.onEnterActions,
+        ...node.onCompleteActions
+      ]) {
         if (action.type === "setFlag" && isBlankWorldFlagValue(action.value)) {
           issues.push(
             warning(at, `Node "${node.displayName}" sets a flag with no value.`)
@@ -221,17 +235,26 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
         }
         if (node.objectiveSubtype === "talk" && !node.dialogueDefinitionId) {
           issues.push(
-            warning(at, `Talk node "${node.displayName}" has no dialogue linked.`)
+            warning(
+              at,
+              `Talk node "${node.displayName}" has no dialogue linked.`
+            )
           );
         }
         if (node.objectiveSubtype === "collect" && !node.targetId) {
           issues.push(
-            warning(at, `Collect node "${node.displayName}" has no item target.`)
+            warning(
+              at,
+              `Collect node "${node.displayName}" has no item target.`
+            )
           );
         }
         if (node.objectiveSubtype === "castSpell" && !node.targetId) {
           issues.push(
-            warning(at, `Cast Spell node "${node.displayName}" has no spell target.`)
+            warning(
+              at,
+              `Cast Spell node "${node.displayName}" has no spell target.`
+            )
           );
         }
       }
@@ -241,7 +264,10 @@ export function validateQuest(quest: QuestDefinition): ContentValidationIssue[] 
         !node.dialogueDefinitionId
       ) {
         issues.push(
-          warning(at, `Narrative node "${node.displayName}" has no dialogue selected.`)
+          warning(
+            at,
+            `Narrative node "${node.displayName}" has no dialogue selected.`
+          )
         );
       }
     }
@@ -310,7 +336,8 @@ function collectQuestBindings(
  */
 export function validateProjectContent(
   gameProject: GameProject,
-  regions: readonly RegionDocument[]
+  regions: readonly RegionDocument[],
+  contentLibrary: ContentLibrarySnapshot
 ): ContentValidationResult {
   const issues: ContentValidationIssue[] = [];
 
@@ -369,7 +396,9 @@ export function validateProjectContent(
   }
 
   const knownFlagIds = new Set(
-    gameProject.worldFlagDefinitions.map((definition) => definition.definitionId)
+    gameProject.worldFlagDefinitions.map(
+      (definition) => definition.definitionId
+    )
   );
   for (const reference of collectWorldFlagReferences(gameProject, regions)) {
     if (!knownFlagIds.has(reference.worldFlagId)) {
@@ -418,12 +447,50 @@ export function validateProjectContent(
   }
 
   issues.push(...findMissingPlaceReferences(regions));
+  issues.push(...findMissingTextureReferences(regions, contentLibrary));
   issues.push(...findAmbiguousBehaviorTasks(gameProject, regions));
 
   return {
     valid: !issues.some((issue) => issue.severity === "error"),
     issues
   };
+}
+
+/**
+ * Textures named by id that no longer exist: a spot light still pointed
+ * through a window frame someone deleted from the library.
+ *
+ * A warning rather than an error, and deliberately not folded into the place
+ * check above. The light still lights the room -- it simply throws a plain
+ * cone instead of a window shape -- so the game is playable and the save
+ * should go through. What the author loses is a look they chose, which is
+ * worth telling them about and not worth stopping them for.
+ */
+function findMissingTextureReferences(
+  regions: readonly RegionDocument[],
+  contentLibrary: ContentLibrarySnapshot
+): ContentValidationIssue[] {
+  const textureIds = new Set(
+    (contentLibrary.textureDefinitions ?? []).map(
+      (definition) => definition.definitionId
+    )
+  );
+  const issues: ContentValidationIssue[] = [];
+
+  for (const region of regions) {
+    for (const light of region.placedLights ?? []) {
+      const textureId = light.spot?.projectedTextureId;
+      if (!textureId || textureIds.has(textureId)) continue;
+      issues.push(
+        warning(
+          `region "${region.displayName}" light "${light.displayName}"`,
+          `Shines through texture "${textureId}", which is not in the library. The light still works; it just projects nothing.`
+        )
+      );
+    }
+  }
+
+  return issues;
 }
 
 /**
@@ -450,7 +517,10 @@ function findMissingPlaceReferences(
     const at = `region "${region.displayName}"`;
 
     for (const volume of region.volumes ?? []) {
-      for (const action of [...volume.onEnterActions, ...volume.onExitActions]) {
+      for (const action of [
+        ...volume.onEnterActions,
+        ...volume.onExitActions
+      ]) {
         if (action.type !== "goToRegion" || !action.regionId) continue;
         const destinationMarkers = markerIdsByRegion.get(action.regionId);
         if (!destinationMarkers) {

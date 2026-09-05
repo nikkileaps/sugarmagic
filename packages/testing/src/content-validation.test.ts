@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createEmptyContentLibrarySnapshot,
   createDefaultGameProject,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -17,6 +18,10 @@ import {
   type RegionDocument,
   type RegionNPCBehaviorTask
 } from "@sugarmagic/domain";
+
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
 
 /**
  * One checker, two callers: the quest editor's panel and the save gate. These
@@ -121,7 +126,7 @@ describe("validateQuest", () => {
   // of its life; a save that refused an unfinished node would be unusable.
   it("reports only warnings, so an unfinished quest still saves", () => {
     const quest = questWith({ type: "hasFlag", worldFlagId: "", value: "" });
-    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()], VALIDATION_CONTENT_LIBRARY);
 
     expect(result.issues.length).toBeGreaterThan(0);
     expect(result.issues.every((issue) => issue.severity === "warning")).toBe(
@@ -138,7 +143,7 @@ describe("dangling world flag references", () => {
       worldFlagId: "flag:deleted",
       value: "true"
     });
-    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()], VALIDATION_CONTENT_LIBRARY);
 
     expect(result.valid).toBe(false);
     const dangling = result.issues.filter(
@@ -161,7 +166,7 @@ describe("dangling world flag references", () => {
     const result = validateProjectContent(
       { ...projectWith(quest), worldFlagDefinitions: [flag] },
       [validationRegion()]
-    );
+    , VALIDATION_CONTENT_LIBRARY);
 
     expect(result.valid).toBe(true);
     expect(
@@ -199,7 +204,7 @@ describe("dangling world flag references", () => {
       startStageId: stage.stageId,
       stageDefinitions: [stage]
     };
-    const result = validateProjectContent(projectWith(quest), [validationRegion()]);
+    const result = validateProjectContent(projectWith(quest), [validationRegion()], VALIDATION_CONTENT_LIBRARY);
 
     const errors = result.issues.filter((issue) => issue.severity === "error");
     expect(errors).toHaveLength(2);
@@ -264,7 +269,7 @@ describe("dangling story point references", () => {
         worldFlagDefinitions: [flag]
       },
       regionWaitingOn("quest:gone", "node:whatever")
-    );
+    , VALIDATION_CONTENT_LIBRARY);
 
     expect(result.valid).toBe(false);
     expect(
@@ -289,7 +294,7 @@ describe("dangling story point references", () => {
         worldFlagDefinitions: [flag]
       },
       regionWaitingOn("quest:test", "node:gone")
-    );
+    , VALIDATION_CONTENT_LIBRARY);
 
     expect(result.valid).toBe(false);
     expect(
@@ -359,7 +364,7 @@ describe("behavior tasks with no ordering between them", () => {
           worldFlagDefinitions: [flag]
         },
         regions
-      )
+      , VALIDATION_CONTENT_LIBRARY)
     };
   }
 

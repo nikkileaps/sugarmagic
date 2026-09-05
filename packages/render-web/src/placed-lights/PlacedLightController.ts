@@ -25,6 +25,16 @@ import { RectAreaLightTexturesLib } from "three/examples/jsm/lights/RectAreaLigh
 import type { PlacedLight, PlacedLightKind } from "@sugarmagic/domain";
 import { samplePlacedLightModulation } from "@sugarmagic/runtime-core";
 
+/**
+ * A texture a spot light shines through, by the id an author picked. Null when
+ * the light projects nothing, and null when the id names a texture that has
+ * since been deleted -- the light keeps burning either way, and the dangling
+ * reference is reported at save time rather than by going dark.
+ */
+export type ProjectedTextureResolver = (
+  textureDefinitionId: string
+) => THREE.Texture | null;
+
 export interface PlacedLightController {
   /**
    * Make the scene hold exactly these lights. Pass the COMPOSED list (the
@@ -125,7 +135,8 @@ function createLight(authored: PlacedLight): PlacedThreeLight {
 }
 
 export function createPlacedLightController(
-  scene: THREE.Scene
+  scene: THREE.Scene,
+  resolveProjectedTexture?: ProjectedTextureResolver
 ): PlacedLightController {
   const live = new Map<string, LiveLight>();
 
@@ -183,6 +194,16 @@ export function createPlacedLightController(
       entry.light.angle =
         (authored.spot?.angleDeg ?? 0) * THREE.MathUtils.DEG2RAD;
       entry.light.penumbra = authored.spot?.penumbra ?? 0;
+      // The window-shaped pool: a texture in the cone's path, which three
+      // multiplies into the light. Assigning the same texture object again is
+      // free -- the shader cache keys on the texture's id, and the resolver
+      // hands back the same object for the same definition -- but SWAPPING one
+      // recompiles, which is why this is an authoring-time change and never
+      // something a behavior touches per frame.
+      entry.light.map =
+        (authored.spot?.projectedTextureId
+          ? resolveProjectedTexture?.(authored.spot.projectedTextureId)
+          : null) ?? null;
       // A spot lands a pool of light where it points and nothing in the air
       // between. Revisit when a window pool reads flat without a shaft.
       entry.target?.position.copy(aimPoint(authored));

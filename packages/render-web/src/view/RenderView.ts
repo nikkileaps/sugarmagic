@@ -80,7 +80,24 @@ export function createRenderView(options: RenderViewOptions): RenderView {
   const { engine, scene, compileProfile } = options;
   const logger = options.logger ?? engine.logger;
   const environmentController = createEnvironmentSceneController(scene);
-  const placedLightController = createPlacedLightController(scene);
+  const placedLightController = createPlacedLightController(
+    scene,
+    // A spot's projected texture, looked up in whatever content library the
+    // engine currently holds. Resolving late rather than at construction is
+    // what lets a texture swapped in the library reach a light already in the
+    // scene; the resolver caches, so the same definition hands back the same
+    // texture object and costs nothing to ask for again.
+    (textureDefinitionId) => {
+      const definition = engine
+        .getEnvironmentState()
+        .contentLibrary.textureDefinitions.find(
+          (candidate) => candidate.definitionId === textureDefinitionId
+        );
+      return definition
+        ? engine.assetResolver.resolveTextureDefinition(definition)
+        : null;
+    }
+  );
   const landscapeController = createLandscapeSceneController(
     scene,
     engine.assetResolver,

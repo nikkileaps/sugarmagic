@@ -27,6 +27,7 @@ export * from "./player-definition/index";
 export * from "./graph-layout/index";
 export * from "./quest-definition/index";
 export * from "./region-authoring/index";
+export * from "./region-authoring/light-budget";
 export * from "./save/index";
 export * from "./scenes/index";
 export * from "./shader-graph/index";

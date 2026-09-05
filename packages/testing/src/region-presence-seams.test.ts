@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  createEmptyContentLibrarySnapshot,
   collectWorldFlagReferences,
   createDefaultRegion,
   createDefaultScene,
@@ -22,6 +23,10 @@ import {
   type RegionDocument,
   type SemanticCommand
 } from "@sugarmagic/domain";
+
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
 
 const REGION_ID = "region:village";
 const RESIDENT_ID = "presence:finnick";
@@ -136,7 +141,7 @@ describe("region residents reach every pass a Scene placement does", () => {
     const report = validateProjectContent(
       createDefaultGameProject("Test", "project-test"),
       [region]
-    );
+    , VALIDATION_CONTENT_LIBRARY);
 
     // The binding names a quest that does not exist. Before this story the
     // validator never walked region residents, so it passed silently.

@@ -14,7 +14,8 @@
     "probe:sky": "node driver/sky-probe.mjs",
     "probe:postprocess": "node driver/postprocess-probe.mjs",
     "probe:fog": "node driver/fog-probe.mjs",
-    "probe:mountain": "node driver/mountain-probe.mjs"
+    "probe:mountain": "node driver/mountain-probe.mjs",
+    "probe:light-budget": "node driver/light-budget.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",

@@ -19,6 +19,10 @@ import {
 } from "@sugarmagic/domain";
 import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
 
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
+
 /** A project whose Scenes name the given region. These tests are about flag
  *  migration; a Scene naming nowhere is a separate validation error and
  *  would drown the assertion under test. */
@@ -177,7 +181,7 @@ describe("a region written before the registry", () => {
 
     // And therefore the project saves.
     expect(
-      validateProjectContent(migrated.gameProject, migrated.regions).valid
+      validateProjectContent(migrated.gameProject, migrated.regions, VALIDATION_CONTENT_LIBRARY).valid
     ).toBe(true);
   });
 
@@ -197,7 +201,7 @@ describe("a region written before the registry", () => {
         ?.worldFlagId
     ).toBe(migrated.gameProject.worldFlagDefinitions[0].definitionId);
     expect(
-      validateProjectContent(migrated.gameProject, migrated.regions).valid
+      validateProjectContent(migrated.gameProject, migrated.regions, VALIDATION_CONTENT_LIBRARY).valid
     ).toBe(true);
   });
 });

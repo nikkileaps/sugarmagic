@@ -17,3 +17,8 @@ __pycache__/
 
 # Playwright MCP working directory — console logs, page snapshots, CSV exports
 .playwright-mcp/
+
+# Perf-probe run output: a measurement of one machine on one day, not
+# something to carry in the repo. The threshold it produced lives in a
+# comment on MAX_COMFORTABLE_PLACED_LIGHTS.
+packages/perf-harness/light-budget.json

@@ -43,7 +43,8 @@ import type {
   SemanticCommand,
   RegionDocument,
   SoundCueDefinition,
-  SurfaceDefinition
+  SurfaceDefinition,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import {
   createInspectableBehaviorId,
@@ -170,6 +171,8 @@ export interface LayoutWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   /** Library surfaces for the Surface Brush palette (Plan 068.9). */
   surfaceDefinitions: SurfaceDefinition[];
+  /** Library textures a spot light can shine through. */
+  textureDefinitions: TextureDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -487,6 +490,7 @@ export function useLayoutWorkspaceView(
     getAllScenes,
     assetDefinitions,
     surfaceDefinitions,
+    textureDefinitions,
     playerDefinition,
     itemDefinitions,
     documentDefinitions,
@@ -2337,6 +2341,27 @@ export function useLayoutWorkspaceView(
                     typeof value === "number" && selectedLight.spot
                       ? patchSelectedLight({
                           spot: { ...selectedLight.spot, penumbra: value }
+                        })
+                      : undefined
+                  }
+                />
+                <Select
+                  label="Shines through"
+                  size="xs"
+                  description="A window frame, leaves, a lattice. The shape lands where the light does."
+                  clearable
+                  data={textureDefinitions.map((definition) => ({
+                    value: definition.definitionId,
+                    label: definition.displayName
+                  }))}
+                  value={selectedLight.spot.projectedTextureId}
+                  onChange={(value) =>
+                    selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: {
+                            ...selectedLight.spot,
+                            projectedTextureId: value
+                          }
                         })
                       : undefined
                   }

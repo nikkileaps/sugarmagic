@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  createEmptyContentLibrarySnapshot,
   collectWorldFlagReferences,
   createDefaultGameProject,
   createDefaultQuestDefinition,
@@ -27,6 +28,10 @@ import {
   type QuestDefinition
 } from "@sugarmagic/domain";
 import { QuestManager } from "@sugarmagic/runtime-core";
+
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
 
 /** A one-node quest that finishes when its event fires. */
 function questFinishedBy(options: {
@@ -317,7 +322,8 @@ describe("a start condition is content like any other", () => {
         value: null,
         declareFlag: true
       }),
-      [walkRegion()]
+      [walkRegion()],
+      VALIDATION_CONTENT_LIBRARY
     );
 
     expect(
@@ -332,7 +338,8 @@ describe("a start condition is content like any other", () => {
         value: "true",
         declareFlag: false
       }),
-      [walkRegion()]
+      [walkRegion()],
+      VALIDATION_CONTENT_LIBRARY
     );
 
     expect(result.valid).toBe(false);

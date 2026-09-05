@@ -277,6 +277,7 @@ export function useBuildProductModeView(
     getAllScenes: () => getAllScenes(session?.gameProject.episodes ?? []),
     assetDefinitions,
     surfaceDefinitions,
+    textureDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     documentDefinitions,

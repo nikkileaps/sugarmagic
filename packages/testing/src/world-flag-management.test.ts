@@ -17,6 +17,10 @@ import {
   createDefaultRegion
 } from "@sugarmagic/domain";
 
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
+
 /**
  * The commands behind the World Flags tab. Create was already wired to the
  * picker's inline create; update and delete had no caller until this surface
@@ -130,7 +134,7 @@ describe("world flag commands", () => {
     expect(
       references.every((reference) => reference.worldFlagId === FLAG_ID)
     ).toBe(true);
-    expect(validateProjectContent(session.gameProject, [flagTestRegion()]).valid).toBe(true);
+    expect(validateProjectContent(session.gameProject, [flagTestRegion()], VALIDATION_CONTENT_LIBRARY).valid).toBe(true);
   });
 
   it("deletes a flag and leaves the references dangling, which the save catches", () => {
@@ -143,7 +147,7 @@ describe("world flag commands", () => {
 
     // Deliberate: deleting does not silently rewrite an author's content. The
     // surface warns first, and the save gate then names every orphan.
-    const result = validateProjectContent(session.gameProject, [flagTestRegion()]);
+    const result = validateProjectContent(session.gameProject, [flagTestRegion()], VALIDATION_CONTENT_LIBRARY);
     expect(result.valid).toBe(false);
     expect(
       result.issues.filter((issue) => issue.severity === "error")
@@ -189,7 +193,7 @@ describe("unique flag names", () => {
       ]
     };
 
-    const result = validateProjectContent(project, []);
+    const result = validateProjectContent(project, [], VALIDATION_CONTENT_LIBRARY);
 
     expect(result.valid).toBe(false);
     expect(
@@ -218,7 +222,7 @@ describe("unique flag names", () => {
     };
 
     expect(
-      validateProjectContent(project, [flagTestRegion()]).valid
+      validateProjectContent(project, [flagTestRegion()], VALIDATION_CONTENT_LIBRARY).valid
     ).toBe(true);
   });
 });
