@@ -173,7 +173,7 @@ describe("moving an Episode between Seasons", () => {
     expect(
       after.gameProject.seasons[1]!.episodes.map((e) => e.episodeId)
     ).toEqual([session.gameProject.seasons[1]!.episodes[0]!.episodeId, moving]);
-    // Exactly once, across the whole campaign.
+    // Exactly once, across the whole story.
     expect(
       getAllEpisodes(after.gameProject.seasons).filter(
         (episode) => episode.episodeId === moving

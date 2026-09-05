@@ -293,7 +293,7 @@ export function getActiveRegion(
 
 /**
  * Resolve the author's active Scene. Falls back to the first
- * Scene in the campaign when the pointer is unset or dangling
+ * Scene in the story when the pointer is unset or dangling
  * (Scene deleted); a migrated project always has >= 1.
  */
 export function getActiveScene(session: AuthoringSession): Scene | null {
@@ -503,11 +503,11 @@ export function createAuthoringSession(
     gameProject.identity.id
   )
 ): AuthoringSession {
-  // `normalizeGameProject` resolves the campaign, including the floor
+  // `normalizeGameProject` resolves the story, including the floor
   // of one Episode holding one Scene for a project that has none.
   const normalizedProject = normalizeGameProject(gameProject);
   // Plan 058 §058.1 — strip the pre-058 `region.scene` nest off the
-  // regions. Its Scene-side output is ignored: the campaign comes from
+  // regions. Its Scene-side output is ignored: the story comes from
   // `episodes` now, and a file old enough to carry that nest is not
   // converted, just overwritten.
   const migrated = migrateToScenes({
@@ -2916,7 +2916,7 @@ function withSeasons(
 /**
  * Rewrite one Season's Episode list, leaving the others alone.
  * Every structural edit to a single Season's run of Episodes goes
- * through here, so no caller rebuilds the campaign from a flat
+ * through here, so no caller rebuilds the story from a flat
  * Episode list and drops the grouping on the way.
  */
 function withSeasonEpisodes(
@@ -2947,7 +2947,7 @@ function withEpisodeScenes(
 }
 
 /**
- * Append a new Season to the end of the campaign, already holding
+ * Append a new Season to the end of the story, already holding
  * one Episode holding one Scene, and make that Scene active.
  * Appending IS the ordering — there is no order number.
  *
@@ -3006,7 +3006,7 @@ export function deleteSeasonFromSession(
 }
 
 /**
- * Move a Season one step up or down the campaign. Moving the entry
+ * Move a Season one step up or down the story. Moving the entry
  * IS the reorder — nothing is renumbered afterwards.
  */
 export function reorderSeasonInSession(
@@ -3102,7 +3102,7 @@ export function addEpisodeToSession(
   options: { displayName: string; seasonId?: string }
 ): AuthoringSession {
   // Which Season it lands in: the one named, else the last, which is
-  // where "append to the end of the campaign" puts it. Studio has no
+  // where "append to the end of the story" puts it. Studio has no
   // Season control yet, so today every call takes the default.
   const seasons = session.gameProject.seasons;
   const target =
@@ -3243,7 +3243,7 @@ export function moveQuestToSceneInSession(
   toSceneId: string
 ): AuthoringSession {
   // Both views: the flat run to look the quest and Scenes up, the Seasons
-  // themselves to write back through without flattening the campaign.
+  // themselves to write back through without flattening the story.
   const seasons = session.gameProject.seasons;
   const episodes = getAllEpisodes(seasons);
   const quest = findQuestDefinitionById(episodes, questDefinitionId);

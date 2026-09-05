@@ -81,7 +81,7 @@ describe("the Episodes screen", () => {
   });
 
   it("restarts the card ordinal inside each Season", () => {
-    // Season two's only Episode is the third in the campaign. It must
+    // Season two's only Episode is the third in the story. It must
     // read 1, not 3, or the number contradicts the heading above it.
     const html = render(TWO_SEASONS);
     const ordinals = [...html.matchAll(/>(\d+)<\/div>/g)].map(

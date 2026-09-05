@@ -1,7 +1,7 @@
 /**
- * packages/domain/src/game-project/campaign-load.test.ts
+ * packages/domain/src/game-project/story-load.test.ts
  *
- * Purpose: the campaign's load behaviour.
+ * Purpose: the story's load behaviour.
  *
  * There is NO migration from the pre-Episodes `scenes` shape --
  * that shape is gone and a file still carrying it is overwritten
@@ -13,7 +13,7 @@
  *      from, so a load that reorders is unrecoverable damage. An
  *      earlier version of this file tested only the normalizer and
  *      missed a reorder in the real load path entirely.
- *   2. A project with no campaign gets one Season holding one
+ *   2. A project with no story gets one Season holding one
  *      Episode holding one Scene, so Studio always has an active
  *      Scene and the runtime always has something to boot into.
  *
@@ -37,7 +37,7 @@ const REGIONS = [
   createDefaultRegion({ regionId: "region:town", displayName: "Town" })
 ];
 
-const CAMPAIGN_EPISODES = [
+const STORY_EPISODES = [
   createDefaultEpisode({
     episodeId: "e:second",
     scenes: [
@@ -59,11 +59,11 @@ function projectWithEpisodes() {
   return {
     ...createDefaultGameProject("Probe", "probe"),
     regionRegistry: [{ regionId: "region:town" }],
-    seasons: [createDefaultSeason({ episodes: CAMPAIGN_EPISODES })]
+    seasons: [createDefaultSeason({ episodes: STORY_EPISODES })]
   };
 }
 
-describe("campaign order round-trip", () => {
+describe("story order round-trip", () => {
   it("normalizeGameProject preserves both list orders", () => {
     const reloaded = normalizeGameProject(
       JSON.parse(JSON.stringify(projectWithEpisodes())) as never
@@ -103,8 +103,8 @@ describe("campaign order round-trip", () => {
   });
 });
 
-/** A project file carrying no campaign key of any generation. */
-function projectWithNoCampaign(): Record<string, unknown> {
+/** A project file carrying no story key of any generation. */
+function projectWithNoStory(): Record<string, unknown> {
   const bare = createDefaultGameProject("Probe", "probe") as unknown as Record<
     string,
     unknown
@@ -114,17 +114,17 @@ function projectWithNoCampaign(): Record<string, unknown> {
   return bare;
 }
 
-describe("a project with no campaign gets a floor", () => {
+describe("a project with no story gets a floor", () => {
   it("normalizeGameProject supplies one Season, Episode and Scene", () => {
-    const project = normalizeGameProject(projectWithNoCampaign() as never);
+    const project = normalizeGameProject(projectWithNoStory() as never);
     expect(project.seasons).toHaveLength(1);
     expect(getAllEpisodes(project.seasons)).toHaveLength(1);
     expect(getAllEpisodes(project.seasons)[0]!.scenes).toHaveLength(1);
   });
 
-  it("empty campaign arrays are treated as no campaign", () => {
+  it("empty story arrays are treated as no story", () => {
     const project = normalizeGameProject({
-      ...projectWithNoCampaign(),
+      ...projectWithNoStory(),
       seasons: [],
       episodes: []
     } as never);
@@ -135,7 +135,7 @@ describe("a project with no campaign gets a floor", () => {
 
   it("createAuthoringSession lands on an active Scene", () => {
     const session = createAuthoringSession(
-      projectWithNoCampaign() as never,
+      projectWithNoStory() as never,
       REGIONS
     );
     expect(session.activeSceneId).not.toBeNull();
@@ -145,7 +145,7 @@ describe("a project with no campaign gets a floor", () => {
   });
 });
 
-describe("superseded campaign keys are dropped, not converted", () => {
+describe("superseded story keys are dropped, not converted", () => {
   it("a stale scenes array does not survive the load", () => {
     const stale = {
       ...createDefaultGameProject("Probe", "probe"),
@@ -160,7 +160,7 @@ describe("superseded campaign keys are dropped, not converted", () => {
     // out beside the `seasons` that replaced them.
     expect(project.scenes).toBeUndefined();
     expect(project.scenesUiLabel).toBeUndefined();
-    // The campaign comes from `seasons`; the old Scene is not folded in.
+    // The story comes from `seasons`; the old Scene is not folded in.
     expect(
       getAllScenes(getAllEpisodes(project.seasons as never)).map(
         (scene: { sceneId: string }) => scene.sceneId
@@ -171,8 +171,8 @@ describe("superseded campaign keys are dropped, not converted", () => {
   it("a flat episodes list is wrapped, then dropped from the output", () => {
     // The wrap is the conversion; the key going away is what stops the
     // normalizer's spread from carrying it back onto disk on every save.
-    const legacy = projectWithNoCampaign();
-    legacy.episodes = CAMPAIGN_EPISODES;
+    const legacy = projectWithNoStory();
+    legacy.episodes = STORY_EPISODES;
     const project = normalizeGameProject(legacy as never) as unknown as Record<
       string,
       unknown

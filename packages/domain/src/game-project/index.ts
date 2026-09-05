@@ -230,7 +230,7 @@ export interface GameProject {
   gameRootPath: string;
   regionRegistry: RegionReference[];
   /**
-   * The campaign: ordered Seasons, each holding its own ordered,
+   * The story: ordered Seasons, each holding its own ordered,
    * gated Episodes, each of those holding its own ordered Scenes.
    * Position in each list IS the order — there is no order
    * number.
@@ -241,7 +241,7 @@ export interface GameProject {
    * `getAllScenes(getAllEpisodes(seasons))` / `mapScenes` rather
    * than a flat project-level array.
    *
-   * Narrative order across the campaign is the concatenation of
+   * Narrative order across the story is the concatenation of
    * each Season's Episode list, in Season order. Gating reads
    * that flat run and cannot see the grouping, which is why a
    * Season needs no gate of its own.
@@ -519,12 +519,12 @@ export function normalizeGameProject(
   const {
     deployment: legacyDeployment,
     versionedProjectIdentifiers: legacyVersionedProjectIdentifiers,
-    // The superseded campaign keys. Nothing reads them -- dropping them
+    // The superseded story keys. Nothing reads them -- dropping them
     // here keeps a stale file from writing them back out alongside the
     // `seasons` that replaced them.
     //
     // `episodes` is load-bearing, not tidiness: `resolveSeasons` reads it
-    // to wrap a pre-Seasons campaign, and the spread below is cast
+    // to wrap a pre-Seasons story, and the spread below is cast
     // through `unknown`, so an `episodes` left in `gameProjectRest` would
     // ride onto the output where the checker cannot see it and get
     // written back to disk on every save.
@@ -612,14 +612,14 @@ export function normalizeGameProject(
 }
 
 /**
- * The project's campaign. A file with no `episodes` gets one
- * holding one Scene rather than an empty campaign, so Studio
+ * The project's story. A file with no `episodes` gets one
+ * holding one Scene rather than an empty story, so Studio
  * always has an active Scene to author against and the runtime
  * always has something to boot into.
  *
  * There is NO migration from the pre-Episodes `scenes` shape.
  * That shape is gone; a file still carrying it is overwritten
- * with a fresh campaign rather than converted.
+ * with a fresh story rather than converted.
  */
 /**
  * Quests a load moved out of the old flat project list and onto a Scene
@@ -657,7 +657,7 @@ function containLegacyQuests(
     : [];
   if (legacy.length === 0) return seasons;
 
-  // The first Episode with Scenes anywhere in the campaign, so the target
+  // The first Episode with Scenes anywhere in the story, so the target
   // is the same one this migration picked before Seasons existed.
   const episodes = getAllEpisodes(seasons);
   const target = episodes.find((episode) => episode.scenes.length > 0);
@@ -702,7 +702,7 @@ function containLegacyQuests(
 }
 
 /**
- * The project's campaign, in precedence order: authored Seasons,
+ * The project's story, in precedence order: authored Seasons,
  * else a pre-Seasons flat `episodes` list wrapped in one Season,
  * else one synthesized Season holding one Episode holding one
  * Scene.
@@ -710,7 +710,7 @@ function containLegacyQuests(
  * Each test is for a NON-EMPTY list, not a present key: an empty
  * `seasons` array beside a real `episodes` list has to fall
  * through to the wrap, or a half-migrated file would load as an
- * empty campaign.
+ * empty story.
  */
 function resolveSeasons(gameProject: {
   seasons?: unknown;

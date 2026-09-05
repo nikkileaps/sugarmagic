@@ -192,9 +192,9 @@ import {
   type HostPlayerSlice
 } from "./save/hostPlayerParticipant";
 import {
-  createCampaignProgressionParticipant,
-  type CampaignProgressionSlice
-} from "./save/campaignProgressionParticipant";
+  createStoryProgressionParticipant,
+  type StoryProgressionSlice
+} from "./save/storyProgressionParticipant";
 import { showEntryTitleSequence } from "./transitionCard";
 import { showSceneExitOverlay } from "./creditsRoll";
 import {
@@ -265,7 +265,7 @@ export const BOOT_READINESS_TIMEOUT_MS = 60_000;
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
   /**
-   * The campaign: ordered Seasons, each holding its own ordered,
+   * The story: ordered Seasons, each holding its own ordered,
    * gated Episodes, each of those holding its own ordered Scenes.
    * The host gates the Episodes across the flattened run, picks
    * the active Scene inside the chosen one, and composes that
@@ -1132,7 +1132,7 @@ export function createWebRuntimeHost(
 
   // Plan 058 §058.5 — quest Scene-progression actions land here
   // from the assembly's quest action handler. `unlockScene` only
-  // mutates campaign state (persisted on the next autosave tick).
+  // mutates story state (persisted on the next autosave tick).
   // `advanceToNextScene` mutates, force-writes the save, shows
   // the target Scene's transition card (null config = hard cut),
   // then reloads: the boot path recomposes the world into the new
@@ -1171,7 +1171,7 @@ export function createWebRuntimeHost(
     // the FIRST SCENE OF THE NEXT OPEN EPISODE.
     //
     // Resolving it here rather than treating the end of an Episode as
-    // "nowhere" is what makes the campaign advance at all: without it
+    // "nowhere" is what makes the story advance at all: without it
     // the save pointer stays on the Episode just finished, that Episode
     // renders as `current`, and the only enterable card drops the
     // player back into the Scene they already completed.
@@ -1442,8 +1442,8 @@ export function createWebRuntimeHost(
   let activeSceneIdForSave: string | null = null;
   let activeEpisodeIdForSave: string | null = null;
   let manuallyUnlockedEpisodeIds: string[] = [];
-  let campaignRestore: CampaignProgressionSlice | null = null;
-  /** The campaign from the last start() — the advance action
+  let storyRestore: StoryProgressionSlice | null = null;
+  /** The story from the last start() — the advance action
    *  resolves "the next Scene, then the next Episode" against it. */
   let bootEpisodes: Episode[] = [];
   let bootEpisodeEndRouting: EpisodeEndRouting = DEFAULT_EPISODE_END_ROUTING;
@@ -1466,12 +1466,12 @@ export function createWebRuntimeHost(
   // load was caused by a New Game press that ran at least one step.
   let bootPreNewGameStepAnswers: PreNewGameStepAnswers = {};
   saveParticipantRegistry.register(
-    createCampaignProgressionParticipant({
+    createStoryProgressionParticipant({
       getCurrentEpisodeId: () => activeEpisodeIdForSave,
       getCurrentSceneId: () => activeSceneIdForSave,
       getManuallyUnlockedEpisodeIds: () => manuallyUnlockedEpisodeIds,
       applyRestoredSlice: (data) => {
-        campaignRestore = data;
+        storyRestore = data;
       }
     })
   );
@@ -3562,16 +3562,16 @@ export function createWebRuntimeHost(
       typeof resolvedActiveRegionId === "string"
         ? resolvedActiveRegionId
         : null;
-    // Flattened here: gating and routing walk the campaign as one run,
+    // Flattened here: gating and routing walk the story as one run,
     // and neither can see the grouping. The Seasons themselves are read
     // by the Episodes screen's view model further down.
-    // Both views of one campaign: the Seasons for the Episodes screen's
+    // Both views of one story: the Seasons for the Episodes screen's
     // grouping, and the flattened run for gating and routing, neither of
     // which can see the grouping.
     const bootSeasons = normalizeSeasons(state.seasons ?? []);
     bootEpisodes = getAllEpisodes(bootSeasons);
     // Plan 058 §058.1 — strip the pre-058 `region.scene` nest off the
-    // regions. Its Scene-side output is ignored: the campaign ships as
+    // regions. Its Scene-side output is ignored: the story ships as
     // `seasons` now.
     const migratedContent = migrateToScenes({
       scenes: getAllScenes(bootEpisodes),
@@ -3584,9 +3584,7 @@ export function createWebRuntimeHost(
     // evaluation happens in Phase 1, before the quest system
     // exists (Phase 2) — a deliberate cross-slice READ of plain
     // save data, not a reach into another system.
-    manuallyUnlockedEpisodeIds = [
-      ...(campaignRestore?.unlockedEpisodeIds ?? [])
-    ];
+    manuallyUnlockedEpisodeIds = [...(storyRestore?.unlockedEpisodeIds ?? [])];
     const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
       ?.data as { completedQuestIds?: string[] } | undefined;
     // Quest completion is the one recorded fact on the story timeline;
@@ -3604,13 +3602,13 @@ export function createWebRuntimeHost(
       now: Date.now()
     });
     const requestedSceneId =
-      campaignRestore?.currentSceneId ?? state.activeSceneId ?? null;
+      storyRestore?.currentSceneId ?? state.activeSceneId ?? null;
     const activeEpisode = resolveActiveEpisode({
       episodes: bootEpisodes,
       unlockedEpisodeIds,
       isQuestCompleted,
       requestedEpisodeId:
-        campaignRestore?.currentEpisodeId ??
+        storyRestore?.currentEpisodeId ??
         findEpisodeBySceneId(bootEpisodes, requestedSceneId)?.episodeId ??
         null
     });

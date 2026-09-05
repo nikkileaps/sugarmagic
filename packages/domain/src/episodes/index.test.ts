@@ -1,7 +1,7 @@
 /**
  * packages/domain/src/episodes/index.test.ts
  *
- * Purpose: Pins the Episode container — the gate, the campaign
+ * Purpose: Pins the Episode container — the gate, the story
  * resolvers, and the two guards that carry the most weight in this
  * epic because hand-verification is deferred:
  *

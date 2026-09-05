@@ -1168,7 +1168,7 @@ async function postPreviewBootMessage(
     {
       type: "PREVIEW_BOOT",
       regions,
-      // The campaign rides the boot payload; the runtime gates the
+      // The story rides the boot payload; the runtime gates the
       // Episodes across the flattened run and composes the active
       // Scene's overlays onto the region base.
       seasons: session.gameProject.seasons,

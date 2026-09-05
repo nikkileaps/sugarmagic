@@ -206,7 +206,7 @@ export function normalizeEpisode(input: unknown): Episode | null {
  * file as well as after a migration.
  *
  * The caller may pass the sets of ids already claimed, so the
- * same first-wins rule spans every Episode list in the campaign
+ * same first-wins rule spans every Episode list in the story
  * rather than restarting per Season. `normalizeSeasons` threads
  * them; a caller normalizing one list on its own gets fresh sets
  * and the behaviour above.
@@ -468,9 +468,9 @@ export function findEpisodeBySceneId(
  * Rewrite every Scene in one Episode list, preserving which
  * Episode owns which.
  *
- * Campaign-wide code wants `mapScenes` in `seasons/` instead:
+ * Story-wide code wants `mapScenes` in `seasons/` instead:
  * that one preserves Season ownership too, and rebuilding a
- * campaign from a flat Episode list is how Season membership gets
+ * story from a flat Episode list is how Season membership gets
  * silently collapsed.
  */
 export function mapScenesInEpisodes(

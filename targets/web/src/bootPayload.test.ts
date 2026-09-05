@@ -5,10 +5,10 @@
  * with a bundle baked by an older engine.
  *
  * `/boot.json` is one of only two places untyped data enters the
- * game, so it is the one place the legacy campaign shape can still
+ * game, so it is the one place the legacy story shape can still
  * appear. These pin the precedence and, just as importantly, the
  * case that is deliberately NOT handled: a payload with no
- * campaign at all is left empty rather than given a made-up one.
+ * story at all is left empty rather than given a made-up one.
  *
  * Status: active
  */
@@ -57,7 +57,7 @@ describe("reading a boot payload", () => {
 
   it("falls through an EMPTY seasons array to the legacy list", () => {
     // Presence is not the test. A half-migrated bundle carrying
-    // `seasons: []` beside a real campaign must not boot as empty.
+    // `seasons: []` beside a real story must not boot as empty.
     const payload = normalizeBootPayload({
       regions: [],
       seasons: [],
@@ -66,10 +66,10 @@ describe("reading a boot payload", () => {
     expect(getAllEpisodes(payload.seasons ?? [])).toHaveLength(2);
   });
 
-  it("leaves a payload with no campaign empty rather than inventing one", () => {
+  it("leaves a payload with no story empty rather than inventing one", () => {
     // Studio has a one-Scene floor because an author always needs
     // somewhere to work. The runtime's position is the opposite: an
-    // empty campaign is a real state, and fabricating one here would
+    // empty story is a real state, and fabricating one here would
     // disguise a bundle that shipped wrong as a bundle that is fine.
     const payload = normalizeBootPayload({ regions: [] });
     expect(getAllEpisodes(payload.seasons ?? [])).toHaveLength(0);

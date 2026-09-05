@@ -19,7 +19,7 @@
  * uses `getAllEpisodes`; code that REWRITES Episodes or Scenes
  * uses `mapEpisodes` / `mapScenes`, which preserve ownership.
  *
- * Narrative order across the whole campaign is the concatenation
+ * Narrative order across the whole story is the concatenation
  * of each Season's list, in Season order. Gating reads that flat
  * run and cannot observe the grouping.
  *
@@ -41,7 +41,7 @@ import { createScopedId } from "../shared/identity";
 
 /**
  * Stable id for the Season that the load-time migration
- * synthesizes when it wraps a pre-Seasons campaign. A LITERAL,
+ * synthesizes when it wraps a pre-Seasons story. A LITERAL,
  * not a generated id, matching `DEFAULT_EPISODE_ID`'s reasoning:
  * a migration that ran twice must land on the same id both times.
  */
@@ -109,7 +109,7 @@ export function normalizeSeason(
     notes: typeof record.notes === "string" ? record.notes : "",
     // Through `normalizeEpisodes`, not a local loop: that function owns
     // list-level normalization, including the first-wins dedupe. The seen
-    // sets are threaded in so the dedupe spans the whole campaign.
+    // sets are threaded in so the dedupe spans the whole story.
     episodes: normalizeEpisodes(record.episodes, seenEpisodeIds, seenSceneIds)
   };
 }
@@ -143,7 +143,7 @@ export function normalizeSeasons(input: unknown): Season[] {
 }
 
 /**
- * Wrap a pre-Seasons campaign — a flat Episode list — in one
+ * Wrap a pre-Seasons story — a flat Episode list — in one
  * Season. Used by the load path and by any boundary that reads a
  * payload baked before Seasons existed.
  */
@@ -200,7 +200,7 @@ export function mapEpisodes(
 }
 
 /**
- * Rewrite every Scene in the campaign, preserving which Episode
+ * Rewrite every Scene in the story, preserving which Episode
  * and which Season owns which. The write-side counterpart to
  * `getAllScenes(getAllEpisodes(seasons))`.
  */
@@ -215,7 +215,7 @@ export function mapScenes(
 }
 
 /**
- * The campaign a project gets when its file carries no Seasons
+ * The story a project gets when its file carries no Seasons
  * and no Episodes: one of each, so Studio always has an active
  * Scene to author against and the runtime always has something to
  * boot into.

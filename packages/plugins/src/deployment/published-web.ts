@@ -44,7 +44,7 @@ import type { ManagedProjectFile } from "./index";
  * engine to ADD fields an older one ignores, but not to reshape
  * without a bump.
  *
- * Version 2 carries the campaign as `seasons`; version 1 carried a
+ * Version 2 carries the story as `seasons`; version 1 carried a
  * flat `episodes` list, which `normalizeBootPayload` in target-web
  * still reads and wraps.
  *
@@ -188,7 +188,7 @@ function buildBootJsonPayload(
       .map((entry) => entry.pluginId),
     pluginConfigurations: gameProject.pluginConfigurations,
     regions: snapshot.regions,
-    // The whole campaign ships in the bundle (bake-everything
+    // The whole story ships in the bundle (bake-everything
     // model; the runtime composes only the active Scene's
     // overlays and gates Episodes at boot). Regions above are the
     // shrunk base shape.

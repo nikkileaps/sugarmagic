@@ -121,7 +121,7 @@ import "@sugarmagic/ui/node-editor.css";
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
-  /** The campaign: ordered Seasons holding their gated Episodes,
+  /** The story: ordered Seasons holding their gated Episodes,
    *  each of those holding its Scenes. */
   seasons?: Season[];
   /** Where the player goes when an Episode ends. */

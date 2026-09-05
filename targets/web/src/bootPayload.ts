@@ -24,10 +24,10 @@ import {
 import type { WebRuntimeStartState } from "./runtimeHost";
 
 /**
- * The campaign shapes a boot payload can carry, newest first.
+ * The story shapes a boot payload can carry, newest first.
  * Neither key is trusted: this reads whatever is there.
  */
-interface RawBootCampaign {
+interface RawBootStory {
   seasons?: unknown;
   episodes?: unknown;
 }
@@ -35,23 +35,23 @@ interface RawBootCampaign {
 /**
  * Read the fetched payload into the shape the runtime takes.
  *
- * Campaign precedence matches the project loader's: a non-EMPTY
+ * Story precedence matches the project loader's: a non-EMPTY
  * `seasons` wins; else a non-empty pre-Seasons `episodes` list is
  * wrapped in one Season. Testing for non-empty rather than present
  * matters — a payload carrying `seasons: []` beside a real
  * `episodes` list has to fall through, or a half-migrated bundle
- * boots as an empty campaign.
+ * boots as an empty story.
  *
  * A payload carrying NEITHER is left empty rather than given a
  * synthesized Season. Studio has a floor because an author always
  * needs a Scene to work in; the runtime's position is the opposite
  * — `resolveActiveEpisode` returns null when nothing is open, and
  * calls that "a real position on the story timeline". Inventing a
- * campaign here would turn a bundle that shipped wrong into a
+ * story here would turn a bundle that shipped wrong into a
  * bundle that looks empty on purpose.
  */
 export function normalizeBootPayload(raw: unknown): WebRuntimeStartState {
-  const payload = (raw ?? {}) as WebRuntimeStartState & RawBootCampaign;
+  const payload = (raw ?? {}) as WebRuntimeStartState & RawBootStory;
   const authored = Array.isArray(payload.seasons) ? payload.seasons : [];
   if (authored.length > 0) return payload;
 

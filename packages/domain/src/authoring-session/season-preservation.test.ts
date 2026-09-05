@@ -5,7 +5,7 @@
  * that owns it.
  *
  * This is the failure the typechecker cannot see. `getAllEpisodes`
- * flattens the campaign, so any write that rebuilds from that flat
+ * flattens the story, so any write that rebuilds from that flat
  * list and puts the result back into `seasons[0]` compiles with no
  * error and no assertion — `strict` is on without
  * `noUncheckedIndexedAccess`, so `seasons[0]` is a `Season`, not

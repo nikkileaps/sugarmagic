@@ -1,7 +1,7 @@
 /**
  * packages/domain/src/seasons/index.test.ts
  *
- * Purpose: the Season level of the campaign — the container, its
+ * Purpose: the Season level of the story — the container, its
  * load behaviour, and the invariants the rest of the epic leans on.
  *
  * Two of these look like bookkeeping and are not:
@@ -66,7 +66,7 @@ function twoSeasons() {
 }
 
 describe("a Season contains Episodes", () => {
-  it("round trips a two-Season campaign, preserving every list order", () => {
+  it("round trips a two-Season story, preserving every list order", () => {
     const project = normalizeGameProject({
       ...createDefaultGameProject("Probe", "probe"),
       seasons: twoSeasons()
@@ -241,7 +241,7 @@ describe("loading a project that predates Seasons", () => {
 
   it("falls through an EMPTY seasons array to the legacy episodes list", () => {
     // Presence is not the test -- a half-migrated file carrying
-    // `seasons: []` beside a real campaign must not load as empty.
+    // `seasons: []` beside a real story must not load as empty.
     const project = normalizeGameProject({
       ...createDefaultGameProject("Probe", "probe"),
       seasons: [],
@@ -260,7 +260,7 @@ describe("loading a project that predates Seasons", () => {
     ).toEqual(["e:legacy"]);
   });
 
-  it("gives a project with no campaign at all one Season, Episode and Scene", () => {
+  it("gives a project with no story at all one Season, Episode and Scene", () => {
     const bare = createDefaultGameProject(
       "Probe",
       "probe"
@@ -296,7 +296,7 @@ describe("loading a project that predates Seasons", () => {
   });
 });
 
-describe("ids stay unique across the whole campaign", () => {
+describe("ids stay unique across the whole story", () => {
   it("keeps the first of two Seasons sharing a seasonId", () => {
     const seasons = normalizeSeasons([
       createDefaultSeason({

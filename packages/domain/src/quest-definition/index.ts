@@ -103,7 +103,7 @@ export type QuestActionDefinition =
   | { type: "emitEvent"; eventName: string }
   | { type: "giveItem"; itemDefinitionId: string | null; count: number }
   | { type: "removeItem"; itemDefinitionId: string | null; count: number }
-  // Campaign progression. `unlockEpisode` opens an Episode's gate by adding
+  // Story progression. `unlockEpisode` opens an Episode's gate by adding
   // it to campaign.progression's manual unlocks -- Episodes are gated, Scenes
   // are not, so there is no unlockScene. `advanceToNextScene` completes the
   // current Scene and moves the player into `sceneId`, or into the next Scene
