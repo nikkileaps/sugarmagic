@@ -1,7 +1,7 @@
 /**
  * packages/domain/src/episodes/index.test.ts
  *
- * Purpose: Pins the Episode container — the gate, the campaign
+ * Purpose: Pins the Episode container — the gate, the story
  * resolvers, and the two guards that carry the most weight in this
  * epic because hand-verification is deferred:
  *
@@ -24,7 +24,6 @@ import {
   findEpisodeBySceneId,
   findSceneById,
   getAllScenes,
-  mapScenes,
   normalizeEpisode,
   normalizeEpisodeEndRouting,
   normalizeEpisodes,
@@ -413,18 +412,5 @@ describe("Scene lookup across Episodes", () => {
     expect(findEpisodeBySceneId(episodes, "s:3")?.episodeId).toBe("e:2");
     expect(findSceneById(episodes, "s:missing")).toBeNull();
     expect(findEpisodeBySceneId(episodes, null)).toBeNull();
-  });
-
-  it("mapScenes rewrites Scenes without moving them between Episodes", () => {
-    const mapped = mapScenes(episodes, (scene) => ({
-      ...scene,
-      displayName: `renamed ${scene.sceneId}`
-    }));
-    expect(mapped[0]!.scenes.map((scene) => scene.sceneId)).toEqual(["s:1"]);
-    expect(mapped[1]!.scenes.map((scene) => scene.sceneId)).toEqual([
-      "s:2",
-      "s:3"
-    ]);
-    expect(mapped[1]!.scenes[1]!.displayName).toBe("renamed s:3");
   });
 });

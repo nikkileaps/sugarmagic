@@ -60,6 +60,7 @@ import {
 } from "@sugarmagic/runtime-core";
 import { LoginModal } from "@sugarmagic/plugins";
 import { readBuildConfigFromViteEnv } from "./buildConfig";
+import { normalizeBootPayload } from "./bootPayload";
 import {
   createWebRuntimeHost,
   type WebRuntimeHost,
@@ -184,7 +185,9 @@ export function App() {
             `Failed to fetch /boot.json: HTTP ${bootResponse.status} ${bootResponse.statusText}`
           );
         }
-        const payload = (await bootResponse.json()) as WebRuntimeStartState;
+        // The one untyped entry for a baked payload; `normalizeBootPayload`
+        // is what reads a bundle older than this engine.
+        const payload = normalizeBootPayload(await bootResponse.json());
         if (cancelled) return;
         const buildConfig = readBuildConfigFromViteEnv();
         if (payload.pluginRuntimeEnvironment) {
@@ -230,10 +233,7 @@ export function App() {
                 return;
               }
               const save = settledUser
-                ? await loadSaveSafely(
-                    resolved.saveStore,
-                    settledUser.userId
-                  )
+                ? await loadSaveSafely(resolved.saveStore, settledUser.userId)
                 : null;
               resolveSavedGame(save);
             })();
@@ -299,11 +299,7 @@ export function App() {
     if (user !== null) {
       const wasSignedIn = hasEverBeenSignedInRef.current;
       hasEverBeenSignedInRef.current = true;
-      if (
-        phase.kind === "running" &&
-        prev === null &&
-        wasSignedIn
-      ) {
+      if (phase.kind === "running" && prev === null && wasSignedIn) {
         hostRef.current?.showStartMenu();
       }
     }
@@ -358,11 +354,7 @@ export function App() {
     const prev = prevUserRef.current;
     prevUserRef.current = user;
     if (!user || !active || !fallback) return;
-    if (
-      prev?.isAnonymous &&
-      !user.isAnonymous &&
-      prev.userId === user.userId
-    ) {
+    if (prev?.isAnonymous && !user.isAnonymous && prev.userId === user.userId) {
       void (async () => {
         const result = await migrateLocalSaveToCloud({
           localStore: fallback.saveStore,
@@ -385,7 +377,9 @@ export function App() {
   // the fallback, no plugin contributed — anonymous-local owns
   // identity and there's nothing for the login modal to do.
   const pluginIdentityActive =
-    active && fallback ? active.identityProvider !== fallback.identityProvider : false;
+    active && fallback
+      ? active.identityProvider !== fallback.identityProvider
+      : false;
 
   const overlay =
     phase.kind === "loading" ? (
@@ -465,10 +459,7 @@ export function App() {
           + no session cookie (a direct-URL visitor to a game that
           requires accounts). */}
       {showLoginModal && pluginIdentityActive && active ? (
-        <LoginModal
-          provider={active.identityProvider}
-          mode="required"
-        />
+        <LoginModal provider={active.identityProvider} mode="required" />
       ) : null}
       {/* Sustained-save-failure notice. Shown only after several writes
           in a row have failed, so a blip stays silent, and dismissable so

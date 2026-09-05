@@ -63,6 +63,12 @@ import {
   updateSceneInSession,
   updateEpisodeInSession,
   addEpisodeToSession,
+  addSeasonToSession,
+  deleteSeasonFromSession,
+  reorderSeasonInSession,
+  updateSeasonInSession,
+  moveEpisodeToSeasonInSession,
+  type Season,
   deleteEpisodeFromSession,
   reorderEpisodeInSession,
   moveSceneToEpisodeInSession,
@@ -145,6 +151,7 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
+  getAllEpisodes,
   type Scene,
   getActiveRegionContents
 } from "@sugarmagic/domain";
@@ -834,14 +841,60 @@ function handleRenameScene(sceneId: string, displayName: string) {
     .updateSession(updateSceneInSession(session, sceneId, { displayName }));
 }
 
-// Episode structural mutations, same seam as the Scene handlers
-// below (session-level, outside the semantic command/undo stream).
-function handleAddEpisode(displayName: string) {
+// Season and Episode structural mutations, same seam as the Scene
+// handlers below (session-level, outside the semantic command/undo
+// stream).
+function handleAddSeason(displayName: string) {
   const { session } = projectStore.getState();
   if (!session) return;
   projectStore
     .getState()
-    .updateSession(addEpisodeToSession(session, { displayName }));
+    .updateSession(addSeasonToSession(session, { displayName }));
+}
+
+function handleDeleteSeason(seasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(deleteSeasonFromSession(session, seasonId));
+}
+
+function handleReorderSeason(seasonId: string, direction: "up" | "down") {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(reorderSeasonInSession(session, seasonId, direction));
+}
+
+function handleUpdateSeason(
+  seasonId: string,
+  patch: Partial<Pick<Season, "displayName" | "description" | "notes">>
+) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSeasonInSession(session, seasonId, patch));
+}
+
+function handleMoveEpisodeToSeason(episodeId: string, toSeasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(
+      moveEpisodeToSeasonInSession(session, episodeId, toSeasonId)
+    );
+}
+
+function handleAddEpisode(displayName: string, seasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(addEpisodeToSession(session, { displayName, seasonId }));
 }
 
 function handleDeleteEpisode(episodeId: string) {
@@ -1115,10 +1168,10 @@ async function postPreviewBootMessage(
     {
       type: "PREVIEW_BOOT",
       regions,
-      // The campaign rides the boot payload; the runtime gates the
-      // Episodes and composes the active Scene's overlays onto the
-      // region base.
-      episodes: session.gameProject.episodes,
+      // The story rides the boot payload; the runtime gates the
+      // Episodes across the flattened run and composes the active
+      // Scene's overlays onto the region base.
+      seasons: session.gameProject.seasons,
       episodeEndRouting: session.gameProject.episodeEndRouting,
       // Ambient Context: Preview boots whichever Scene is active
       // in the editor — no separate "preview which Scene?" picker.
@@ -1277,6 +1330,15 @@ export function App() {
     if (!session) return [];
     return getAllRegions(session);
   }, [session]);
+
+  // Flattened once per project change, not per render. Several workspaces
+  // take this list straight into a `useMemo` dependency, so a fresh array
+  // each render recomputes all of them every time anything on this screen
+  // moves.
+  const storyEpisodes = useMemo(
+    () => getAllEpisodes(session?.gameProject.seasons ?? []),
+    [session]
+  );
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
@@ -2792,7 +2854,9 @@ export function App() {
     // it owns no artifact and inherits -- and any it owned before is
     // cleared, or it would keep pathing against a composition that no
     // longer differs.
-    for (const scene of getAllScenes(session.gameProject.episodes)) {
+    for (const scene of getAllScenes(
+      getAllEpisodes(session.gameProject.seasons)
+    )) {
       if (scene.regionId !== region.identity.id) continue;
       const sceneInput = buildRegionNavMeshInput({
         ...shared,
@@ -3417,7 +3481,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     gameProject: session?.gameProject ?? null,
     regions: regionDocuments,
-    episodes: session?.gameProject.episodes ?? [],
+    episodes: storyEpisodes,
     soundCueDefinitions,
     creditsDefinition: session?.gameProject.creditsDefinition ?? {
       sections: []
@@ -3567,17 +3631,17 @@ export function App() {
     // The Episode holding the Scene being worked in -- the graph draws the
     // chapter the author is actually inside, not whichever came first.
     graphEpisode: session
-      ? (session.gameProject.episodes.find((episode) =>
+      ? (getAllEpisodes(session.gameProject.seasons).find((episode) =>
           episode.scenes.some(
             (scene) => scene.sceneId === session.activeSceneId
           )
         ) ??
-        session.gameProject.episodes[0] ??
+        getAllEpisodes(session.gameProject.seasons)[0] ??
         null)
       : null,
     structurePanel: session ? (
       <StoryStructureView
-        episodes={session.gameProject.episodes}
+        seasons={session.gameProject.seasons}
         activeSceneId={session.activeSceneId}
         questDefinitions={getAllQuestDefinitions(session)}
         environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
@@ -3610,11 +3674,16 @@ export function App() {
         onReorderEpisode={handleReorderEpisode}
         onMoveSceneToEpisode={handleMoveSceneToEpisode}
         onMoveQuestToScene={handleMoveQuestToScene}
+        onAddSeason={handleAddSeason}
+        onUpdateSeason={handleUpdateSeason}
+        onDeleteSeason={handleDeleteSeason}
+        onReorderSeason={handleReorderSeason}
+        onMoveEpisodeToSeason={handleMoveEpisodeToSeason}
       />
     ) : null,
     composerPanel: session ? (
       <SceneComposerPanel
-        scenes={getAllScenes(session.gameProject.episodes)}
+        scenes={getAllScenes(getAllEpisodes(session.gameProject.seasons))}
         selectedScene={getActiveScene(session)}
         region={
           session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null
@@ -3657,7 +3726,7 @@ export function App() {
       gameProjectId: session?.gameProject.identity.id ?? null,
       questDefinitions: session ? getAllQuestDefinitions(session) : [],
       regions: regionDocuments,
-      episodes: session?.gameProject.episodes ?? [],
+      episodes: storyEpisodes,
       soundCueDefinitions,
       dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
       itemDefinitions: session?.gameProject.itemDefinitions ?? [],
@@ -4656,37 +4725,39 @@ export function App() {
                       {/* One group per Episode, its Scenes in order
                         underneath. The grouping is the containment
                         made visible; authoring Episodes is story 2. */}
-                      {session.gameProject.episodes.map((episode) => (
-                        <Fragment key={episode.episodeId}>
-                          <Menu.Label>{episode.displayName}</Menu.Label>
-                          {episode.scenes.map((scene) => (
-                            <Menu.Item
-                              key={scene.sceneId}
-                              onClick={() => handleSceneSelect(scene.sceneId)}
-                              styles={{
-                                item: {
-                                  fontSize: "var(--sm-font-size-lg)",
-                                  color:
-                                    scene.sceneId ===
-                                    getActiveScene(session)?.sceneId
-                                      ? "var(--sm-accent-blue)"
-                                      : "var(--sm-color-text)",
-                                  padding: "10px 16px",
-                                  "&:hover": {
-                                    background: "var(--sm-active-bg)"
+                      {getAllEpisodes(session.gameProject.seasons).map(
+                        (episode) => (
+                          <Fragment key={episode.episodeId}>
+                            <Menu.Label>{episode.displayName}</Menu.Label>
+                            {episode.scenes.map((scene) => (
+                              <Menu.Item
+                                key={scene.sceneId}
+                                onClick={() => handleSceneSelect(scene.sceneId)}
+                                styles={{
+                                  item: {
+                                    fontSize: "var(--sm-font-size-lg)",
+                                    color:
+                                      scene.sceneId ===
+                                      getActiveScene(session)?.sceneId
+                                        ? "var(--sm-accent-blue)"
+                                        : "var(--sm-color-text)",
+                                    padding: "10px 16px",
+                                    "&:hover": {
+                                      background: "var(--sm-active-bg)"
+                                    }
                                   }
-                                }
-                              }}
-                            >
-                              {scene.sceneId ===
-                              getActiveScene(session)?.sceneId
-                                ? "✓ "
-                                : ""}
-                              {scene.displayName}
-                            </Menu.Item>
-                          ))}
-                        </Fragment>
-                      ))}
+                                }}
+                              >
+                                {scene.sceneId ===
+                                getActiveScene(session)?.sceneId
+                                  ? "✓ "
+                                  : ""}
+                                {scene.displayName}
+                              </Menu.Item>
+                            ))}
+                          </Fragment>
+                        )
+                      )}
                     </Menu.Dropdown>
                   </Menu>
                 </Group>

@@ -264,8 +264,9 @@ export interface Scene {
    * way an Episode holds its Scenes: a quest belongs to exactly one Scene
    * by construction, so it cannot be orphaned or owned twice. Code that
    * wants a quest without caring which Scene owns it uses the
-   * `getAllQuestDefinitions` / `findQuestDefinitionById` accessors in
-   * `episodes/`.
+   * `getAllQuestDefinitionsInEpisodes` / `findQuestDefinitionById`
+   * accessors in `episodes/`, reached from a project through
+   * `getAllEpisodes(project.seasons)`.
    *
    * Dialogue is NOT contained this way: a quest node references a dialogue
    * by id, and an NPC-bound ambient dialogue belongs to no quest at all.

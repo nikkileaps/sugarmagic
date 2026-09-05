@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   createEmptyContentLibrarySnapshot,
   createDefaultRegion,
   migrateToScenes,
@@ -137,7 +138,7 @@ describe("collapsing a Scene onto one region", () => {
     const base = createDefaultGameProject("Test", "test");
     const project = {
       ...base,
-      episodes: base.episodes.map((episode) => ({
+      seasons: mapEpisodes(base.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene) => ({ ...scene, regionId: "" }))
       }))
@@ -167,7 +168,7 @@ describe("collapsing a Scene onto one region", () => {
     const base = createDefaultGameProject("Test", "test");
     const project = {
       ...base,
-      episodes: base.episodes.map((episode) => ({
+      seasons: mapEpisodes(base.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene) => ({
           ...scene,

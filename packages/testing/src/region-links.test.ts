@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   createEmptyContentLibrarySnapshot,
   createDefaultGameProject,
   createDefaultRegion,
@@ -156,7 +157,7 @@ function validate(regions: RegionDocument[]) {
   const base = createDefaultGameProject("Test", "test");
   const project = {
     ...base,
-    episodes: base.episodes.map((episode) => ({
+    seasons: mapEpisodes(base.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene) => ({ ...scene, regionId: HERE }))
     }))

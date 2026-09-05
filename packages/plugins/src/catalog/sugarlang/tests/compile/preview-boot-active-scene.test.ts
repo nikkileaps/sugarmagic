@@ -23,6 +23,7 @@ import {
   createAuthoringSession,
   createDefaultGameProject,
   createDefaultEpisode,
+  createDefaultSeason,
   createDefaultScene,
   createPluginConfigurationRecord,
   createRegionNPCPresence
@@ -62,25 +63,31 @@ describe("preview boot composes the active Scene overlay", () => {
         })
       ],
       npcDefinitions: [CHEESE_NPC],
-      episodes: [
-        createDefaultEpisode({
-          episodeId: "episode:overlay-test",
-          scenes: [
-            createDefaultScene({
-              sceneId: "scene:overlay-test",
-              regionId: region.identity.id,
-              overlay: {
-                  placedLights: [],
-                  suppressedRegionIds: [],
-                  assetAppearanceOverrides: {},
-                  folders: [],
-                  placedAssets: [],
-                  playerPresence: null,
-                  npcPresences: [
-                    createRegionNPCPresence({ npcDefinitionId: "npc-finnick" })
-                  ],
-                  itemPresences: []
-                }
+      seasons: [
+        createDefaultSeason({
+          episodes: [
+            createDefaultEpisode({
+              episodeId: "episode:overlay-test",
+              scenes: [
+                createDefaultScene({
+                  sceneId: "scene:overlay-test",
+                  regionId: region.identity.id,
+                  overlay: {
+                    placedLights: [],
+                    suppressedRegionIds: [],
+                    assetAppearanceOverrides: {},
+                    folders: [],
+                    placedAssets: [],
+                    playerPresence: null,
+                    npcPresences: [
+                      createRegionNPCPresence({
+                        npcDefinitionId: "npc-finnick"
+                      })
+                    ],
+                    itemPresences: []
+                  }
+                })
+              ]
             })
           ]
         })

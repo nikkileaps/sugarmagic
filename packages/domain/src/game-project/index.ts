@@ -23,15 +23,20 @@ import {
   normalizeScenes
 } from "../scenes";
 import {
-  createDefaultEpisode,
   DEFAULT_EPISODE_END_ROUTING,
   DEFAULT_EPISODE_ID,
   normalizeEpisodeEndRouting,
   normalizeEpisodes,
-  type Episode,
   type EpisodeEndRouting,
   getAllQuestDefinitionsInEpisodes
 } from "../episodes";
+import {
+  createDefaultSeasons,
+  getAllEpisodes,
+  mapEpisodes,
+  resolveStorySeasons,
+  type Season
+} from "../seasons";
 import {
   normalizeItemDefinition,
   type ItemDefinition
@@ -114,9 +119,7 @@ export function normalizeMusicBindings(
   input: Partial<MusicBindings> | null | undefined
 ): MusicBindings {
   const coerce = (value: unknown): string | null =>
-    typeof value === "string" && value.trim().length > 0
-      ? value.trim()
-      : null;
+    typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
   return {
     menuMusicId: coerce(input?.menuMusicId),
     defaultBackgroundMusicId: coerce(input?.defaultBackgroundMusicId),
@@ -226,16 +229,26 @@ export interface GameProject {
   gameRootPath: string;
   regionRegistry: RegionReference[];
   /**
-   * The campaign: ordered, gated Episodes, each holding its own
-   * ordered Scenes. Position in this list IS the order — there is
-   * no order number. Scenes live inside their Episode, so reach
-   * them with `getAllScenes` / `findSceneById` / `mapScenes`
-   * rather than a flat project-level array.
+   * The story: ordered Seasons, each holding its own ordered,
+   * gated Episodes, each of those holding its own ordered Scenes.
+   * Position in each list IS the order — there is no order
+   * number.
+   *
+   * Episodes live inside their Season and Scenes inside their
+   * Episode, so reach them with `getAllEpisodes` /
+   * `findSeasonById` / `mapEpisodes` and
+   * `getAllScenes(getAllEpisodes(seasons))` / `mapScenes` rather
+   * than a flat project-level array.
+   *
+   * Narrative order across the story is the concatenation of
+   * each Season's Episode list, in Season order. Gating reads
+   * that flat run and cannot see the grouping, which is why a
+   * Season needs no gate of its own.
    *
    * Regions remain the shared geographic base; a Scene carries
    * per-region overlays composed on top while it is active.
    */
-  episodes: Episode[];
+  seasons: Season[];
   /**
    * Where the player goes when an Episode ends, after credits.
    *
@@ -395,9 +408,8 @@ function migrateLegacyDeployFields(
     );
   }
   if (hasLegacyVPI) {
-    nextConfig.versionedProjectIdentifiers = normalizeVersionedProjectIdentifiers(
-      legacyVersionedProjectIdentifiers
-    );
+    nextConfig.versionedProjectIdentifiers =
+      normalizeVersionedProjectIdentifiers(legacyVersionedProjectIdentifiers);
   }
 
   const nextRecord: PluginConfigurationRecord = existingRecord
@@ -440,7 +452,7 @@ export function normalizeGameProject(
         | "audioMixer"
         | "mechanics"
         | "defaultGameSavePayload"
-        | "episodes"
+        | "seasons"
         | "episodeEndRouting"
         | "musicBindings"
         | "creditsDefinition"
@@ -471,9 +483,12 @@ export function normalizeGameProject(
         audioMixer?: Partial<AudioMixerSettings> | null;
         mechanics?: Partial<MechanicsDefinition> | null;
         defaultGameSavePayload?: GameSavePayload | null;
-        // A file written before Episodes carries `scenes` and
-        // `scenesUiLabel`. Both are accepted on input only so they can be
-        // dropped from the output; nothing converts them.
+        seasons?: unknown;
+        // A file written before Seasons carries a flat `episodes` list,
+        // which `resolveSeasons` wraps in one Season and then drops from
+        // the output. One written before Episodes carries `scenes` and
+        // `scenesUiLabel`; those are accepted on input only so they can be
+        // dropped, and nothing converts them.
         episodes?: unknown;
         episodeEndRouting?: unknown;
         scenes?: unknown;
@@ -503,17 +518,25 @@ export function normalizeGameProject(
   const {
     deployment: legacyDeployment,
     versionedProjectIdentifiers: legacyVersionedProjectIdentifiers,
-    // The pre-Episodes campaign keys. Nothing reads them -- dropping them
+    // The superseded story keys. Nothing reads them -- dropping them
     // here keeps a stale file from writing them back out alongside the
-    // `episodes` that replaced them.
+    // `seasons` that replaced them.
+    //
+    // `episodes` is load-bearing, not tidiness: `resolveSeasons` reads it
+    // to wrap a pre-Seasons story, and the spread below is cast
+    // through `unknown`, so an `episodes` left in `gameProjectRest` would
+    // ride onto the output where the checker cannot see it and get
+    // written back to disk on every save.
     scenes: _legacyScenes,
     scenesUiLabel: _legacyScenesUiLabel,
+    episodes: _legacyEpisodes,
     ...gameProjectRest
   } = gameProject as {
     deployment?: unknown;
     versionedProjectIdentifiers?: unknown;
     scenes?: unknown;
     scenesUiLabel?: unknown;
+    episodes?: unknown;
   } & Record<string, unknown>;
   const migratedPluginConfigurations = migrateLegacyDeployFields(
     normalizePluginConfigurationRecords(
@@ -534,8 +557,8 @@ export function normalizeGameProject(
       gameProject.playerDefinition,
       gameProject.identity.id
     ),
-    worldFlagDefinitions: (gameProject.worldFlagDefinitions ?? []).map((definition) =>
-      normalizeWorldFlagDefinition(definition)
+    worldFlagDefinitions: (gameProject.worldFlagDefinitions ?? []).map(
+      (definition) => normalizeWorldFlagDefinition(definition)
     ),
     spellDefinitions: (gameProject.spellDefinitions ?? []).map((definition) =>
       normalizeSpellDefinition(definition)
@@ -569,7 +592,7 @@ export function normalizeGameProject(
       (gameProject as { defaultGameSavePayload?: unknown })
         .defaultGameSavePayload
     ),
-    episodes: resolveEpisodes(gameProject),
+    seasons: resolveSeasons(gameProject),
     episodeEndRouting: normalizeEpisodeEndRouting(
       (gameProject as { episodeEndRouting?: unknown }).episodeEndRouting
     ),
@@ -588,14 +611,14 @@ export function normalizeGameProject(
 }
 
 /**
- * The project's campaign. A file with no `episodes` gets one
- * holding one Scene rather than an empty campaign, so Studio
+ * The project's story. A file with no `episodes` gets one
+ * holding one Scene rather than an empty story, so Studio
  * always has an active Scene to author against and the runtime
  * always has something to boot into.
  *
  * There is NO migration from the pre-Episodes `scenes` shape.
  * That shape is gone; a file still carrying it is overwritten
- * with a fresh campaign rather than converted.
+ * with a fresh story rather than converted.
  */
 /**
  * Quests a load moved out of the old flat project list and onto a Scene
@@ -626,24 +649,29 @@ export function takeQuestContainmentNotes(): QuestContainmentNote[] {
  */
 function containLegacyQuests(
   gameProject: { questDefinitions?: unknown },
-  episodes: Episode[]
-): Episode[] {
+  seasons: Season[]
+): Season[] {
   const legacy = Array.isArray(gameProject.questDefinitions)
     ? gameProject.questDefinitions
     : [];
-  if (legacy.length === 0) return episodes;
+  if (legacy.length === 0) return seasons;
 
+  // The first Episode with Scenes anywhere in the story, so the target
+  // is the same one this migration picked before Seasons existed.
+  const episodes = getAllEpisodes(seasons);
   const target = episodes.find((episode) => episode.scenes.length > 0);
   const targetScene = target?.scenes[0];
-  if (!target || !targetScene) return episodes;
+  if (!target || !targetScene) return seasons;
 
   const owned = new Set(
-    getAllQuestDefinitionsInEpisodes(episodes).map((quest) => quest.definitionId)
+    getAllQuestDefinitionsInEpisodes(episodes).map(
+      (quest) => quest.definitionId
+    )
   );
   const moved = legacy
     .map((definition) => normalizeQuestDefinition(definition))
     .filter((quest) => !owned.has(quest.definitionId));
-  if (moved.length === 0) return episodes;
+  if (moved.length === 0) return seasons;
 
   for (const quest of moved) {
     questContainmentNotes.push({
@@ -653,7 +681,9 @@ function containLegacyQuests(
     });
   }
 
-  return episodes.map((episode) =>
+  // Through `mapEpisodes` so the rewrite keeps every Episode in the Season
+  // that owns it.
+  return mapEpisodes(seasons, (episode) =>
     episode.episodeId === target.episodeId
       ? {
           ...episode,
@@ -670,18 +700,35 @@ function containLegacyQuests(
   );
 }
 
-function resolveEpisodes(gameProject: {
+/**
+ * The project's story, in precedence order: authored Seasons,
+ * else a pre-Seasons flat `episodes` list wrapped in one Season,
+ * else one synthesized Season holding one Episode holding one
+ * Scene.
+ *
+ * Each test is for a NON-EMPTY list, not a present key: an empty
+ * `seasons` array beside a real `episodes` list has to fall
+ * through to the wrap, or a half-migrated file would load as an
+ * empty story.
+ */
+function resolveSeasons(gameProject: {
+  seasons?: unknown;
   episodes?: unknown;
   questDefinitions?: unknown;
-}): Episode[] {
-  const authored = normalizeEpisodes(gameProject.episodes);
-  if (authored.length > 0) return containLegacyQuests(gameProject, authored);
-  return containLegacyQuests(gameProject, [
-    createDefaultEpisode({
+}): Season[] {
+  // Precedence between the two stored shapes lives in `seasons/`, shared
+  // with the boot payload's seam so the rule cannot drift between them.
+  // What this path adds is the authoring floor and the legacy quest move.
+  const stored = resolveStorySeasons(gameProject);
+  if (stored.length > 0) return containLegacyQuests(gameProject, stored);
+
+  return containLegacyQuests(
+    gameProject,
+    createDefaultSeasons({
       episodeId: DEFAULT_EPISODE_ID,
-      scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
+      sceneId: DEFAULT_SCENE_ID
     })
-  ]);
+  );
 }
 
 export function createDefaultGameProject(
@@ -710,16 +757,14 @@ export function createDefaultGameProject(
     audioMixer: createDefaultAudioMixerSettings(),
     mechanics: createDefaultMechanicsDefinition(),
     defaultGameSavePayload: null,
-    // A fresh project starts with one Episode holding the default
-    // Scene, so authoring always has an active Scene context
-    // (Ambient Context pattern) from day one.
-    episodes: [
-      createDefaultEpisode({
-        episodeId: DEFAULT_EPISODE_ID,
-        displayName: gameName,
-        scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
-      })
-    ],
+    // A fresh project starts with one Season holding one Episode
+    // holding the default Scene, so authoring always has an active
+    // Scene context (Ambient Context pattern) from day one.
+    seasons: createDefaultSeasons({
+      episodeId: DEFAULT_EPISODE_ID,
+      episodeDisplayName: gameName,
+      sceneId: DEFAULT_SCENE_ID
+    }),
     episodeEndRouting: DEFAULT_EPISODE_END_ROUTING,
     musicBindings: normalizeMusicBindings(null),
     creditsDefinition: normalizeCreditsDefinition(null)

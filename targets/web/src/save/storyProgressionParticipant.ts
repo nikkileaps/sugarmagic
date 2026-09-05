@@ -1,9 +1,9 @@
 /**
- * targets/web/src/save/campaignProgressionParticipant.ts
+ * targets/web/src/save/storyProgressionParticipant.ts
  *
- * Purpose: `campaign.progression` SaveParticipant — where the
- * player is in the campaign, which Episodes gameplay has opened,
- * and what they have finished. Plan 055 registry pattern.
+ * Purpose: the story-progression SaveParticipant — where the
+ * player is in the story, and which Episodes gameplay has opened.
+ * Plan 055 registry pattern.
  *
  * Tier is `host-owned`, NOT `default`: `currentSceneId` decides
  * which Scene overlay composes the world, so it must restore in
@@ -22,7 +22,7 @@
 
 import type { SaveParticipant, SaveSlice } from "@sugarmagic/runtime-core";
 
-export interface CampaignProgressionSlice {
+export interface StoryProgressionSlice {
   /** The Episode the player is in. */
   currentEpisodeId: string | null;
   /** The Scene the player is in, inside that Episode. */
@@ -31,16 +31,26 @@ export interface CampaignProgressionSlice {
   unlockedEpisodeIds: string[];
 }
 
-export interface CampaignProgressionDeps {
+export interface StoryProgressionDeps {
   /** Serialize-time reads from the host's closures. */
   getCurrentEpisodeId: () => string | null;
   getCurrentSceneId: () => string | null;
   getManuallyUnlockedEpisodeIds: () => readonly string[];
   /** Deserialize-time handoff to the host, Phase 1 (pre-spawn). */
-  applyRestoredSlice: (data: CampaignProgressionSlice | null) => void;
+  applyRestoredSlice: (data: StoryProgressionSlice | null) => void;
 }
 
-export const CAMPAIGN_PROGRESSION_PARTICIPANT_ID = "campaign.progression";
+/**
+ * The key this participant's slice is stored under, inside every
+ * save file that already exists.
+ *
+ * The VALUE is a wire name, not a domain term. "Campaign" is not a
+ * word in this domain -- the tiers are game, Season, Episode,
+ * Scene, quest -- but the string is what a saved game holds, so
+ * changing it silently drops a player's position. It moves in its
+ * own change, with a read-both migration; see #313.
+ */
+export const STORY_PROGRESSION_PARTICIPANT_ID = "campaign.progression";
 
 /**
  * v2 — Episodes. v1 was Scene-shaped (`unlockedSceneIds`,
@@ -50,35 +60,35 @@ export const CAMPAIGN_PROGRESSION_PARTICIPANT_ID = "campaign.progression";
  *
  * A player on a v1 save keeps everything else — quests,
  * inventory, world flags, world time, known facts, NPC behavior,
- * caster stats — and restarts the campaign from its first Scene.
+ * caster stats — and restarts the story from its first Scene.
  * The precedent is `teach-plan-state`'s discard-on-version-miss,
  * not `world.presence`'s v1 -> v2 in-place upgrade.
  */
-export const CAMPAIGN_PROGRESSION_SLICE_SCHEMA_VERSION = 2;
+export const STORY_PROGRESSION_SLICE_SCHEMA_VERSION = 2;
 
-export function createCampaignProgressionParticipant(
-  deps: CampaignProgressionDeps
-): SaveParticipant<CampaignProgressionSlice> {
+export function createStoryProgressionParticipant(
+  deps: StoryProgressionDeps
+): SaveParticipant<StoryProgressionSlice> {
   return {
-    participantId: CAMPAIGN_PROGRESSION_PARTICIPANT_ID,
+    participantId: STORY_PROGRESSION_PARTICIPANT_ID,
     tier: "host-owned",
-    schemaVersion: CAMPAIGN_PROGRESSION_SLICE_SCHEMA_VERSION,
-    serialize(): CampaignProgressionSlice {
+    schemaVersion: STORY_PROGRESSION_SLICE_SCHEMA_VERSION,
+    serialize(): StoryProgressionSlice {
       return {
         currentEpisodeId: deps.getCurrentEpisodeId(),
         currentSceneId: deps.getCurrentSceneId(),
         unlockedEpisodeIds: [...deps.getManuallyUnlockedEpisodeIds()]
       };
     },
-    deserialize(slice: SaveSlice<CampaignProgressionSlice> | null): void {
+    deserialize(slice: SaveSlice<StoryProgressionSlice> | null): void {
       if (
         slice &&
-        slice.schemaVersion < CAMPAIGN_PROGRESSION_SLICE_SCHEMA_VERSION
+        slice.schemaVersion < STORY_PROGRESSION_SLICE_SCHEMA_VERSION
       ) {
         console.info(
-          "[web-runtime] Discarding a pre-Episodes campaign.progression slice; " +
-            "the campaign restarts from its first Scene. Everything else in " +
-            "the save is untouched."
+          `[web-runtime] Discarding a pre-Episodes ${STORY_PROGRESSION_PARTICIPANT_ID} ` +
+            "slice; the story restarts from its first Scene. Everything else " +
+            "in the save is untouched."
         );
         deps.applyRestoredSlice(null);
         return;

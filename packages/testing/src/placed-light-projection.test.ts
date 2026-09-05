@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { createPlacedLightController } from "@sugarmagic/render-web";
 import {
+  createDefaultSeason,
   createAuthoringSession,
   createDefaultEpisode,
   createDefaultGameProject,
@@ -225,7 +226,11 @@ describe("a Scene's own lights", () => {
     });
     const project = {
       ...createDefaultGameProject("Test", "test"),
-      episodes: [createDefaultEpisode({ scenes: [scene] })]
+      seasons: [
+        createDefaultSeason({
+          episodes: [createDefaultEpisode({ scenes: [scene] })]
+        })
+      ]
     };
 
     const issues = validateProjectContent(

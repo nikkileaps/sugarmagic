@@ -19,7 +19,8 @@ import {
   getActiveScene,
   getAllRegions,
   type AuthoringSession,
-  getAllQuestDefinitionsInEpisodes
+  getAllQuestDefinitionsInEpisodes,
+  getAllEpisodes
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "../../runtime";
 import { resolveSugarLangTargetLanguage } from "./config";
@@ -97,7 +98,7 @@ export async function buildSugarlangPreviewBootPayloadForSession(
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
       questDefinitions: getAllQuestDefinitionsInEpisodes(
-        session.gameProject.episodes
+        getAllEpisodes(session.gameProject.seasons)
       ),
       itemDefinitions: session.gameProject.itemDefinitions,
       documentDefinitions: session.gameProject.documentDefinitions

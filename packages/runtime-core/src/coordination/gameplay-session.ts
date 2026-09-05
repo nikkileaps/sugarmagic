@@ -228,7 +228,7 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   activeScene?: Scene | null;
   /**
-   * Quest campaign-progression actions (unlockEpisode /
+   * Quest story-progression actions (unlockEpisode /
    * advanceToNextScene) forward here; the host owns
    * campaign.progression and the world reload that a Scene change
    * implies.
@@ -241,7 +241,7 @@ export interface RuntimeGameplaySessionControllerOptions {
   /**
    * Walk the player into another region, landing on one of its markers.
    *
-   * Separate from `onSceneAction` on purpose: that one is campaign
+   * Separate from `onSceneAction` on purpose: that one is story
    * progression -- the story moves on and the Scene changes. This is a
    * doorway. The story does not change; the player is just somewhere else.
    * The host owns it either way, because standing a region up is its job.
@@ -2180,7 +2180,7 @@ export function createRuntimeGameplaySessionController(
         return;
       }
 
-      // Campaign progression actions belong to the host
+      // Story progression actions belong to the host
       // (campaign.progression lives there), not the assembly.
       case "unlockEpisode":
         options.onSceneAction?.({

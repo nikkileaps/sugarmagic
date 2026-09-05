@@ -22,7 +22,12 @@
  * Scene belongs to exactly one Episode by construction — it
  * cannot be orphaned or owned twice. Code that needs a Scene
  * without caring which Episode owns it uses `getAllScenes` /
- * `findSceneById` / `mapScenes` below.
+ * `findSceneById` below.
+ *
+ * An Episode in turn belongs to exactly one Season, which holds
+ * it the same way (`seasons/`). The lookups here take an Episode
+ * list, so a caller holding a project reaches them through
+ * `getAllEpisodes(project.seasons)`.
  *
  * Lives beside `scenes/` rather than inside it: an Episode
  * contains Scenes, and filing the container inside the contained
@@ -90,7 +95,9 @@ export type EpisodeEndRouting = "episodes-screen" | "next-episode";
 export const DEFAULT_EPISODE_END_ROUTING: EpisodeEndRouting = "episodes-screen";
 
 export function normalizeEpisodeEndRouting(input: unknown): EpisodeEndRouting {
-  return input === "next-episode" ? "next-episode" : DEFAULT_EPISODE_END_ROUTING;
+  return input === "next-episode"
+    ? "next-episode"
+    : DEFAULT_EPISODE_END_ROUTING;
 }
 
 export interface Episode {
@@ -197,11 +204,19 @@ export function normalizeEpisode(input: unknown): Episode | null {
  * A Scene id appearing in two Episodes is kept only in the first,
  * which is what makes single ownership true after a hand-edited
  * file as well as after a migration.
+ *
+ * The caller may pass the sets of ids already claimed, so the
+ * same first-wins rule spans every Episode list in the story
+ * rather than restarting per Season. `normalizeSeasons` threads
+ * them; a caller normalizing one list on its own gets fresh sets
+ * and the behaviour above.
  */
-export function normalizeEpisodes(input: unknown): Episode[] {
+export function normalizeEpisodes(
+  input: unknown,
+  seenEpisodeIds: Set<string> = new Set(),
+  seenSceneIds: Set<string> = new Set()
+): Episode[] {
   if (!Array.isArray(input)) return [];
-  const seenEpisodeIds = new Set<string>();
-  const seenSceneIds = new Set<string>();
   const episodes: Episode[] = [];
   for (const candidate of input) {
     const episode = normalizeEpisode(candidate);
@@ -371,7 +386,9 @@ export function isEpisodeComplete(
   isQuestCompleted: QuestCompletionReader
 ): boolean {
   if (episode.scenes.length === 0) return false;
-  return episode.scenes.every((scene) => isSceneComplete(scene, isQuestCompleted));
+  return episode.scenes.every((scene) =>
+    isSceneComplete(scene, isQuestCompleted)
+  );
 }
 
 /** Every Scene in the project, in narrative order across Episodes. */
@@ -445,20 +462,4 @@ export function findEpisodeBySceneId(
       episode.scenes.some((scene) => scene.sceneId === sceneId)
     ) ?? null
   );
-}
-
-/**
- * Rewrite every Scene in place, preserving which Episode owns
- * which. The write-side counterpart to `getAllScenes` — code that
- * used to map over a flat `scenes` array uses this so Episode
- * membership and order survive the rewrite.
- */
-export function mapScenes(
-  episodes: readonly Episode[],
-  transform: (scene: Scene, episode: Episode) => Scene
-): Episode[] {
-  return episodes.map((episode) => ({
-    ...episode,
-    scenes: episode.scenes.map((scene) => transform(scene, episode))
-  }));
 }

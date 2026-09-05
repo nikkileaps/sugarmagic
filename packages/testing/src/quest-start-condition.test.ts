@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   createEmptyContentLibrarySnapshot,
   collectWorldFlagReferences,
   createDefaultGameProject,
@@ -278,7 +279,7 @@ function projectGatedOnFlag(options: {
           })
         ]
       : [],
-    episodes: base.episodes.map((episode) => ({
+    seasons: mapEpisodes(base.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene, index) => ({
         ...scene,

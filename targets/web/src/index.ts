@@ -1,4 +1,5 @@
 export * from "./runtimeHost";
+export { normalizeBootPayload } from "./bootPayload";
 export * from "./bootPreviewSession";
 export * from "./audio";
 export {

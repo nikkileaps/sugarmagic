@@ -2,7 +2,7 @@
  * targets/web/src/transitionCard.ts
  *
  * Purpose: the player-facing transition title card ("CHAPTER 3:
- * THE RECKONING"). Rendered by the host when the campaign advances
+ * THE RECKONING"). Rendered by the host when the story advances
  * into something carrying a `transitionConfig` — an Episode's
  * chapter card or a Scene's between-Scenes cut, same shape either
  * way. A null config is a hard cut (no card).

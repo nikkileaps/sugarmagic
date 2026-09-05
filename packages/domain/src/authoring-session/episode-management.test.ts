@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  getAllEpisodes,
   addEpisodeToSession,
   addSceneToSession,
   createAuthoringSession,
@@ -51,16 +52,18 @@ function makeSession(): AuthoringSession {
 describe("Episode CRUD", () => {
   it("starts with exactly one Episode holding one Scene", () => {
     const session = makeSession();
-    expect(session.gameProject.episodes).toHaveLength(1);
-    expect(session.gameProject.episodes[0]!.scenes).toHaveLength(1);
+    expect(getAllEpisodes(session.gameProject.seasons)).toHaveLength(1);
+    expect(getAllEpisodes(session.gameProject.seasons)[0]!.scenes).toHaveLength(
+      1
+    );
   });
 
   it("appends a new Episode at the end, holding an empty Scene", () => {
     const session = addEpisodeToSession(makeSession(), {
       displayName: "The Rackwick Job"
     });
-    expect(session.gameProject.episodes).toHaveLength(2);
-    const added = session.gameProject.episodes[1]!;
+    expect(getAllEpisodes(session.gameProject.seasons)).toHaveLength(2);
+    const added = getAllEpisodes(session.gameProject.seasons)[1]!;
     expect(added.displayName).toBe("The Rackwick Job");
     expect(added.unlockCondition).toBe("always");
     // An Episode with no Scenes cannot be entered, so it never
@@ -72,22 +75,24 @@ describe("Episode CRUD", () => {
 
   it("falls back to a placeholder name for a blank one", () => {
     const session = addEpisodeToSession(makeSession(), { displayName: "   " });
-    expect(session.gameProject.episodes[1]!.displayName).toBe(
+    expect(getAllEpisodes(session.gameProject.seasons)[1]!.displayName).toBe(
       "Untitled Episode"
     );
   });
 
   it("renames an Episode and sets its gate", () => {
     let session = makeSession();
-    const episodeId = session.gameProject.episodes[0]!.episodeId;
+    const episodeId = getAllEpisodes(session.gameProject.seasons)[0]!.episodeId;
     session = updateEpisodeInSession(session, episodeId, {
       displayName: "Wordlark Hollow",
       unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" }
     });
-    expect(session.gameProject.episodes[0]!.displayName).toBe(
+    expect(getAllEpisodes(session.gameProject.seasons)[0]!.displayName).toBe(
       "Wordlark Hollow"
     );
-    expect(session.gameProject.episodes[0]!.unlockCondition).toEqual({
+    expect(
+      getAllEpisodes(session.gameProject.seasons)[0]!.unlockCondition
+    ).toEqual({
       kind: "questComplete",
       questDefinitionId: "q:1"
     });
@@ -95,25 +100,26 @@ describe("Episode CRUD", () => {
 
   it("refuses to delete the last Episode", () => {
     const session = makeSession();
-    const episodeId = session.gameProject.episodes[0]!.episodeId;
+    const episodeId = getAllEpisodes(session.gameProject.seasons)[0]!.episodeId;
     expect(deleteEpisodeFromSession(session, episodeId)).toBe(session);
   });
 
   it("deletes an Episode with its Scenes and repoints the active pointer", () => {
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
-    const secondId = session.gameProject.episodes[1]!.episodeId;
+    const secondId = getAllEpisodes(session.gameProject.seasons)[1]!.episodeId;
     // The active Scene is inside the Episode being deleted.
     session = deleteEpisodeFromSession(session, secondId);
-    expect(session.gameProject.episodes).toHaveLength(1);
+    expect(getAllEpisodes(session.gameProject.seasons)).toHaveLength(1);
     expect(session.activeSceneId).toBe(
-      session.gameProject.episodes[0]!.scenes[0]!.sceneId
+      getAllEpisodes(session.gameProject.seasons)[0]!.scenes[0]!.sceneId
     );
   });
 
   it("leaves the active pointer alone when it survives the delete", () => {
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
-    const firstSceneId = session.gameProject.episodes[0]!.scenes[0]!.sceneId;
-    const secondId = session.gameProject.episodes[1]!.episodeId;
+    const firstSceneId = getAllEpisodes(session.gameProject.seasons)[0]!
+      .scenes[0]!.sceneId;
+    const secondId = getAllEpisodes(session.gameProject.seasons)[1]!.episodeId;
     session = { ...session, activeSceneId: firstSceneId };
     session = deleteEpisodeFromSession(session, secondId);
     expect(session.activeSceneId).toBe(firstSceneId);
@@ -121,16 +127,21 @@ describe("Episode CRUD", () => {
 
   it("reorders by moving the entry, with nothing to renumber", () => {
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
-    const [first, second] = session.gameProject.episodes;
+    const [first, second] = getAllEpisodes(session.gameProject.seasons);
     session = reorderEpisodeInSession(session, second!.episodeId, "up");
     expect(
-      session.gameProject.episodes.map((episode) => episode.episodeId)
+      getAllEpisodes(session.gameProject.seasons).map(
+        (episode) => episode.episodeId
+      )
     ).toEqual([second!.episodeId, first!.episodeId]);
-    // No-op at the boundary.
+    // No-op at the boundary -- and the boundary is the Season's list, not
+    // the project's, so a step never re-homes an Episode.
     expect(
-      reorderEpisodeInSession(session, second!.episodeId, "up").gameProject
-        .episodes
-    ).toEqual(session.gameProject.episodes);
+      getAllEpisodes(
+        reorderEpisodeInSession(session, second!.episodeId, "up").gameProject
+          .seasons
+      )
+    ).toEqual(getAllEpisodes(session.gameProject.seasons));
   });
 });
 
@@ -140,26 +151,35 @@ describe("moving a Scene between Episodes", () => {
     // Two Scenes in Episode one so the move does not empty it.
     session = addSceneToSession(session, { displayName: "Scene 2" });
     session = addEpisodeToSession(session, { displayName: "Two" });
-    const fromId = session.gameProject.episodes[0]!.episodeId;
-    const toId = session.gameProject.episodes[1]!.episodeId;
-    const movingId = session.gameProject.episodes[0]!.scenes[1]!.sceneId;
+    const fromId = getAllEpisodes(session.gameProject.seasons)[0]!.episodeId;
+    const toId = getAllEpisodes(session.gameProject.seasons)[1]!.episodeId;
+    const movingId = getAllEpisodes(session.gameProject.seasons)[0]!.scenes[1]!
+      .sceneId;
 
     session = moveSceneToEpisodeInSession(session, movingId, toId);
 
     expect(
-      session.gameProject.episodes[0]!.scenes.map((scene) => scene.sceneId)
+      getAllEpisodes(session.gameProject.seasons)[0]!.scenes.map(
+        (scene) => scene.sceneId
+      )
     ).not.toContain(movingId);
     expect(
-      session.gameProject.episodes[1]!.scenes.map((scene) => scene.sceneId)
+      getAllEpisodes(session.gameProject.seasons)[1]!.scenes.map(
+        (scene) => scene.sceneId
+      )
     ).toContain(movingId);
     // Single ownership: it appears in exactly one Episode.
     expect(
-      getAllScenes(session.gameProject.episodes).filter(
+      getAllScenes(getAllEpisodes(session.gameProject.seasons)).filter(
         (scene) => scene.sceneId === movingId
       )
     ).toHaveLength(1);
-    expect(findEpisodeBySceneId(session.gameProject.episodes, movingId)
-      ?.episodeId).toBe(toId);
+    expect(
+      findEpisodeBySceneId(
+        getAllEpisodes(session.gameProject.seasons),
+        movingId
+      )?.episodeId
+    ).toBe(toId);
     expect(fromId).not.toBe(toId);
   });
 
@@ -167,17 +187,19 @@ describe("moving a Scene between Episodes", () => {
     let session = makeSession();
     session = addSceneToSession(session, { displayName: "Mover" });
     session = addEpisodeToSession(session, { displayName: "Two" });
-    const toId = session.gameProject.episodes[1]!.episodeId;
-    const movingId = session.gameProject.episodes[0]!.scenes[1]!.sceneId;
+    const toId = getAllEpisodes(session.gameProject.seasons)[1]!.episodeId;
+    const movingId = getAllEpisodes(session.gameProject.seasons)[0]!.scenes[1]!
+      .sceneId;
     session = moveSceneToEpisodeInSession(session, movingId, toId);
-    const destination = session.gameProject.episodes[1]!.scenes;
+    const destination = getAllEpisodes(session.gameProject.seasons)[1]!.scenes;
     expect(destination[destination.length - 1]!.sceneId).toBe(movingId);
   });
 
   it("refuses to empty the source Episode", () => {
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
-    const onlySceneId = session.gameProject.episodes[0]!.scenes[0]!.sceneId;
-    const toId = session.gameProject.episodes[1]!.episodeId;
+    const onlySceneId = getAllEpisodes(session.gameProject.seasons)[0]!
+      .scenes[0]!.sceneId;
+    const toId = getAllEpisodes(session.gameProject.seasons)[1]!.episodeId;
     // An Episode with no Scenes cannot be entered.
     expect(moveSceneToEpisodeInSession(session, onlySceneId, toId)).toBe(
       session
@@ -189,20 +211,21 @@ describe("moving a Scene between Episodes", () => {
     // session can produce an empty Episode, so delete must not
     // either. `resolveActiveScene` returns null for one.
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
-    const lonelyId = session.gameProject.episodes[1]!.scenes[0]!.sceneId;
+    const lonelyId = getAllEpisodes(session.gameProject.seasons)[1]!.scenes[0]!
+      .sceneId;
     expect(deleteSceneFromSession(session, lonelyId)).toBe(session);
     // Deleting the whole Episode is the way out.
     session = deleteEpisodeFromSession(
       session,
-      session.gameProject.episodes[1]!.episodeId
+      getAllEpisodes(session.gameProject.seasons)[1]!.episodeId
     );
-    expect(session.gameProject.episodes).toHaveLength(1);
+    expect(getAllEpisodes(session.gameProject.seasons)).toHaveLength(1);
   });
 
   it("every Episode always holds at least one Scene", () => {
     let session = addEpisodeToSession(makeSession(), { displayName: "Two" });
     session = addSceneToSession(session, { displayName: "Extra" });
-    for (const episode of session.gameProject.episodes) {
+    for (const episode of getAllEpisodes(session.gameProject.seasons)) {
       expect(episode.scenes.length).toBeGreaterThan(0);
     }
   });
@@ -211,8 +234,9 @@ describe("moving a Scene between Episodes", () => {
     let session = makeSession();
     session = addSceneToSession(session, { displayName: "Scene 2" });
     session = addEpisodeToSession(session, { displayName: "Two" });
-    const sameId = session.gameProject.episodes[0]!.episodeId;
-    const sceneId = session.gameProject.episodes[0]!.scenes[0]!.sceneId;
+    const sameId = getAllEpisodes(session.gameProject.seasons)[0]!.episodeId;
+    const sceneId = getAllEpisodes(session.gameProject.seasons)[0]!.scenes[0]!
+      .sceneId;
     expect(moveSceneToEpisodeInSession(session, "s:nope", sameId)).toBe(
       session
     );

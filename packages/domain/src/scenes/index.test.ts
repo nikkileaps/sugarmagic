@@ -6,7 +6,7 @@
  * through the region-authoring factories, and a Scene list dedupes
  * by id while PRESERVING input order.
  *
- * The gate and the campaign resolvers live in `episodes/` and are
+ * The gate and the story resolvers live in `episodes/` and are
  * tested there: a Scene is ordered but not gated.
  *
  * Status: active

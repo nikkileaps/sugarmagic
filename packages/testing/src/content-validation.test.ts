@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   createEmptyContentLibrarySnapshot,
   createDefaultGameProject,
   createDefaultQuestDefinition,
@@ -71,7 +72,7 @@ function projectWith(quest: QuestDefinition): GameProject {
   const project = createDefaultGameProject("Test", "test");
   return {
     ...project,
-    episodes: project.episodes.map((episode) => ({
+    seasons: mapEpisodes(project.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene, index) => ({
         ...scene,

@@ -17,6 +17,7 @@
 
 import { tasksAreAmbiguous } from "../behavior-specificity";
 import { getAllQuestDefinitionsInEpisodes, getAllScenes } from "../episodes";
+import { getAllEpisodes } from "../seasons";
 import type { ContentLibrarySnapshot } from "../content-library";
 import type { PlacedLight } from "../region-authoring";
 import type { GameProject } from "../game-project";
@@ -315,7 +316,7 @@ function collectQuestBindings(
       }
     }
   }
-  for (const scene of getAllScenes(gameProject.episodes)) {
+  for (const scene of getAllScenes(getAllEpisodes(gameProject.seasons))) {
     for (const presence of scene.overlay.npcPresences) {
       if (presence.condition) {
         bindings.push({
@@ -346,7 +347,7 @@ export function validateProjectContent(
   // still opens a project whose Scene lost its region, and this is where
   // that becomes a refusal -- errors block save and deploy.
   const regionIds = new Set(regions.map((region) => region.identity.id));
-  for (const scene of getAllScenes(gameProject.episodes)) {
+  for (const scene of getAllScenes(getAllEpisodes(gameProject.seasons))) {
     if (scene.regionId.trim().length === 0) {
       issues.push(
         error(
@@ -366,8 +367,30 @@ export function validateProjectContent(
     }
   }
 
-  for (const quest of getAllQuestDefinitionsInEpisodes(gameProject.episodes)) {
+  const storyEpisodes = getAllEpisodes(gameProject.seasons);
+  const storyQuests = getAllQuestDefinitionsInEpisodes(storyEpisodes);
+
+  for (const quest of storyQuests) {
     issues.push(...validateQuest(quest));
+  }
+
+  // An Episode gated on a quest that no longer exists never opens, and
+  // nothing at runtime says why -- the gate simply evaluates false at every
+  // boot. Deleting the Season or Episode that held the quest is the ordinary
+  // way to get here, and neither delete can check on its own: the quest may
+  // legitimately live anywhere in the story, so only a whole-project pass
+  // knows it is gone.
+  const questIds = new Set(storyQuests.map((quest) => quest.definitionId));
+  for (const episode of storyEpisodes) {
+    const gate = episode.unlockCondition;
+    if (gate === "always" || gate.kind !== "questComplete") continue;
+    if (questIds.has(gate.questDefinitionId)) continue;
+    issues.push(
+      error(
+        `episode.${episode.episodeId}.unlockCondition`,
+        `Episode "${episode.displayName}" unlocks when quest "${gate.questDefinitionId}" completes, and no such quest exists. Pick a quest that does, or change how it unlocks.`
+      )
+    );
   }
 
   // The name is the runtime store key. A blank one is a key nothing can write
@@ -415,14 +438,16 @@ export function validateProjectContent(
   // A story point is authored as ids with no validation anywhere else, so a
   // quest or node that has since been deleted is only caught here.
   const nodeIdsByQuest = new Map(
-    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
-      quest.definitionId,
-      new Set(
-        quest.stageDefinitions.flatMap((stage) =>
-          stage.nodeDefinitions.map((node) => node.nodeId)
+    getAllQuestDefinitionsInEpisodes(getAllEpisodes(gameProject.seasons)).map(
+      (quest) => [
+        quest.definitionId,
+        new Set(
+          quest.stageDefinitions.flatMap((stage) =>
+            stage.nodeDefinitions.map((node) => node.nodeId)
+          )
         )
-      )
-    ])
+      ]
+    )
   );
   for (const { binding, where } of collectQuestBindings(gameProject, regions)) {
     const questDefinitionId = binding.questDefinitionId;
@@ -500,7 +525,7 @@ function findMissingTextureReferences(
   // A Scene's own lights name a texture just as firmly as the region's, and
   // are the ones most likely to be forgotten -- they are only visible while
   // that Scene is staged.
-  for (const scene of getAllScenes(gameProject.episodes)) {
+  for (const scene of getAllScenes(getAllEpisodes(gameProject.seasons))) {
     check(`scene "${scene.displayName}"`, scene.overlay.placedLights ?? []);
   }
 
@@ -606,7 +631,9 @@ function findAmbiguousBehaviorTasks(
             !tasksAreAmbiguous(
               left,
               right,
-              getAllQuestDefinitionsInEpisodes(gameProject.episodes)
+              getAllQuestDefinitionsInEpisodes(
+                getAllEpisodes(gameProject.seasons)
+              )
             )
           ) {
             continue;

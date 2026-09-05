@@ -32,6 +32,7 @@ import type {
 import {
   collectFileBackedAssetPaths,
   getAllScenes,
+  getAllEpisodes,
   normalizeCreditsDefinition,
   getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
@@ -39,10 +40,19 @@ import type { ManagedProjectFile } from "./index";
 
 /**
  * Schema version stamped onto every boot.json. Bumped when the
- * fetched payload shape changes meaningfully. Target-web's runtime
- * checks this and fails fast (with a clear message) on mismatch.
+ * fetched payload shape changes meaningfully -- ADR 019 allows an
+ * engine to ADD fields an older one ignores, but not to reshape
+ * without a bump.
+ *
+ * Version 2 carries the story as `seasons`; version 1 carried a
+ * flat `episodes` list, which `normalizeBootPayload` in target-web
+ * still reads and wraps.
+ *
+ * NOTE: nothing reads this yet. The check this comment used to
+ * claim exists does not -- see #312. The bump is still required,
+ * and is what first gives the constant something to mean.
  */
-export const BOOT_JSON_SCHEMA_VERSION = 1;
+export const BOOT_JSON_SCHEMA_VERSION = 2;
 
 const PUBLISHED_WEB_DIRECTORY = ".sugarmagic/published-web";
 const PUBLISHED_WEB_README = `.sugarmagic/published-web/README.md`;
@@ -60,10 +70,7 @@ function asJsonFile(
   };
 }
 
-function asTextFile(
-  relativePath: string,
-  content: string
-): ManagedProjectFile {
+function asTextFile(relativePath: string, content: string): ManagedProjectFile {
   return { relativePath, content, contentType: "text" };
 }
 
@@ -127,7 +134,7 @@ function resolveAssetSources(
       regions: snapshot.regions,
       // A Scene that changes what blocks movement bakes its own navmesh.
       // Without this the bundle ships the pointer and not the file.
-      scenes: getAllScenes(gameProject.episodes),
+      scenes: getAllScenes(getAllEpisodes(gameProject.seasons)),
       // Plan 092.2 — a plugin's derived artifacts ship with the game.
       // Disabled plugins are skipped inside the collector, so turning
       // one off deploys a game without its files rather than a game
@@ -156,8 +163,9 @@ function assetDirectories(assetSources: Record<string, string>): string[] {
 /**
  * Build the boot.json payload from a game project + the in-memory
  * runtime snapshot Studio has loaded. The shape mirrors
- * `WebRuntimeStartState`; mismatches between this shape and the
- * runtime's expectation are guarded by `BOOT_JSON_SCHEMA_VERSION`.
+ * `WebRuntimeStartState` and is stamped with
+ * `BOOT_JSON_SCHEMA_VERSION`, which nothing reads yet -- see the
+ * note on that constant, and #312.
  */
 function buildBootJsonPayload(
   gameProject: GameProject,
@@ -166,7 +174,7 @@ function buildBootJsonPayload(
   const activeRegionId =
     snapshot.activeRegionId !== undefined
       ? snapshot.activeRegionId
-      : snapshot.regions[0]?.identity.id ?? null;
+      : (snapshot.regions[0]?.identity.id ?? null);
   return {
     note: PUBLISHED_WEB_HEADER,
     schemaVersion: BOOT_JSON_SCHEMA_VERSION,
@@ -181,11 +189,11 @@ function buildBootJsonPayload(
       .map((entry) => entry.pluginId),
     pluginConfigurations: gameProject.pluginConfigurations,
     regions: snapshot.regions,
-    // The whole campaign ships in the bundle (bake-everything
+    // The whole story ships in the bundle (bake-everything
     // model; the runtime composes only the active Scene's
     // overlays and gates Episodes at boot). Regions above are the
     // shrunk base shape.
-    episodes: gameProject.episodes,
+    seasons: gameProject.seasons,
     episodeEndRouting: gameProject.episodeEndRouting,
     activeRegionId,
     activeEnvironmentId: snapshot.activeEnvironmentId ?? null,
@@ -200,7 +208,9 @@ function buildBootJsonPayload(
     dialogueDefinitions: gameProject.dialogueDefinitions,
     // Derived at the wire seam, not stored: quests live in the Scenes
     // that hold them, so the bundle carries each one exactly once.
-    questDefinitions: getAllQuestDefinitionsInEpisodes(gameProject.episodes),
+    questDefinitions: getAllQuestDefinitionsInEpisodes(
+      getAllEpisodes(gameProject.seasons)
+    ),
     menuDefinitions: gameProject.menuDefinitions,
     hudDefinition: gameProject.hudDefinition,
     uiTheme: gameProject.uiTheme,

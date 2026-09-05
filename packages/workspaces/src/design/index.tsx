@@ -86,7 +86,7 @@ export interface DesignProductModeViewProps {
   /** The whole project, for the world flag registry's reference walk. */
   gameProject: GameProject | null;
   regions: RegionDocument[];
-  /** Picker source for the quest campaign actions (unlockEpisode
+  /** Picker source for the quest story actions (unlockEpisode
    *  picks an Episode, advanceToNextScene picks a Scene). */
   episodes: Episode[];
   /** Cue picker source for the quest playCue action. */

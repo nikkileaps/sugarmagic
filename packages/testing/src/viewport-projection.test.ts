@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   createAuthoringSession,
   createDefaultGameProject,
   createDefaultRegion,
@@ -203,7 +204,7 @@ describe("the composer's region comes from its Scene", () => {
     });
     const withScene = {
       ...gameProject,
-      episodes: gameProject.episodes.map((episode) => ({
+      seasons: mapEpisodes(gameProject.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene) => ({
           ...scene,
