@@ -1369,6 +1369,8 @@ export function createWebRuntimeHost(
   let unsubscribeTexturesUpdated: (() => void) | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
+  /** How long the frame loop has been running, for light behaviors. */
+  let placedLightSeconds = 0;
   /**
    * Named camera moves in flight. The HOST owns this because the host owns
    * cameraState -- runtime-core defines what a move is and where it should be
@@ -2074,6 +2076,11 @@ export function createWebRuntimeHost(
 
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
+    // Seconds since this session started driving frames. Placed lights read it
+    // to know where their flicker is; accumulating the clamped delta rather
+    // than reading a clock means a paused game holds its light still.
+    placedLightSeconds += delta;
+    renderView.placedLightController.animate(placedLightSeconds);
 
     const smperf = readSmperf();
     const perfOn = smperf.on;

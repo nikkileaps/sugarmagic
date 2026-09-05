@@ -35,6 +35,7 @@ export * from "./quest";
 export * from "./world-flags";
 export * from "./game-state";
 export * from "./save";
+export * from "./placed-lights";
 export * from "./scene";
 export * from "./collision";
 export * from "./navmesh";

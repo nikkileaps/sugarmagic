@@ -31,6 +31,11 @@ export class WorldTimeStore {
   setTimeBand(band: TimeOfDayBand): void {
     if (band === this._band) return;
     this._band = band;
+    // Nothing visual listens here yet. A hearth that brightens at dusk, or a
+    // lantern that lights itself at nightfall, hangs off this callback: the
+    // band is the fact, and a placed light reading it is the first thing that
+    // would make the fact visible. Revisit at the first light meant to answer
+    // to the time of day.
     this.onBandChange?.(band);
   }
 

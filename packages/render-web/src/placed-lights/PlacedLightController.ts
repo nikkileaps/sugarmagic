@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { RectAreaLightNode } from "three/webgpu";
 import { RectAreaLightTexturesLib } from "three/examples/jsm/lights/RectAreaLightTexturesLib.js";
 import type { PlacedLight, PlacedLightKind } from "@sugarmagic/domain";
+import { samplePlacedLightModulation } from "@sugarmagic/runtime-core";
 
 export interface PlacedLightController {
   /**
@@ -31,6 +32,16 @@ export interface PlacedLightController {
    * own, or a Scene's candles never light anything.
    */
   apply: (lights: readonly PlacedLight[]) => void;
+  /**
+   * Move every light to where its behavior says it should be at this many
+   * seconds into the session. Call it every frame; a light with a `steady`
+   * behavior lands on exactly its authored values, so this is safe to call
+   * whether or not anything is animating.
+   *
+   * Seconds come from the host because the host owns the clock. Nothing here
+   * reads one, which is what keeps a paused game paused.
+   */
+  animate: (seconds: number) => void;
   clear: () => void;
   dispose: () => void;
 }
@@ -44,6 +55,10 @@ interface LiveLight {
   /** What the light was built as. A different kind is a different three.js
    *  class, so it cannot be mutated into the new one. */
   kind: PlacedLightKind;
+  /** What the author wrote. The values a behavior moves AWAY from, kept so
+   *  each frame samples from the authored intensity rather than from last
+   *  frame's -- which would wander. */
+  authored: PlacedLight;
   light: PlacedThreeLight;
   /**
    * Spot only. three.js aims a spot light at an object rather than by its own
@@ -139,7 +154,7 @@ export function createPlacedLightController(
       light.target = target;
     }
 
-    const entry: LiveLight = { kind: authored.kind, light, target };
+    const entry: LiveLight = { kind: authored.kind, authored, light, target };
     live.set(authored.instanceId, entry);
     return entry;
   }
@@ -150,6 +165,7 @@ export function createPlacedLightController(
    * apply rather than being diffed.
    */
   function updateEntry(entry: LiveLight, authored: PlacedLight): void {
+    entry.authored = authored;
     const [x, y, z] = authored.transform.position;
     entry.light.color.setHex(authored.color);
     entry.light.intensity = authored.intensity;
@@ -209,6 +225,18 @@ export function createPlacedLightController(
     }
   }
 
+  function animate(seconds: number): void {
+    for (const entry of live.values()) {
+      const sample = samplePlacedLightModulation(entry.authored, seconds);
+      // Written onto the light directly, NEVER through a colorNode. three.js
+      // puts a spot light's colorNode in the shader cache key, so driving
+      // colour that way would recompile every material in the scene on every
+      // frame. These two writes are uniform updates and cost nothing.
+      entry.light.intensity = sample.intensity;
+      entry.light.color.setHex(sample.color);
+    }
+  }
+
   function clear(): void {
     for (const [instanceId, entry] of [...live]) {
       removeEntry(instanceId, entry);
@@ -217,6 +245,7 @@ export function createPlacedLightController(
 
   return {
     apply,
+    animate,
     clear,
     dispose: clear
   };

@@ -256,3 +256,65 @@ describe("what changes and what is left alone", () => {
     expect(lightsIn(scene)).toHaveLength(0);
   });
 });
+
+describe("a light moving over time", () => {
+  it("writes the behaviour's values onto the light already in the scene", () => {
+    const scene = new THREE.Scene();
+    const controller = createPlacedLightController(scene);
+    controller.apply([
+      lantern({
+        intensity: 10,
+        modulation: {
+          kind: "flame",
+          speed: 1,
+          amount: 0.5,
+          colorWobble: 0,
+          seed: 0.25
+        }
+      })
+    ]);
+    const before = onlyLight(scene);
+
+    controller.animate(3.2);
+
+    // Same object, new value: a frame of flicker is a uniform write, not a
+    // light being replaced -- which would recompile every material.
+    expect(Object.is(before, onlyLight(scene))).toBe(true);
+    expect(onlyLight(scene).intensity).not.toBe(10);
+  });
+
+  it("leaves a steady light exactly where its author put it", () => {
+    const scene = new THREE.Scene();
+    const controller = createPlacedLightController(scene);
+    controller.apply([lantern({ intensity: 12 })]);
+
+    controller.animate(7.5);
+
+    expect(onlyLight(scene).intensity).toBe(12);
+  });
+
+  it("returns to the authored brightness rather than wandering from the last frame", () => {
+    const scene = new THREE.Scene();
+    const controller = createPlacedLightController(scene);
+    const moving = lantern({
+      intensity: 10,
+      modulation: {
+        kind: "flame",
+        speed: 1,
+        amount: 0.5,
+        colorWobble: 0,
+        seed: 0.25
+      }
+    });
+    controller.apply([moving]);
+
+    controller.animate(3.2);
+    const atMoment = onlyLight(scene).intensity;
+    for (const at of [4.1, 5.9, 8.3]) controller.animate(at);
+    controller.animate(3.2);
+
+    // Every frame samples the authored value, so coming back to the same
+    // second gives the same brightness however many frames went by.
+    expect(onlyLight(scene).intensity).toBe(atMoment);
+  });
+});

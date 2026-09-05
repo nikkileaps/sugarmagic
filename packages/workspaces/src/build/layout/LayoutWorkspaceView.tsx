@@ -58,6 +58,7 @@ import {
   type ComposedRegionContents,
   type PlacedLight,
   type PlacedLightKind,
+  type PlacedLightModulationKind,
   type Scene,
   sceneOverlayForRegion
 } from "@sugarmagic/domain";
@@ -196,6 +197,17 @@ const PLACED_LIGHT_KIND_OPTIONS: { value: PlacedLightKind; label: string }[] = [
   { value: "point", label: "Point" },
   { value: "spot", label: "Spot" },
   { value: "area", label: "Area" }
+];
+
+/** How a light moves over time, as the Inspector's dropdown offers it. */
+const PLACED_LIGHT_MODULATION_OPTIONS: {
+  value: PlacedLightModulationKind;
+  label: string;
+}[] = [
+  { value: "steady", label: "Steady" },
+  { value: "flame", label: "Flame" },
+  { value: "candle", label: "Candle" },
+  { value: "pulse", label: "Pulse" }
 ];
 
 /**
@@ -2357,6 +2369,102 @@ export function useLayoutWorkspaceView(
                     typeof value === "number" && selectedLight.area
                       ? patchSelectedLight({
                           area: { ...selectedLight.area, height: value }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            <Select
+              label="Movement"
+              size="xs"
+              description="Seen in the game, not here."
+              allowDeselect={false}
+              data={PLACED_LIGHT_MODULATION_OPTIONS}
+              value={selectedLight.modulation.kind}
+              onChange={(value) =>
+                value
+                  ? patchSelectedLight({
+                      modulation: {
+                        ...selectedLight.modulation,
+                        kind: value as PlacedLightModulationKind
+                      }
+                    })
+                  : undefined
+              }
+            />
+            {selectedLight.modulation.kind !== "steady" ? (
+              <>
+                <NumberInput
+                  label="Speed"
+                  size="xs"
+                  min={0}
+                  step={0.1}
+                  value={selectedLight.modulation.speed}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            speed: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Amount"
+                  size="xs"
+                  description="How far the brightness swings, 0 to 1."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.amount}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            amount: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Colour drift"
+                  size="xs"
+                  description="How far it cools toward red as it dims."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.colorWobble}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            colorWobble: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Seed"
+                  size="xs"
+                  description="Two lights with the same settings and different seeds never move together."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.seed}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            seed: value
+                          }
                         })
                       : undefined
                   }
