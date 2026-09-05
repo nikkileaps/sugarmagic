@@ -58,6 +58,7 @@ import {
   findSceneByQuestDefinitionId
 } from "../episodes";
 import {
+  createDefaultSeason,
   findSeasonByEpisodeId,
   findSeasonById,
   getAllEpisodes,
@@ -2946,9 +2947,151 @@ function withEpisodeScenes(
 }
 
 /**
- * Append a new Episode to the end of the campaign, holding one
- * empty Scene, and make that Scene active. Appending IS the
- * ordering — there is no order number.
+ * Append a new Season to the end of the campaign, already holding
+ * one Episode holding one Scene, and make that Scene active.
+ * Appending IS the ordering — there is no order number.
+ *
+ * It arrives populated for the same reason an Episode does: a
+ * Season with no Episodes has nothing to enter, and the rules that
+ * keep one from BECOMING empty (delete and move both refuse) are
+ * worth nothing if it can be born that way.
+ */
+export function addSeasonToSession(
+  session: AuthoringSession,
+  options: { displayName: string }
+): AuthoringSession {
+  const scene = createDefaultScene({ displayName: "Scene 1" });
+  const season = createDefaultSeason({
+    displayName: options.displayName.trim() || "Untitled Season",
+    episodes: [
+      createDefaultEpisode({ displayName: "Episode 1", scenes: [scene] })
+    ]
+  });
+  return {
+    ...withSeasons(session, [...session.gameProject.seasons, season]),
+    activeSceneId: scene.sceneId
+  };
+}
+
+/**
+ * Delete a Season, every Episode in it and every Scene in those.
+ * Refuses to delete the last Season (a project always has >= 1);
+ * the remaining Seasons close the gap, and the active pointer
+ * moves to the first Scene left. Destructive — the caller confirms.
+ */
+export function deleteSeasonFromSession(
+  session: AuthoringSession,
+  seasonId: string
+): AuthoringSession {
+  const seasons = session.gameProject.seasons;
+  if (seasons.length <= 1) return session;
+  const remaining = seasons.filter((season) => season.seasonId !== seasonId);
+  if (remaining.length === seasons.length) return session;
+
+  const next = withSeasons(session, remaining);
+  // Same move `deleteEpisodeFromSession` makes: reads fall back from a
+  // dangling pointer, so leaving it stale fails quietly rather than
+  // loudly -- `switchActiveScene` compares against it, and Studio ships
+  // it to Preview.
+  const remainingEpisodes = getAllEpisodes(remaining);
+  const activeSurvives = Boolean(
+    findSceneById(remainingEpisodes, session.activeSceneId)
+  );
+  return {
+    ...next,
+    activeSceneId: activeSurvives
+      ? session.activeSceneId
+      : (getAllScenes(remainingEpisodes)[0]?.sceneId ?? null)
+  };
+}
+
+/**
+ * Move a Season one step up or down the campaign. Moving the entry
+ * IS the reorder — nothing is renumbered afterwards.
+ */
+export function reorderSeasonInSession(
+  session: AuthoringSession,
+  seasonId: string,
+  direction: "up" | "down"
+): AuthoringSession {
+  const seasons = [...session.gameProject.seasons];
+  const index = seasons.findIndex((season) => season.seasonId === seasonId);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= seasons.length) {
+    return session;
+  }
+  [seasons[index], seasons[targetIndex]] = [
+    seasons[targetIndex]!,
+    seasons[index]!
+  ];
+  return withSeasons(session, seasons);
+}
+
+/** Edit a Season's own fields. Its Episodes are untouched. */
+export function updateSeasonInSession(
+  session: AuthoringSession,
+  seasonId: string,
+  patch: Partial<Pick<Season, "displayName" | "description" | "notes">>
+): AuthoringSession {
+  if (
+    !session.gameProject.seasons.some((season) => season.seasonId === seasonId)
+  ) {
+    return session;
+  }
+  return withSeasons(
+    session,
+    session.gameProject.seasons.map((season) =>
+      season.seasonId === seasonId ? { ...season, ...patch } : season
+    )
+  );
+}
+
+/**
+ * Move an Episode out of the Season holding it and onto the end of
+ * another. The only operation that changes Season membership —
+ * reordering deliberately stops at a Season's edges.
+ *
+ * Refuses to empty a Season, the same way moving a Scene refuses
+ * to empty an Episode. Move the other Episodes in first, or delete
+ * the Season.
+ */
+export function moveEpisodeToSeasonInSession(
+  session: AuthoringSession,
+  episodeId: string,
+  toSeasonId: string
+): AuthoringSession {
+  const seasons = session.gameProject.seasons;
+  const from = findSeasonByEpisodeId(seasons, episodeId);
+  const to = findSeasonById(seasons, toSeasonId);
+  const episode = from?.episodes.find((entry) => entry.episodeId === episodeId);
+  if (!from || !to || !episode || from.seasonId === to.seasonId) {
+    return session;
+  }
+  if (from.episodes.length <= 1) return session;
+
+  return withSeasons(
+    session,
+    seasons.map((season) => {
+      if (season.seasonId === from.seasonId) {
+        return {
+          ...season,
+          episodes: season.episodes.filter(
+            (entry) => entry.episodeId !== episodeId
+          )
+        };
+      }
+      if (season.seasonId === to.seasonId) {
+        return { ...season, episodes: [...season.episodes, episode] };
+      }
+      return season;
+    })
+  );
+}
+
+/**
+ * Append a new Episode to the end of a Season, holding one empty
+ * Scene, and make that Scene active. Appending IS the ordering —
+ * there is no order number.
  *
  * The Scene comes with it because an Episode with no Scenes has
  * nothing to enter: the runtime resolves an Episode then a Scene

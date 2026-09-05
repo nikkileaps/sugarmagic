@@ -63,6 +63,12 @@ import {
   updateSceneInSession,
   updateEpisodeInSession,
   addEpisodeToSession,
+  addSeasonToSession,
+  deleteSeasonFromSession,
+  reorderSeasonInSession,
+  updateSeasonInSession,
+  moveEpisodeToSeasonInSession,
+  type Season,
   deleteEpisodeFromSession,
   reorderEpisodeInSession,
   moveSceneToEpisodeInSession,
@@ -835,14 +841,60 @@ function handleRenameScene(sceneId: string, displayName: string) {
     .updateSession(updateSceneInSession(session, sceneId, { displayName }));
 }
 
-// Episode structural mutations, same seam as the Scene handlers
-// below (session-level, outside the semantic command/undo stream).
-function handleAddEpisode(displayName: string) {
+// Season and Episode structural mutations, same seam as the Scene
+// handlers below (session-level, outside the semantic command/undo
+// stream).
+function handleAddSeason(displayName: string) {
   const { session } = projectStore.getState();
   if (!session) return;
   projectStore
     .getState()
-    .updateSession(addEpisodeToSession(session, { displayName }));
+    .updateSession(addSeasonToSession(session, { displayName }));
+}
+
+function handleDeleteSeason(seasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(deleteSeasonFromSession(session, seasonId));
+}
+
+function handleReorderSeason(seasonId: string, direction: "up" | "down") {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(reorderSeasonInSession(session, seasonId, direction));
+}
+
+function handleUpdateSeason(
+  seasonId: string,
+  patch: Partial<Pick<Season, "displayName" | "description" | "notes">>
+) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSeasonInSession(session, seasonId, patch));
+}
+
+function handleMoveEpisodeToSeason(episodeId: string, toSeasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(
+      moveEpisodeToSeasonInSession(session, episodeId, toSeasonId)
+    );
+}
+
+function handleAddEpisode(displayName: string, seasonId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(addEpisodeToSession(session, { displayName, seasonId }));
 }
 
 function handleDeleteEpisode(episodeId: string) {
@@ -3580,7 +3632,7 @@ export function App() {
       : null,
     structurePanel: session ? (
       <StoryStructureView
-        episodes={getAllEpisodes(session.gameProject.seasons)}
+        seasons={session.gameProject.seasons}
         activeSceneId={session.activeSceneId}
         questDefinitions={getAllQuestDefinitions(session)}
         environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
@@ -3613,6 +3665,11 @@ export function App() {
         onReorderEpisode={handleReorderEpisode}
         onMoveSceneToEpisode={handleMoveSceneToEpisode}
         onMoveQuestToScene={handleMoveQuestToScene}
+        onAddSeason={handleAddSeason}
+        onUpdateSeason={handleUpdateSeason}
+        onDeleteSeason={handleDeleteSeason}
+        onReorderSeason={handleReorderSeason}
+        onMoveEpisodeToSeason={handleMoveEpisodeToSeason}
       />
     ) : null,
     composerPanel: session ? (
