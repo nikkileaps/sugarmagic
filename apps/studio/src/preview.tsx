@@ -70,7 +70,7 @@ import type {
   MusicBindings,
   UITheme,
   RegionDocument,
-  Episode
+  Season
 } from "@sugarmagic/domain";
 import { normalizeEpisodeEndRouting } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
@@ -121,8 +121,9 @@ import "@sugarmagic/ui/node-editor.css";
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
-  /** The campaign: ordered, gated Episodes holding their Scenes. */
-  episodes?: Episode[];
+  /** The campaign: ordered Seasons holding their gated Episodes,
+   *  each of those holding its Scenes. */
+  seasons?: Season[];
   /** Where the player goes when an Episode ends. */
   episodeEndRouting?: string | null;
   /** Plan 058 §058.2 — the editor's active Scene (Ambient
@@ -238,7 +239,10 @@ interface PreviewBootStatus {
 const bootStatusStore: MutableObservableValue<PreviewBootStatus> =
   createObservableValue<PreviewBootStatus>({ phase: "loading", reason: null });
 
-function publishBootPhase(next: PreviewBootPhase, reason: string | null = null) {
+function publishBootPhase(
+  next: PreviewBootPhase,
+  reason: string | null = null
+) {
   bootStatusStore.set({ phase: next, reason });
 }
 
@@ -281,62 +285,63 @@ window.addEventListener("message", (event) => {
       const savedGamePromise = new Promise<GameSave | null>((resolve) => {
         resolveSavedGame = resolve;
       });
-      void host.start({
-        regions: data.regions,
-        episodes: data.episodes,
-        episodeEndRouting: normalizeEpisodeEndRouting(data.episodeEndRouting),
-        activeSceneId: data.activeSceneId,
-        // Deliberately NOT forwarding the Studio-edited region:
-        // Preview is the GAME (same region resolution as a
-        // published boot — saved game > scene starting region >
-        // first). The workspace viewport is where you look at the
-        // region you're editing (nikki, 2026-07-09).
-        activeEnvironmentId: data.activeEnvironmentId,
-        savedGamePromise,
-        currentUser: identityProvider.currentUser(),
-        fallbackIdentityProvider: identityProvider,
-        fallbackSaveStore: saveStore,
-        onProvidersResolved: (resolved) => {
-          publishResolvedBindings(resolved);
-          void (async () => {
-            const settledUser = await waitForActiveUser(
-              resolved.identityProvider
-            );
-            const save = settledUser
-              ? await loadSaveSafely(resolved.saveStore, settledUser.userId)
-              : null;
-            resolveSavedGame(save);
-          })();
-        },
-        installedPluginIds: data.installedPluginIds,
-        pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
-        pluginConfigurations: data.pluginConfigurations,
-        contentLibrary: data.contentLibrary,
-        mechanics: data.mechanics,
-        playerDefinition: data.playerDefinition,
-        worldFlagDefinitions: data.worldFlagDefinitions,
-        spellDefinitions: data.spellDefinitions,
-        itemDefinitions: data.itemDefinitions,
-        documentDefinitions: data.documentDefinitions,
-        npcDefinitions: data.npcDefinitions,
-        dialogueDefinitions: data.dialogueDefinitions,
-        questDefinitions: data.questDefinitions,
-        menuDefinitions: data.menuDefinitions,
-        hudDefinition: data.hudDefinition,
-        uiTheme: data.uiTheme,
-        soundEventBindings: data.soundEventBindings,
-        audioMixer: data.audioMixer,
-        musicBindings: data.musicBindings,
-        creditsDefinition: data.creditsDefinition,
-        gameTitle: data.gameTitle,
-        gameId: data.gameId,
-        assetSources: data.assetSources,
-        pluginBootPayloads: data.pluginBootPayloads,
-        defaultGameSavePayload: data.defaultGameSavePayload ?? null,
-        skipStartMenuOnBoot: freshStart,
-        preNewGameStepAnswers
-        // Plan 054 §054.3 — host owns the destructive transition.
-      })
+      void host
+        .start({
+          regions: data.regions,
+          seasons: data.seasons,
+          episodeEndRouting: normalizeEpisodeEndRouting(data.episodeEndRouting),
+          activeSceneId: data.activeSceneId,
+          // Deliberately NOT forwarding the Studio-edited region:
+          // Preview is the GAME (same region resolution as a
+          // published boot — saved game > scene starting region >
+          // first). The workspace viewport is where you look at the
+          // region you're editing (nikki, 2026-07-09).
+          activeEnvironmentId: data.activeEnvironmentId,
+          savedGamePromise,
+          currentUser: identityProvider.currentUser(),
+          fallbackIdentityProvider: identityProvider,
+          fallbackSaveStore: saveStore,
+          onProvidersResolved: (resolved) => {
+            publishResolvedBindings(resolved);
+            void (async () => {
+              const settledUser = await waitForActiveUser(
+                resolved.identityProvider
+              );
+              const save = settledUser
+                ? await loadSaveSafely(resolved.saveStore, settledUser.userId)
+                : null;
+              resolveSavedGame(save);
+            })();
+          },
+          installedPluginIds: data.installedPluginIds,
+          pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
+          pluginConfigurations: data.pluginConfigurations,
+          contentLibrary: data.contentLibrary,
+          mechanics: data.mechanics,
+          playerDefinition: data.playerDefinition,
+          worldFlagDefinitions: data.worldFlagDefinitions,
+          spellDefinitions: data.spellDefinitions,
+          itemDefinitions: data.itemDefinitions,
+          documentDefinitions: data.documentDefinitions,
+          npcDefinitions: data.npcDefinitions,
+          dialogueDefinitions: data.dialogueDefinitions,
+          questDefinitions: data.questDefinitions,
+          menuDefinitions: data.menuDefinitions,
+          hudDefinition: data.hudDefinition,
+          uiTheme: data.uiTheme,
+          soundEventBindings: data.soundEventBindings,
+          audioMixer: data.audioMixer,
+          musicBindings: data.musicBindings,
+          creditsDefinition: data.creditsDefinition,
+          gameTitle: data.gameTitle,
+          gameId: data.gameId,
+          assetSources: data.assetSources,
+          pluginBootPayloads: data.pluginBootPayloads,
+          defaultGameSavePayload: data.defaultGameSavePayload ?? null,
+          skipStartMenuOnBoot: freshStart,
+          preNewGameStepAnswers
+          // Plan 054 §054.3 — host owns the destructive transition.
+        })
         .then(() => publishBootPhase("running"))
         .catch((error) => {
           console.error("[studio-preview] host.start failed", error);
@@ -528,11 +533,7 @@ function PreviewOverlay() {
     const prev = prevUserRef.current;
     prevUserRef.current = user;
     if (!user || !active) return;
-    if (
-      prev?.isAnonymous &&
-      !user.isAnonymous &&
-      prev.userId === user.userId
-    ) {
+    if (prev?.isAnonymous && !user.isAnonymous && prev.userId === user.userId) {
       void (async () => {
         const result = await migrateLocalSaveToCloud({
           localStore: saveStore,
@@ -611,7 +612,10 @@ function PreviewOverlay() {
   // case — when those are false, showLoginModal stays false and the
   // useEffect tells the host the modal isn't open.
   const requireSignIn =
-    pluginIdentityActive && active != null && user === null && phase !== "loading";
+    pluginIdentityActive &&
+    active != null &&
+    user === null &&
+    phase !== "loading";
   const showLoginModal = requireSignIn;
 
   // Story 50.6 — mirror the modal-open boolean into the host's

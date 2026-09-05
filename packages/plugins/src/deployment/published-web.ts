@@ -40,10 +40,19 @@ import type { ManagedProjectFile } from "./index";
 
 /**
  * Schema version stamped onto every boot.json. Bumped when the
- * fetched payload shape changes meaningfully. Target-web's runtime
- * checks this and fails fast (with a clear message) on mismatch.
+ * fetched payload shape changes meaningfully -- ADR 019 allows an
+ * engine to ADD fields an older one ignores, but not to reshape
+ * without a bump.
+ *
+ * Version 2 carries the campaign as `seasons`; version 1 carried a
+ * flat `episodes` list, which `normalizeBootPayload` in target-web
+ * still reads and wraps.
+ *
+ * NOTE: nothing reads this yet. The check this comment used to
+ * claim exists does not -- see #312. The bump is still required,
+ * and is what first gives the constant something to mean.
  */
-export const BOOT_JSON_SCHEMA_VERSION = 1;
+export const BOOT_JSON_SCHEMA_VERSION = 2;
 
 const PUBLISHED_WEB_DIRECTORY = ".sugarmagic/published-web";
 const PUBLISHED_WEB_README = `.sugarmagic/published-web/README.md`;
@@ -61,10 +70,7 @@ function asJsonFile(
   };
 }
 
-function asTextFile(
-  relativePath: string,
-  content: string
-): ManagedProjectFile {
+function asTextFile(relativePath: string, content: string): ManagedProjectFile {
   return { relativePath, content, contentType: "text" };
 }
 
@@ -167,7 +173,7 @@ function buildBootJsonPayload(
   const activeRegionId =
     snapshot.activeRegionId !== undefined
       ? snapshot.activeRegionId
-      : snapshot.regions[0]?.identity.id ?? null;
+      : (snapshot.regions[0]?.identity.id ?? null);
   return {
     note: PUBLISHED_WEB_HEADER,
     schemaVersion: BOOT_JSON_SCHEMA_VERSION,
@@ -186,14 +192,7 @@ function buildBootJsonPayload(
     // model; the runtime composes only the active Scene's
     // overlays and gates Episodes at boot). Regions above are the
     // shrunk base shape.
-    // Flattened, so this payload keeps the shape the runtime reads today.
-    // The runtime learns about Seasons in its own story, together with the
-    // `BOOT_JSON_SCHEMA_VERSION` bump and Studio's Preview message; until
-    // then a published game runs the campaign as one flat run, which is
-    // what it did before Seasons existed. Send `gameProject.seasons` here
-    // and the runtime silently normalizes an absent `episodes` to an empty
-    // campaign, so the two move together or not at all.
-    episodes: getAllEpisodes(gameProject.seasons),
+    seasons: gameProject.seasons,
     episodeEndRouting: gameProject.episodeEndRouting,
     activeRegionId,
     activeEnvironmentId: snapshot.activeEnvironmentId ?? null,
@@ -208,7 +207,9 @@ function buildBootJsonPayload(
     dialogueDefinitions: gameProject.dialogueDefinitions,
     // Derived at the wire seam, not stored: quests live in the Scenes
     // that hold them, so the bundle carries each one exactly once.
-    questDefinitions: getAllQuestDefinitionsInEpisodes(getAllEpisodes(gameProject.seasons)),
+    questDefinitions: getAllQuestDefinitionsInEpisodes(
+      getAllEpisodes(gameProject.seasons)
+    ),
     menuDefinitions: gameProject.menuDefinitions,
     hudDefinition: gameProject.hudDefinition,
     uiTheme: gameProject.uiTheme,

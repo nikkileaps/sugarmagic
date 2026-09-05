@@ -1117,14 +1117,9 @@ async function postPreviewBootMessage(
       type: "PREVIEW_BOOT",
       regions,
       // The campaign rides the boot payload; the runtime gates the
-      // Episodes and composes the active Scene's overlays onto the
-      // region base.
-      // Flattened, matching the boot payload the published game gets. The
-      // Preview message learns about Seasons in the same story the runtime
-      // does -- `PreviewBootMessage` is preview.tsx's own interface and
-      // names no GameProject, so nothing here would break if this kept
-      // flattening after that landed. Changing both together is the point.
-      episodes: getAllEpisodes(session.gameProject.seasons),
+      // Episodes across the flattened run and composes the active
+      // Scene's overlays onto the region base.
+      seasons: session.gameProject.seasons,
       episodeEndRouting: session.gameProject.episodeEndRouting,
       // Ambient Context: Preview boots whichever Scene is active
       // in the editor — no separate "preview which Scene?" picker.
@@ -2798,7 +2793,9 @@ export function App() {
     // it owns no artifact and inherits -- and any it owned before is
     // cleared, or it would keep pathing against a composition that no
     // longer differs.
-    for (const scene of getAllScenes(getAllEpisodes(session.gameProject.seasons))) {
+    for (const scene of getAllScenes(
+      getAllEpisodes(session.gameProject.seasons)
+    )) {
       if (scene.regionId !== region.identity.id) continue;
       const sceneInput = buildRegionNavMeshInput({
         ...shared,
@@ -4662,37 +4659,39 @@ export function App() {
                       {/* One group per Episode, its Scenes in order
                         underneath. The grouping is the containment
                         made visible; authoring Episodes is story 2. */}
-                      {getAllEpisodes(session.gameProject.seasons).map((episode) => (
-                        <Fragment key={episode.episodeId}>
-                          <Menu.Label>{episode.displayName}</Menu.Label>
-                          {episode.scenes.map((scene) => (
-                            <Menu.Item
-                              key={scene.sceneId}
-                              onClick={() => handleSceneSelect(scene.sceneId)}
-                              styles={{
-                                item: {
-                                  fontSize: "var(--sm-font-size-lg)",
-                                  color:
-                                    scene.sceneId ===
-                                    getActiveScene(session)?.sceneId
-                                      ? "var(--sm-accent-blue)"
-                                      : "var(--sm-color-text)",
-                                  padding: "10px 16px",
-                                  "&:hover": {
-                                    background: "var(--sm-active-bg)"
+                      {getAllEpisodes(session.gameProject.seasons).map(
+                        (episode) => (
+                          <Fragment key={episode.episodeId}>
+                            <Menu.Label>{episode.displayName}</Menu.Label>
+                            {episode.scenes.map((scene) => (
+                              <Menu.Item
+                                key={scene.sceneId}
+                                onClick={() => handleSceneSelect(scene.sceneId)}
+                                styles={{
+                                  item: {
+                                    fontSize: "var(--sm-font-size-lg)",
+                                    color:
+                                      scene.sceneId ===
+                                      getActiveScene(session)?.sceneId
+                                        ? "var(--sm-accent-blue)"
+                                        : "var(--sm-color-text)",
+                                    padding: "10px 16px",
+                                    "&:hover": {
+                                      background: "var(--sm-active-bg)"
+                                    }
                                   }
-                                }
-                              }}
-                            >
-                              {scene.sceneId ===
-                              getActiveScene(session)?.sceneId
-                                ? "✓ "
-                                : ""}
-                              {scene.displayName}
-                            </Menu.Item>
-                          ))}
-                        </Fragment>
-                      ))}
+                                }}
+                              >
+                                {scene.sceneId ===
+                                getActiveScene(session)?.sceneId
+                                  ? "✓ "
+                                  : ""}
+                                {scene.displayName}
+                              </Menu.Item>
+                            ))}
+                          </Fragment>
+                        )
+                      )}
                     </Menu.Dropdown>
                   </Menu>
                 </Group>
