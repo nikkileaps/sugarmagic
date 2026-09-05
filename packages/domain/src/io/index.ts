@@ -19,6 +19,7 @@ import {
   createDefaultRegionLandscapeSurfaceSlots,
   createDefaultRegionLandscapeState,
   createPlacedAssetInstance,
+  createPlacedLight,
   createRegionAreaDefinition,
   createRegionVolumeDefinition,
   migrateRegionVolumesFromLegacy,
@@ -294,6 +295,13 @@ export function normalizeRegionDocumentForLoad(
         colliderOverride: normalizeInstanceColliderOverride(asset)
       })
     ),
+    // Written explicitly rather than left to the `...regionRest` spread
+    // above: a spread would pass an on-disk value through unnormalized, and
+    // would leave a region saved before lights existed with no collection
+    // at all, which composition then reads as undefined.
+    placedLights: (region.placedLights ?? []).map((light) =>
+      createPlacedLight(light)
+    ),
     folders: [...baseFolders],
     // Epic #226 — the region's residents. Absent in files predating the
     // fields; empty lists mean exactly the pre-#226 world until composition
@@ -408,6 +416,10 @@ export function normalizeScenesForLoad(
     return {
       ...scene,
       overlay: {
+        // Carries the overlay members this pass has no work to do on —
+        // placed lights hold no shader bindings, so they come through
+        // as `normalizeScenes` left them.
+        ...overlay,
         itemPresences: overlay.itemPresences.map((presence) =>
           createRegionItemPresence({
             ...presence,

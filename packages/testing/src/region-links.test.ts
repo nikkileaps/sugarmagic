@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  createEmptyContentLibrarySnapshot,
   createDefaultGameProject,
   createDefaultRegion,
   createRegionMarker,
@@ -22,6 +23,10 @@ import {
   createQuestAction,
   type RegionDocument
 } from "@sugarmagic/domain";
+
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
 
 describe("a link names a region and where in it", () => {
   it("is offered by the one action picker every surface renders", () => {
@@ -156,7 +161,7 @@ function validate(regions: RegionDocument[]) {
       scenes: episode.scenes.map((scene) => ({ ...scene, regionId: HERE }))
     }))
   };
-  return validateProjectContent(project, regions);
+  return validateProjectContent(project, regions, VALIDATION_CONTENT_LIBRARY);
 }
 
 describe("a link that leads nowhere", () => {

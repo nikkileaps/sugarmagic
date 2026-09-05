@@ -188,11 +188,31 @@ that needs a Scene without caring which Episode owns it uses `getAllScenes` /
 `findSceneById` / `mapScenes`.
 
 `Region` (`packages/domain/src/region-authoring`) is the authored place:
-placed asset instances, landscape, environment, and the region-local
-gameplay placements -- `RegionNPCPresence` (which NPC exists here, optionally
-conditioned by a quest binding: quest active / stage / world-flag equals) and
-region volumes whose trigger actions can set world flags and play audio on
-entry.
+placed asset instances, placed lights, landscape, environment, and the
+region-local gameplay placements -- `RegionNPCPresence` (which NPC exists
+here, optionally conditioned by a quest binding: quest active / stage /
+world-flag equals) and region volumes whose trigger actions can set world
+flags and play audio on entry.
+
+`PlacedLight` is a light an author put in the world, as distinct from the
+environment's sun, which stays a property of the environment. It is one of
+`point`, `spot` or `area` -- the same three Blender offers -- and the kind
+decides which fields it carries: reach for point and spot, cone angle and
+softness for spot, panel size for area. Anything the kind does not use is
+null, and `createPlacedLight` is the only constructor, so a point light
+holding a cone cannot be built.
+
+`enabled` is authored, not an editor convenience: a light switched off is
+absent from the shipped game, not merely hidden while authoring. `modulation`
+names how the light moves over time -- `steady`, `flame`, `candle` or `pulse`
+-- with a seed that keeps two candles in one room from flickering in step; it
+is sampled as a pure function of elapsed seconds, so nothing about phase
+persists. A spot light may name a library texture to shine through, which is
+how a window throws a window-shaped pool.
+
+Lights compose exactly as placed assets do: a Scene overlay adds its own and
+can suppress the region's, and `composeRegionContents` is the only view any
+consumer should read.
 
 `Scene` (`packages/domain/src/scenes`) is one place with the overlays that
 dress it for this part of the story: content additions/overrides, environment
@@ -299,6 +319,13 @@ All authored mutation flows through semantic commands
 (`packages/domain/src/commands`, dispatched from Studio as
 `SemanticCommand`s like `UpdateQuestDefinition`), with transactions and
 history alongside. UI never mutates definitions directly.
+
+Saving runs `validateProjectContent(gameProject, regions, contentLibrary)`
+(`packages/domain/src/content-validation`). It takes the content library
+because some references point out of a region and into it -- a spot light
+naming a texture to shine through, for one -- and a check that cannot see the
+library cannot tell a live reference from a dangling one. Errors stop the
+save; warnings do not.
 
 ---
 

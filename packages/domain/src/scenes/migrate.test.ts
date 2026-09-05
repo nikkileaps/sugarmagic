@@ -27,6 +27,7 @@ function makeBaseRegion(id: string): RegionDocument {
     displayName: id,
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     placedAssets: [],
+    placedLights: [],
     folders: [],
     environmentBinding: { defaultEnvironmentId: null },
     areas: [],
@@ -169,6 +170,7 @@ describe("migrateToScenes", () => {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
+          placedLights: [],
           placedAssets: [],
           playerPresence: null,
           npcPresences: [],
@@ -253,6 +255,7 @@ describe("composeRegionContents", () => {
           suppressedRegionIds: [],
           assetAppearanceOverrides: {},
           folders: [],
+          placedLights: [],
           placedAssets: [
             {
               instanceId: "overlay-asset",

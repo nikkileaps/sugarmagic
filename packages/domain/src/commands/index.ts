@@ -107,6 +107,51 @@ export type RemovePlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+/**
+ * Place a light. The whole light travels in the payload, built by
+ * `createPlacedLight`, so the kind and its fields are already agreed
+ * before the command is dispatched.
+ */
+export type PlaceLightCommand = SemanticCommandBase<
+  "PlaceLight",
+  {
+    light: import("../region-authoring").PlacedLight;
+    /** See `PlacementScope` — omitted = "base". */
+    scope?: PlacementScope;
+  }
+>;
+
+/**
+ * Edit a placed light: rename it, turn it off, retune it, or change its
+ * kind. The executor re-runs the light through `createPlacedLight`, so a
+ * kind change drops the fields the new kind does not use.
+ */
+export type UpdatePlacedLightCommand = SemanticCommandBase<
+  "UpdatePlacedLight",
+  {
+    instanceId: string;
+    patch: Partial<
+      Omit<import("../region-authoring").PlacedLight, "instanceId">
+    >;
+  }
+>;
+
+export type RemovePlacedLightCommand = SemanticCommandBase<
+  "RemovePlacedLight",
+  {
+    instanceId: string;
+  }
+>;
+
+export type DuplicatePlacedLightCommand = SemanticCommandBase<
+  "DuplicatePlacedLight",
+  {
+    sourceInstanceId: string;
+    duplicatedInstanceId: string;
+    positionOffset: [number, number, number];
+  }
+>;
+
 /** One landed instance from a scatter-brush stroke (Plan 065.2). */
 export interface BrushPlacement {
   instanceId: string;
@@ -1009,6 +1054,18 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+/** A placed light names its target `instanceId`, the way a placed asset
+ *  does. */
+export type TransformPlacedLightCommand = SemanticCommandBase<
+  "TransformPlacedLight",
+  {
+    instanceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
 /**
  * One object moved by a transform that covered a whole selection, and where it
  * ended up.
@@ -1021,6 +1078,7 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
 export interface TransformSubject {
   subjectKind:
     | "placed-asset"
+    | "placed-light"
     | "player-presence"
     | "npc-presence"
     | "item-presence";
@@ -1203,6 +1261,10 @@ export type SemanticCommand =
   | BrushEraseAssetsCommand
   | DuplicatePlacedAssetCommand
   | RemovePlacedAssetCommand
+  | PlaceLightCommand
+  | UpdatePlacedLightCommand
+  | RemovePlacedLightCommand
+  | DuplicatePlacedLightCommand
   | MovePlacedAssetToFolderCommand
   | CreateSceneFolderCommand
   | RenameSceneFolderCommand
@@ -1226,6 +1288,7 @@ export type SemanticCommand =
   | UpdateLandscapeChannelCommand
   | DeleteLandscapeChannelCommand
   | TransformPlacedAssetCommand
+  | TransformPlacedLightCommand
   | TransformSceneObjectsCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand

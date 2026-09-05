@@ -431,6 +431,7 @@ function regionWithVolumes(
   volumes: RegionDocument["volumes"]
 ): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "region-trig", schema: "RegionDocument", version: 1 },
     displayName: "Trigger Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

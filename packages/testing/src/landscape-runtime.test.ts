@@ -21,6 +21,7 @@ import {
 
 function makeRegion(enabled = true): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "region-landscape", schema: "RegionDocument", version: 1 },
     displayName: "Landscape Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

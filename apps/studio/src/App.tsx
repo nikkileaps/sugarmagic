@@ -145,7 +145,8 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
-  type Scene
+  type Scene,
+  getActiveRegionContents
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -194,7 +195,8 @@ import {
   bakeNavMesh,
   buildRegionNavMeshInput,
   computeNavMeshInputHash,
-  registerActiveGameId
+  registerActiveGameId,
+  placedLightBudgetWarning
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -604,7 +606,8 @@ async function performSave(
   // mid-session and let the save through.
   const contentValidation = validateProjectContent(
     session.gameProject,
-    getAllRegions(session)
+    getAllRegions(session),
+    session.contentLibrary
   );
   if (!contentValidation.valid) {
     const blocking = blockingIssues(contentValidation);
@@ -3974,12 +3977,27 @@ export function App() {
     return () => window.removeEventListener("keydown", handleHistoryShortcut);
   }, [handleUndo, handleRedo]);
 
+  /**
+   * What the active region has too many of. Null when it is within budget,
+   * which is almost always -- this is a warning an author meets once, when
+   * they have gone far enough to feel it.
+   */
+  const lightBudgetWarning = useMemo(() => {
+    if (phase !== "active" || !session) return null;
+    const contents = getActiveRegionContents(session);
+    return contents ? placedLightBudgetWarning(contents.placedLights) : null;
+  }, [phase, session]);
+
   const statusMessage = useMemo(() => {
     if (phase === "no-project") return "No project open";
     if (phase === "error") return "Error loading project";
+    // A budget the author has exceeded outranks "ready", which is true but
+    // not what they need to know. Whether the project is saved is true either
+    // way, so it rides along rather than being displaced.
     const dirty = isDirty ? " (unsaved)" : "";
-    return `${activeProductMode} workspace ready${dirty}`;
-  }, [phase, isDirty, activeProductMode]);
+    const state = lightBudgetWarning ?? `${activeProductMode} workspace ready`;
+    return `${state}${dirty}`;
+  }, [phase, isDirty, activeProductMode, lightBudgetWarning]);
 
   // The shared definition catalogs every surface editor consumes
   // (binding editor, layer stack, mask editor, slot editors) —
@@ -4744,7 +4762,13 @@ export function App() {
           bottomPanel={
             <StatusBar
               message={statusMessage}
-              severity={phase === "error" ? "error" : "info"}
+              severity={
+                phase === "error"
+                  ? "error"
+                  : lightBudgetWarning
+                    ? "warning"
+                    : "info"
+              }
               trailing={activeWorkspaceId ?? undefined}
             />
           }

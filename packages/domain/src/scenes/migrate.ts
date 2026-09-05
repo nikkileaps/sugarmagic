@@ -23,6 +23,7 @@
 
 import type {
   PlacedAssetInstance,
+  PlacedLight,
   RegionDocument,
   RegionNavMeshArtifact,
   RegionItemPresence,
@@ -48,6 +49,7 @@ import {
 export interface ComposedRegionContents {
   folders: RegionSceneFolder[];
   placedAssets: PlacedAssetInstance[];
+  placedLights: PlacedLight[];
   playerPresence: RegionPlayerPresence | null;
   npcPresences: RegionNPCPresence[];
   itemPresences: RegionItemPresence[];
@@ -132,6 +134,12 @@ export function composeRegionContents(
         (asset) => !suppressed.has(asset.instanceId)
       ),
       ...(overlay?.placedAssets ?? [])
+    ],
+    placedLights: [
+      ...region.placedLights.filter(
+        (light) => !suppressed.has(light.instanceId)
+      ),
+      ...(overlay?.placedLights ?? [])
     ],
     // Exactly one player spawn: the Scene's answer wins where it has one,
     // otherwise the region's. Reading the overlay alone used to be the
@@ -232,6 +240,12 @@ export function migrateToScenes(input: {
     const base: RegionDocument = {
       ...(regionRest as RegionDocument),
       placedAssets: region.placedAssets ?? [],
+      // Every collection composition reads has to exist by the time this
+      // returns. This is the ONLY normalization a shipped game runs on its
+      // regions -- Studio's loader never runs in play -- so a boot.json baked
+      // before a collection existed arrives here missing it, and composing
+      // would throw rather than degrade.
+      placedLights: region.placedLights ?? [],
       folders: region.folders ?? []
     };
     if (!legacy) {

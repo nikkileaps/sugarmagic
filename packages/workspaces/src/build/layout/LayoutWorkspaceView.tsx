@@ -21,6 +21,7 @@ import {
   ActionIcon,
   Box,
   Button,
+  Checkbox,
   Group,
   Menu,
   Modal,
@@ -41,7 +42,8 @@ import type {
   SemanticCommand,
   RegionDocument,
   SoundCueDefinition,
-  SurfaceDefinition
+  SurfaceDefinition,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import {
   createInspectableBehaviorId,
@@ -49,14 +51,20 @@ import {
   createItemPresenceId,
   createNPCPresenceId,
   createPlacedAssetInstanceId,
+  createPlacedLight,
+  createPlacedLightId,
   createPlayerPresenceId,
   createRegionMarker,
   createSceneFolderId,
   type ComposedRegionContents,
+  type PlacedLight,
+  type PlacedLightKind,
+  type PlacedLightModulationKind,
   type Scene,
   sceneOverlayForRegion
 } from "@sugarmagic/domain";
 import {
+  ColorField,
   PanelSection,
   SceneExplorer,
   Inspector,
@@ -85,9 +93,13 @@ import { AssetCollisionSection } from "./AssetCollisionSection";
 import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
-import { axisScaleWouldShear } from "../../interaction/selection-transform";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
-import { markersStayAlone, singleTransformCommand } from "./layout-workspace";
+import {
+  axisScaleBlockedBy,
+  markersStayAlone,
+  singleTransformCommand,
+  type AxisScaleBlock
+} from "./layout-workspace";
 
 // Vertical side rail (the Design > Animation viewport pattern): the
 // rail sits below the options-bar row, so an armed tool's settings
@@ -159,6 +171,8 @@ export interface LayoutWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   /** Library surfaces for the Surface Brush palette (Plan 068.9). */
   surfaceDefinitions: SurfaceDefinition[];
+  /** Library textures a spot light can shine through. */
+  textureDefinitions: TextureDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -181,18 +195,57 @@ export interface LayoutWorkspaceViewProps {
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
+/** The three light kinds, as the Inspector's dropdown offers them. */
+const PLACED_LIGHT_KIND_OPTIONS: { value: PlacedLightKind; label: string }[] = [
+  { value: "point", label: "Point" },
+  { value: "spot", label: "Spot" },
+  { value: "area", label: "Area" }
+];
+
+/** How a light moves over time, as the Inspector's dropdown offers it. */
+const PLACED_LIGHT_MODULATION_OPTIONS: {
+  value: PlacedLightModulationKind;
+  label: string;
+}[] = [
+  { value: "steady", label: "Steady" },
+  { value: "flame", label: "Flame" },
+  { value: "candle", label: "Candle" },
+  { value: "pulse", label: "Pulse" }
+];
+
+/**
+ * Intensity is not one unit. three.js reads candela for a point or spot light
+ * and nits for an area light, so the field says which rather than showing a
+ * bare number that means two different things.
+ */
+const PLACED_LIGHT_INTENSITY_LABEL: Record<PlacedLightKind, string> = {
+  point: "Intensity (candela)",
+  spot: "Intensity (candela)",
+  area: "Intensity (nits)"
+};
+
+/** Why the gizmo's axis-scale handles are greyed, in words. */
+const AXIS_SCALE_BLOCK_TEXT: Record<AxisScaleBlock, string> = {
+  "light-has-no-size":
+    "Axis scale unavailable: a light has no size. An area light's size is set in its own fields.",
+  "rotated-selection":
+    "Axis scale unavailable: some of these objects are rotated. The centre handle still scales them evenly."
+};
+
 /** What each scene-object kind is called where the author reads it. */
 const SCENE_OBJECT_KIND_LABELS: Record<SceneObject["kind"], string> = {
   asset: "Asset",
   player: "Player",
   npc: "NPC",
   item: "Item",
-  marker: "Marker"
+  marker: "Marker",
+  light: "Light"
 };
 
 const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
   folders: [],
   placedAssets: [],
+  placedLights: [],
   playerPresence: null,
   npcPresences: [],
   itemPresences: []
@@ -221,10 +274,18 @@ function FactRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function buildSceneTree(
+/**
+ * The Scene Explorer's rows for one region, composed with its active Scene.
+ *
+ * Exported so the row rules can be checked without a browser -- above all,
+ * which rows offer an on/off control. A control that appears where nothing
+ * handles it looks exactly like one that works.
+ */
+export function buildSceneTree(
   region: RegionDocument,
   regionContents: ComposedRegionContents,
   overlayAssetIds: Set<string>,
+  overlayLightIds: Set<string>,
   assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
@@ -257,6 +318,15 @@ function buildSceneTree(
     const siblings = assetsByParent.get(asset.parentFolderId) ?? [];
     siblings.push(asset);
     assetsByParent.set(asset.parentFolderId, siblings);
+  }
+
+  // Lights sit in the folder tree like props: both carry a parentFolderId, and
+  // an author who groups a shrine's props wants its candles in there too.
+  const lightsByParent = new Map<string | null, PlacedLight[]>();
+  for (const light of regionContents.placedLights) {
+    const siblings = lightsByParent.get(light.parentFolderId) ?? [];
+    siblings.push(light);
+    lightsByParent.set(light.parentFolderId, siblings);
   }
 
   const buildChildren = (
@@ -303,7 +373,24 @@ function buildSceneTree(
       }
     );
 
-    return [...childFolders, ...childAssets];
+    const childLights = (lightsByParent.get(parentFolderId) ?? []).map(
+      (light) => ({
+        type: "entity" as const,
+        instanceId: light.instanceId,
+        displayName: overlayLightIds.has(light.instanceId)
+          ? `${light.displayName} \u{1F3AC}`
+          : light.displayName,
+        entityKind: "light" as const,
+        assetKind: "light",
+        assetDefinitionId: null,
+        // The saved state, not the viewport's: this row's control writes the
+        // region, so what it shows has to be what the region says.
+        visible: light.enabled,
+        canToggleVisibility: true
+      })
+    );
+
+    return [...childFolders, ...childAssets, ...childLights];
   };
 
   const markerNodes = (region.markers ?? []).map((marker) => ({
@@ -403,6 +490,7 @@ export function useLayoutWorkspaceView(
     getAllScenes,
     assetDefinitions,
     surfaceDefinitions,
+    textureDefinitions,
     playerDefinition,
     itemDefinitions,
     documentDefinitions,
@@ -537,6 +625,16 @@ export function useLayoutWorkspaceView(
     );
   }, [region, activeScene]);
 
+  const overlayLightIds = useMemo(() => {
+    if (!region || !activeScene) return new Set<string>();
+    return new Set(
+      (
+        sceneOverlayForRegion(activeScene, region.identity.id)?.placedLights ??
+        []
+      ).map((light) => light.instanceId)
+    );
+  }, [region, activeScene]);
+
   useEffect(() => {
     if (!isActive) return;
     getLayoutWorkspaceForViewport(
@@ -624,6 +722,7 @@ export function useLayoutWorkspaceView(
             region,
             regionContents,
             overlayAssetIds,
+            overlayLightIds,
             assetDefinitions,
             playerDefinition,
             itemDefinitions,
@@ -639,6 +738,7 @@ export function useLayoutWorkspaceView(
       itemDefinitions,
       npcDefinitions,
       overlayAssetIds,
+      overlayLightIds,
       playerDefinition,
       region,
       regionContents
@@ -659,6 +759,7 @@ export function useLayoutWorkspaceView(
     return resolveSceneObjects(currentRegion, {
       activeScene: getActiveScene(),
       includeMarkers: true,
+      includeLights: true,
       playerDefinition,
       itemDefinitions,
       npcDefinitions
@@ -696,16 +797,11 @@ export function useLayoutWorkspaceView(
   }, [resolveObjectsNow, selectedIds, region]);
 
   /**
-   * Whether scaling the selection along one axis would shear it. The same rule
-   * greys the gizmo's axis scale handles; this is what tells the author why.
-   * Both read the rotations off the same resolved objects, so the greyed
-   * handles and the explanation cannot disagree about which objects count.
+   * What stops the selection scaling along one axis, from the same function
+   * that greys the gizmo's handles. This is what tells the author why.
    */
-  const selectionShears = useMemo(
-    () =>
-      axisScaleWouldShear(
-        selectedObjects.map((object) => object.transform.rotation)
-      ),
+  const axisScaleBlock = useMemo(
+    () => axisScaleBlockedBy(selectedObjects),
     [selectedObjects]
   );
 
@@ -733,6 +829,39 @@ export function useLayoutWorkspaceView(
       ) ?? null
     );
   }, [region, selectedIds]);
+
+  const selectedLight = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      regionContents.placedLights.find(
+        (light) => light.instanceId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, regionContents, selectedIds]);
+
+  /**
+   * Change one thing about the selected light. The executor re-runs the whole
+   * light through its factory, so a patch that changes the kind arrives with
+   * the old kind's fields already dropped.
+   */
+  const patchSelectedLight = useCallback(
+    (patch: Partial<Omit<PlacedLight, "instanceId">>) => {
+      if (!region || !selectedLight) return;
+      onCommand({
+        kind: "UpdatePlacedLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-light",
+          subjectId: selectedLight.instanceId
+        },
+        payload: { instanceId: selectedLight.instanceId, patch }
+      });
+    },
+    [onCommand, region, selectedLight]
+  );
 
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
@@ -783,16 +912,33 @@ export function useLayoutWorkspaceView(
     );
   }, [documentDefinitions, selectedAsset]);
 
+  /**
+   * What the Inspector's header calls the selection -- and, because the
+   * Inspector renders nothing at all without a label, what decides whether the
+   * sections below are reachable.
+   *
+   * A kind with no answer here does not look broken: its section is written,
+   * the gizmo attaches to it in the viewport, and the panel still says
+   * "Nothing selected". So the last resort resolves the selected object and
+   * takes the name it carries -- anything the viewport can draw is a scene
+   * object with a display name, which makes this list complete for kinds
+   * nobody has thought of yet. The entries above it exist only where a kind
+   * wants a different name than its scene object carries.
+   */
   const selectedSceneLabel =
     (selectedIds.length === 0 && selectedFolderId === SCENE_ROOT_FOLDER_ID
       ? (region?.displayName ?? null)
       : null) ??
+    (selectedIds.length > 1 ? `${selectedIds.length} objects` : null) ??
     selectedAsset?.displayName ??
     (selectedPlayerPresence
       ? (playerDefinition?.displayName ?? "Player")
       : null) ??
     selectedNPCDefinition?.displayName ??
     selectedItemDefinition?.displayName ??
+    (selectedIds.length === 1
+      ? (findSceneObject(selectedIds[0]!)?.displayName ?? null)
+      : null) ??
     null;
 
   const isRegionRootSelected =
@@ -941,9 +1087,38 @@ export function useLayoutWorkspaceView(
     [getRegion, onCommand]
   );
 
+  /**
+   * Copy whatever the explorer row names. A second candle is a copy of the
+   * first rather than a light authored again from scratch, which is the whole
+   * reason the duplicate command takes a source.
+   */
   const handleDuplicateAsset = useCallback(
     (instanceId: string) => {
       if (!region) return;
+      const light = regionContents.placedLights.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      if (light) {
+        const duplicatedInstanceId = createPlacedLightId();
+        onCommand({
+          kind: "DuplicatePlacedLight",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "placed-light",
+            subjectId: duplicatedInstanceId
+          },
+          payload: {
+            sourceInstanceId: light.instanceId,
+            duplicatedInstanceId,
+            positionOffset: [1, 0, 1]
+          }
+        });
+        onSelect([duplicatedInstanceId]);
+        return;
+      }
       const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
@@ -973,6 +1148,33 @@ export function useLayoutWorkspaceView(
     [onCommand, onSelect, region]
   );
 
+  /**
+   * The light row's on/off control. Writes the region, so it survives a reload
+   * and the game reads the same answer -- unlike a folder's eye, which hides
+   * things in the viewport and is forgotten.
+   */
+  const handleToggleEntityVisibility = useCallback(
+    (instanceId: string) => {
+      if (!region) return;
+      const light = regionContents.placedLights.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      // Only light rows offer the control, so a miss means the row named
+      // something already deleted. Nothing to switch.
+      if (!light) return;
+      onCommand({
+        kind: "UpdatePlacedLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "placed-light", subjectId: instanceId },
+        payload: { instanceId, patch: { enabled: !light.enabled } }
+      });
+    },
+    [onCommand, region, regionContents]
+  );
+
   const handleDeleteEntityFromScene = useCallback(
     (instanceId: string) => {
       if (!region) return;
@@ -991,6 +1193,10 @@ export function useLayoutWorkspaceView(
         regionContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
+      const light =
+        regionContents.placedLights.find(
+          (candidate) => candidate.instanceId === instanceId
+        ) ?? null;
 
       const label =
         asset?.displayName ??
@@ -1006,7 +1212,9 @@ export function useLayoutWorkspaceView(
               (definition) =>
                 definition.definitionId === itemPresence.itemDefinitionId
             )?.displayName ?? "Item")
-          : null);
+          : null) ??
+        light?.displayName ??
+        null;
 
       if (!label) return;
       if (!window.confirm(`Remove ${label} from this scene?`)) return;
@@ -1069,6 +1277,21 @@ export function useLayoutWorkspaceView(
           },
           payload: {
             presenceId: itemPresence.presenceId
+          }
+        });
+      } else if (light) {
+        onCommand({
+          kind: "RemovePlacedLight",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "placed-light",
+            subjectId: light.instanceId
+          },
+          payload: {
+            instanceId: light.instanceId
           }
         });
       }
@@ -1222,6 +1445,40 @@ export function useLayoutWorkspaceView(
     });
     onSelect([marker.markerId]);
   }, [onCommand, onSelect, region]);
+
+  const handleAddLight = useCallback(
+    (kind: PlacedLightKind) => {
+      if (!region) return;
+      // Dropped at the origin at the height every other add uses, then
+      // dragged into place with the gizmo. Numbered so two lights are
+      // distinguishable before either has been named. Colour, reach and cone
+      // come from the factory's defaults -- a warm lamp a few metres across.
+      const light = createPlacedLight({
+        kind,
+        displayName: `Light ${regionContents.placedLights.length + 1}`,
+        parentFolderId:
+          selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
+        transform: {
+          position: [0, 0.5, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      });
+      onCommand({
+        kind: "PlaceLight",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "placed-light", subjectId: light.instanceId },
+        // Build authors the world at rest, so a light placed here belongs to
+        // the region, the same rule a placed asset follows.
+        payload: { light, scope: "base" as const }
+      });
+      onSelect([light.instanceId]);
+    },
+    [onCommand, onSelect, region, regionContents, selectedFolderId]
+  );
 
   const handleAddNPCPresence = useCallback(
     (definition: NPCDefinition) => {
@@ -1409,6 +1666,22 @@ export function useLayoutWorkspaceView(
                     Player
                   </Menu.Item>
                   <Menu.Item onClick={handleAddMarker}>Marker</Menu.Item>
+                  <Menu.Sub>
+                    <Menu.Sub.Target>
+                      <Menu.Sub.Item>Light</Menu.Sub.Item>
+                    </Menu.Sub.Target>
+                    <Menu.Sub.Dropdown>
+                      <Menu.Item onClick={() => handleAddLight("point")}>
+                        Point
+                      </Menu.Item>
+                      <Menu.Item onClick={() => handleAddLight("spot")}>
+                        Spot
+                      </Menu.Item>
+                      <Menu.Item onClick={() => handleAddLight("area")}>
+                        Area
+                      </Menu.Item>
+                    </Menu.Sub.Dropdown>
+                  </Menu.Sub>
                   <Menu.Item
                     onClick={() => {
                       setAddNPCOpen(true);
@@ -1476,6 +1749,7 @@ export function useLayoutWorkspaceView(
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
+            onToggleVisibility={handleToggleEntityVisibility}
             onMoveEntityToFolder={handleMoveEntityToFolder}
           />
         </Stack>
@@ -1586,7 +1860,10 @@ export function useLayoutWorkspaceView(
     ) : null,
 
     rightPanel: region ? (
-      <Inspector selectionLabel={selectedSceneLabel}>
+      <Inspector
+        selectionLabel={selectedSceneLabel}
+        hasSelection={selectedIds.length > 0 || isRegionRootSelected}
+      >
         {isRegionRootSelected ? (
           <Stack gap="md">
             <Text size="sm" fw={600}>
@@ -1705,10 +1982,9 @@ export function useLayoutWorkspaceView(
                 </Group>
               ))}
             </Stack>
-            {selectionShears ? (
+            {axisScaleBlock ? (
               <Text size="xs" c="var(--sm-color-overlay0)">
-                Axis scale unavailable: some of these objects are rotated. The
-                centre handle still scales them evenly.
+                {AXIS_SCALE_BLOCK_TEXT[axisScaleBlock]}
               </Text>
             ) : null}
           </Stack>
@@ -1979,6 +2255,287 @@ export function useLayoutWorkspaceView(
               onChange={(axis, value) =>
                 handleTransformChange(
                   selectedMarker.markerId,
+                  "rotation",
+                  axis,
+                  value
+                )
+              }
+            />
+          </Stack>
+        ) : selectedLight ? (
+          <Stack gap="md">
+            <Stack gap={4}>
+              <FactRow label="Type" value="Light" />
+              <FactRow
+                label="Scope"
+                value={
+                  overlayLightIds.has(selectedLight.instanceId)
+                    ? `\u{1F3AC} ${activeScene?.displayName ?? "Scene"}`
+                    : "Base \u2014 always visible"
+                }
+              />
+            </Stack>
+            <TextInput
+              label="Name"
+              size="xs"
+              value={selectedLight.displayName}
+              onChange={(event) =>
+                patchSelectedLight({ displayName: event.currentTarget.value })
+              }
+            />
+            <Select
+              label="Kind"
+              size="xs"
+              allowDeselect={false}
+              data={PLACED_LIGHT_KIND_OPTIONS}
+              value={selectedLight.kind}
+              onChange={(value) =>
+                value
+                  ? patchSelectedLight({ kind: value as PlacedLightKind })
+                  : undefined
+              }
+            />
+            <Checkbox
+              size="xs"
+              label="On"
+              description="Off is dark in the game too, not just here."
+              checked={selectedLight.enabled}
+              onChange={(event) =>
+                patchSelectedLight({ enabled: event.currentTarget.checked })
+              }
+            />
+            <ColorField
+              label="Colour"
+              value={selectedLight.color}
+              onChange={(color) => patchSelectedLight({ color })}
+            />
+            <NumberInput
+              label={PLACED_LIGHT_INTENSITY_LABEL[selectedLight.kind]}
+              size="xs"
+              min={0}
+              step={1}
+              value={selectedLight.intensity}
+              onChange={(value) =>
+                typeof value === "number"
+                  ? patchSelectedLight({ intensity: value })
+                  : undefined
+              }
+            />
+            {selectedLight.radius !== null ? (
+              <NumberInput
+                label="Reach (metres)"
+                size="xs"
+                min={0}
+                step={0.5}
+                value={selectedLight.radius}
+                onChange={(value) =>
+                  typeof value === "number"
+                    ? patchSelectedLight({ radius: value })
+                    : undefined
+                }
+              />
+            ) : null}
+            {selectedLight.spot ? (
+              <>
+                <NumberInput
+                  label="Cone angle (degrees)"
+                  size="xs"
+                  min={1}
+                  max={89}
+                  step={1}
+                  value={selectedLight.spot.angleDeg}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: { ...selectedLight.spot, angleDeg: value }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Edge softness"
+                  size="xs"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.spot.penumbra}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: { ...selectedLight.spot, penumbra: value }
+                        })
+                      : undefined
+                  }
+                />
+                <Select
+                  label="Shines through"
+                  size="xs"
+                  description="A window frame, leaves, a lattice. The shape lands where the light does."
+                  clearable
+                  data={textureDefinitions.map((definition) => ({
+                    value: definition.definitionId,
+                    label: definition.displayName
+                  }))}
+                  value={selectedLight.spot.projectedTextureId}
+                  onChange={(value) =>
+                    selectedLight.spot
+                      ? patchSelectedLight({
+                          spot: {
+                            ...selectedLight.spot,
+                            projectedTextureId: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            {selectedLight.area ? (
+              <>
+                <NumberInput
+                  label="Width (metres)"
+                  size="xs"
+                  min={0}
+                  step={0.25}
+                  value={selectedLight.area.width}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.area
+                      ? patchSelectedLight({
+                          area: { ...selectedLight.area, width: value }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Height (metres)"
+                  size="xs"
+                  min={0}
+                  step={0.25}
+                  value={selectedLight.area.height}
+                  onChange={(value) =>
+                    typeof value === "number" && selectedLight.area
+                      ? patchSelectedLight({
+                          area: { ...selectedLight.area, height: value }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            <Select
+              label="Movement"
+              size="xs"
+              description="Seen in the game, not here."
+              allowDeselect={false}
+              data={PLACED_LIGHT_MODULATION_OPTIONS}
+              value={selectedLight.modulation.kind}
+              onChange={(value) =>
+                value
+                  ? patchSelectedLight({
+                      modulation: {
+                        ...selectedLight.modulation,
+                        kind: value as PlacedLightModulationKind
+                      }
+                    })
+                  : undefined
+              }
+            />
+            {selectedLight.modulation.kind !== "steady" ? (
+              <>
+                <NumberInput
+                  label="Speed"
+                  size="xs"
+                  min={0}
+                  step={0.1}
+                  value={selectedLight.modulation.speed}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            speed: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Amount"
+                  size="xs"
+                  description="How far the brightness swings, 0 to 1."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.amount}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            amount: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Colour drift"
+                  size="xs"
+                  description="How far it cools toward red as it dims."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.colorWobble}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            colorWobble: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+                <NumberInput
+                  label="Seed"
+                  size="xs"
+                  description="Two lights with the same settings and different seeds never move together."
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={selectedLight.modulation.seed}
+                  onChange={(value) =>
+                    typeof value === "number"
+                      ? patchSelectedLight({
+                          modulation: {
+                            ...selectedLight.modulation,
+                            seed: value
+                          }
+                        })
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+            <TransformInspector
+              label="Position"
+              value={selectedLight.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedLight.instanceId,
+                  "position",
+                  axis,
+                  value
+                )
+              }
+            />
+            <TransformInspector
+              label="Facing"
+              value={selectedLight.transform.rotation}
+              onChange={(axis, value) =>
+                handleTransformChange(
+                  selectedLight.instanceId,
                   "rotation",
                   axis,
                   value

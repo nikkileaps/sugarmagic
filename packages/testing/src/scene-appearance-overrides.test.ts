@@ -66,6 +66,7 @@ function makeRegion(assets: PlacedAssetInstance[]): RegionDocument {
     displayName: "Test Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     placedAssets: assets,
+    placedLights: [],
     folders: [],
     environmentBinding: { defaultEnvironmentId: "env:default" },
     areas: [],
@@ -75,7 +76,7 @@ function makeRegion(assets: PlacedAssetInstance[]): RegionDocument {
     npcPresences: [],
     itemPresences: [],
     playerPresence: null
-  } as unknown as RegionDocument;
+  };
 }
 
 function makeLibraryWithHouse() {

@@ -106,6 +106,7 @@ function createRuntimeAssetResolver(contentLibrary: ContentLibrarySnapshot) {
 
 function createRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "region:one", schema: "RegionDocument", version: 1 },
     displayName: "Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

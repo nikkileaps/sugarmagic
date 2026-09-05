@@ -51,6 +51,7 @@ export function regionOwns(
   if (!region) return false;
   return (
     region.placedAssets.some((asset) => asset.instanceId === instanceId) ||
+    region.placedLights.some((light) => light.instanceId === instanceId) ||
     region.npcPresences.some((p) => p.presenceId === instanceId) ||
     region.itemPresences.some((p) => p.presenceId === instanceId) ||
     region.playerPresence?.presenceId === instanceId

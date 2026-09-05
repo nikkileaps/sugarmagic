@@ -14,7 +14,11 @@ export {
   type CssColorFieldProps
 } from "./ColorField";
 export { KindTabs, type KindTabsOption, type KindTabsProps } from "./KindTabs";
-export { CurveEditor, type CurveEditorPoint, type CurveEditorProps } from "./CurveEditor";
+export {
+  CurveEditor,
+  type CurveEditorPoint,
+  type CurveEditorProps
+} from "./CurveEditor";
 export {
   TOOL_OPTIONS_BAR_INSET,
   TOOL_RAIL_TOP,
@@ -61,7 +65,11 @@ export {
   InlineAssetField,
   type InlineAssetFieldProps
 } from "./InlineAssetField";
-export { Inspector, type InspectorProps } from "./Inspector";
+export {
+  Inspector,
+  inspectorShowsSelection,
+  type InspectorProps
+} from "./Inspector";
 export { ShellFrame, type ShellFrameProps } from "./ShellFrame";
 export { StatusBar, type StatusBarProps } from "./StatusBar";
 export { ProgressToast, type ProgressToastProps } from "./ProgressToast";

@@ -122,6 +122,7 @@ export function createTestMorphologyLoader(
 
 export function createTestRegion(): RegionDocument {
   return {
+    placedLights: [],
     identity: {
       id: "scene-station",
       schema: "region-document",
@@ -227,6 +228,7 @@ export function createTestActiveScene(regionId: string): Scene {
     sceneId: "scene:test",
     regionId: regionId,
     overlay: {
+        placedLights: [],
         suppressedRegionIds: [],
         assetAppearanceOverrides: {},
         folders: [],

@@ -25,6 +25,7 @@ function regionWithTask(
   task: Partial<RegionDocument["behaviors"][number]["tasks"][number]>
 ): RegionDocument {
   return {
+    placedLights: [],
     identity: { id: "region-task", schema: "RegionDocument", version: 1 },
     displayName: "Task Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

@@ -34,14 +34,15 @@ const COMPOSER = at({
 const STORY_STRUCTURE = at({ activeProductMode: "story" });
 
 /**
- * A region owning one asset, one NPC, one item and the player.
+ * A region owning one asset, one light, one NPC, one item and the player.
  *
- * `regionOwns` reads only these four collections, so the cast stands in for
+ * `regionOwns` reads only these five collections, so the cast stands in for
  * the rest of a RegionDocument that no code under test looks at; spelling out
  * a whole document here would say less about what the rule depends on.
  */
 const REGION = {
   placedAssets: [{ instanceId: "region:crate" }],
+  placedLights: [{ instanceId: "region:hearth" }],
   npcPresences: [{ presenceId: "region:warden" }],
   itemPresences: [{ presenceId: "region:key" }],
   playerPresence: { presenceId: "region:player" }
@@ -76,6 +77,7 @@ describe("what the Scene Composer lets an author touch", () => {
   it("locks every kind of object the region owns", () => {
     for (const owned of [
       "region:crate",
+      "region:hearth",
       "region:warden",
       "region:key",
       "region:player"

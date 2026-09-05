@@ -6,6 +6,8 @@
  */
 
 import {
+  createPlacedLight,
+  placedLightSeedFromInstanceId,
   createRegionAreaDefinition,
   createRegionMarker,
   createRegionVolumeDefinition,
@@ -18,6 +20,7 @@ import {
 import type {
   RegionDocument,
   PlacedAssetInstance,
+  PlacedLight,
   RegionInspectableBehavior,
   RegionSceneFolder,
   RegionNPCPresence,
@@ -33,12 +36,17 @@ import type {
   SemanticCommand,
   MovePlacedAssetCommand,
   TransformPlacedAssetCommand,
+  TransformPlacedLightCommand,
   TransformSceneObjectsCommand,
   PlaceAssetInstanceCommand,
   BrushPlaceAssetsCommand,
   BrushEraseAssetsCommand,
   DuplicatePlacedAssetCommand,
   RemovePlacedAssetCommand,
+  PlaceLightCommand,
+  UpdatePlacedLightCommand,
+  RemovePlacedLightCommand,
+  DuplicatePlacedLightCommand,
   MovePlacedAssetToFolderCommand,
   CreateSceneFolderCommand,
   RenameSceneFolderCommand,
@@ -187,6 +195,26 @@ function mapPlacedAssetsEverywhere(
   return { region, scene };
 }
 
+/** Placed lights live in the same two stores as placed assets, and are
+ *  named by instanceId for the same reason. */
+function mapPlacedLightsEverywhere(
+  context: CommandExecutionContext,
+  transform: (lights: PlacedLight[]) => PlacedLight[]
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const region = {
+    ...context.region,
+    placedLights: transform(context.region.placedLights)
+  };
+  const scene = sceneOverlayForRegion(context.scene, regionId)
+    ? withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        placedLights: transform(overlay.placedLights)
+      }))
+    : context.scene;
+  return { region, scene };
+}
+
 /**
  * Presences live in TWO stores (epic #226): the region's own residents
  * and the active Scene's overlay list — the same shape placed assets have
@@ -313,6 +341,26 @@ function applyTransformPlacedAsset(
   );
 }
 
+function applyTransformPlacedLight(
+  context: CommandExecutionContext,
+  command: TransformPlacedLightCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedLightsEverywhere(context, (lights) =>
+    lights.map((light) =>
+      light.instanceId === command.payload.instanceId
+        ? {
+            ...light,
+            transform: {
+              position: command.payload.position,
+              rotation: command.payload.rotation,
+              scale: command.payload.scale
+            }
+          }
+        : light
+    )
+  );
+}
+
 /**
  * Move every object a gizmo drag covered.
  *
@@ -335,6 +383,13 @@ function applyTransformSceneObjects(
             kind: "TransformPlacedAsset",
             target,
             subject: { subjectKind: "placed-asset", subjectId },
+            payload: { instanceId: subjectId, position, rotation, scale }
+          });
+        case "placed-light":
+          return applyTransformPlacedLight(current, {
+            kind: "TransformPlacedLight",
+            target,
+            subject: { subjectKind: "placed-light", subjectId },
             payload: { instanceId: subjectId, position, rotation, scale }
           });
         case "player-presence":
@@ -483,6 +538,121 @@ function applyRemovePlacedAsset(
   return mapPlacedAssetsEverywhere(context, (assets) =>
     assets.filter((asset) => asset.instanceId !== command.payload.instanceId)
   );
+}
+
+function applyPlaceLight(
+  context: CommandExecutionContext,
+  command: PlaceLightCommand
+): { region: RegionDocument; scene: Scene } {
+  // Through the factory again, so a hand-built payload still lands with
+  // its kind and its kind-specific fields agreeing.
+  const created = createPlacedLight(command.payload.light);
+  const scope = command.payload.scope ?? "base";
+  if (scope === "base") {
+    return {
+      region: {
+        ...context.region,
+        placedLights: [...context.region.placedLights, created]
+      },
+      scene: context.scene
+    };
+  }
+  return {
+    region: context.region,
+    scene: withOverlay(
+      context.scene,
+      context.region.identity.id,
+      (overlay) => ({
+        ...overlay,
+        placedLights: [...overlay.placedLights, created]
+      })
+    )
+  };
+}
+
+function applyUpdatePlacedLight(
+  context: CommandExecutionContext,
+  command: UpdatePlacedLightCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedLightsEverywhere(context, (lights) =>
+    lights.map((light) =>
+      light.instanceId === command.payload.instanceId
+        ? // The factory decides which fields survive, so changing the kind
+          // drops the cone or the rectangle the old kind was carrying.
+          createPlacedLight({ ...light, ...command.payload.patch })
+        : light
+    )
+  );
+}
+
+function applyRemovePlacedLight(
+  context: CommandExecutionContext,
+  command: RemovePlacedLightCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedLightsEverywhere(context, (lights) =>
+    lights.filter((light) => light.instanceId !== command.payload.instanceId)
+  );
+}
+
+function applyDuplicatePlacedLight(
+  context: CommandExecutionContext,
+  command: DuplicatePlacedLightCommand
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const overlayLights =
+    sceneOverlayForRegion(context.scene, regionId)?.placedLights ?? [];
+  // Scope affinity: the copy lands in the same store as its source, the
+  // way a duplicated placed asset does.
+  const baseSource = context.region.placedLights.find(
+    (light) => light.instanceId === command.payload.sourceInstanceId
+  );
+  const overlaySource = overlayLights.find(
+    (light) => light.instanceId === command.payload.sourceInstanceId
+  );
+  const source = baseSource ?? overlaySource;
+  if (!source) {
+    // A selection can name a light that has already been deleted. There is
+    // nothing to copy, and that is the outcome, not a failure.
+    return { region: context.region, scene: context.scene };
+  }
+
+  const duplicated: PlacedLight = {
+    ...source,
+    instanceId: command.payload.duplicatedInstanceId,
+    displayName: `${source.displayName} Copy`,
+    modulation: {
+      ...source.modulation,
+      // A fresh seed off the new id: two copies of one candle that shared a
+      // seed would flicker in lockstep.
+      seed: placedLightSeedFromInstanceId(command.payload.duplicatedInstanceId)
+    },
+    transform: {
+      position: [
+        source.transform.position[0] + command.payload.positionOffset[0],
+        source.transform.position[1] + command.payload.positionOffset[1],
+        source.transform.position[2] + command.payload.positionOffset[2]
+      ],
+      rotation: [...source.transform.rotation] as [number, number, number],
+      scale: [...source.transform.scale] as [number, number, number]
+    }
+  };
+
+  if (baseSource) {
+    return {
+      region: {
+        ...context.region,
+        placedLights: [...context.region.placedLights, duplicated]
+      },
+      scene: context.scene
+    };
+  }
+  return {
+    region: context.region,
+    scene: withOverlay(context.scene, regionId, (overlay) => ({
+      ...overlay,
+      placedLights: [...overlay.placedLights, duplicated]
+    }))
+  };
 }
 
 function applyBrushPlaceAssets(
@@ -1387,8 +1557,10 @@ function applyDeleteSceneFolder(
     return { region: context.region, scene: context.scene };
   }
 
-  // Reparent children (folders + assets) onto the deleted
-  // folder's parent, in whichever store they live.
+  // Reparent children (folders, assets and lights) onto the deleted folder's
+  // parent, in whichever store they live. Anything left pointing at the
+  // deleted folder is still in the region and still in the world, but the
+  // explorer only walks folders that exist, so it would never show it again.
   const withReparentedFolders = mapFoldersEverywhere(context, (folders) =>
     folders
       .filter((candidate) => candidate.folderId !== command.payload.folderId)
@@ -1401,7 +1573,7 @@ function applyDeleteSceneFolder(
           : candidate
       )
   );
-  return mapPlacedAssetsEverywhere(
+  const withReparentedAssets = mapPlacedAssetsEverywhere(
     {
       region: withReparentedFolders.region,
       scene: withReparentedFolders.scene
@@ -1414,6 +1586,21 @@ function applyDeleteSceneFolder(
               parentFolderId: folder.parentFolderId
             }
           : asset
+      )
+  );
+  return mapPlacedLightsEverywhere(
+    {
+      region: withReparentedAssets.region,
+      scene: withReparentedAssets.scene
+    },
+    (lights) =>
+      lights.map((light) =>
+        light.parentFolderId === command.payload.folderId
+          ? {
+              ...light,
+              parentFolderId: folder.parentFolderId
+            }
+          : light
       )
   );
 }
@@ -1821,6 +2008,10 @@ export function executeCommand(
       ({ region: updatedRegion, scene: updatedScene } =
         applyTransformPlacedAsset(context, command));
       break;
+    case "TransformPlacedLight":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformPlacedLight(context, command));
+      break;
     case "TransformSceneObjects":
       ({ region: updatedRegion, scene: updatedScene } =
         applyTransformSceneObjects(context, command));
@@ -1852,6 +2043,28 @@ export function executeCommand(
         context,
         command
       ));
+      break;
+    case "PlaceLight":
+      ({ region: updatedRegion, scene: updatedScene } = applyPlaceLight(
+        context,
+        command
+      ));
+      break;
+    case "UpdatePlacedLight":
+      ({ region: updatedRegion, scene: updatedScene } = applyUpdatePlacedLight(
+        context,
+        command
+      ));
+      break;
+    case "RemovePlacedLight":
+      ({ region: updatedRegion, scene: updatedScene } = applyRemovePlacedLight(
+        context,
+        command
+      ));
+      break;
+    case "DuplicatePlacedLight":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyDuplicatePlacedLight(context, command));
       break;
     case "MovePlacedAssetToFolder":
       ({ region: updatedRegion, scene: updatedScene } =

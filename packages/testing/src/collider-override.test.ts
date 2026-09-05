@@ -76,6 +76,7 @@ function fixture(): { region: RegionDocument; scene: Scene } {
     assetDefinitionId: "asset:rock"
   });
   const region: RegionDocument = {
+    placedLights: [],
     identity: { id: "region-1", schema: "RegionDocument", version: 1 },
     displayName: "R",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },

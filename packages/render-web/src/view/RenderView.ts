@@ -16,6 +16,10 @@ import {
 } from "../environment/applyPostProcessStack";
 import { createEnvironmentSceneController, type EnvironmentSceneController } from "../environment/EnvironmentSceneController";
 import { createLandscapeSceneController, type LandscapeSceneController } from "../landscape";
+import {
+  createPlacedLightController,
+  type PlacedLightController
+} from "../placed-lights";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
@@ -41,6 +45,7 @@ export interface RenderView {
   readonly shaderRuntime: ShaderRuntime;
   readonly assetResolver: AuthoredAssetResolver;
   readonly environmentController: EnvironmentSceneController;
+  readonly placedLightController: PlacedLightController;
   readonly landscapeController: LandscapeSceneController;
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;
@@ -75,6 +80,24 @@ export function createRenderView(options: RenderViewOptions): RenderView {
   const { engine, scene, compileProfile } = options;
   const logger = options.logger ?? engine.logger;
   const environmentController = createEnvironmentSceneController(scene);
+  const placedLightController = createPlacedLightController(
+    scene,
+    // A spot's projected texture, looked up in whatever content library the
+    // engine currently holds. Resolving late rather than at construction is
+    // what lets a texture swapped in the library reach a light already in the
+    // scene; the resolver caches, so the same definition hands back the same
+    // texture object and costs nothing to ask for again.
+    (textureDefinitionId) => {
+      const definition = engine
+        .getEnvironmentState()
+        .contentLibrary.textureDefinitions.find(
+          (candidate) => candidate.definitionId === textureDefinitionId
+        );
+      return definition
+        ? engine.assetResolver.resolveTextureDefinition(definition)
+        : null;
+    }
+  );
   const landscapeController = createLandscapeSceneController(
     scene,
     engine.assetResolver,
@@ -233,6 +256,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       return engine.assetResolver;
     },
     environmentController,
+    placedLightController,
     landscapeController,
     scene,
     get camera() {
@@ -303,6 +327,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       detachFromEngine();
       landscapeController.dispose();
       environmentController.dispose();
+      placedLightController.dispose();
       renderPipeline?.dispose();
       renderPipeline = null;
       appliedEnvironmentVersion = -1;

@@ -731,6 +731,12 @@ function materializeBuiltin(
     case "viewDirection":
       return positionViewDirection;
     case "sunDirection":
+      // Keyed to the environment's sun and nothing else. A graph that
+      // hand-rolls its own warm term off this vector -- the stylized grass and
+      // foliage surfaces do -- never responds to a light an author placed, and
+      // depending on the material may also pick that light up through three's
+      // automatic integration and brighten twice. Revisit when the look near a
+      // placed light reads wrong in a real region.
       return context.sunDirectionUniform;
     case "sphereNormal": {
       // KNOWN-BROKEN WORKAROUND. Falls back to `normalWorld`. See note below.

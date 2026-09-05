@@ -4,10 +4,12 @@ export {
 } from "./layout-camera-controller";
 
 export {
+  axisScaleBlockedBy,
   createLayoutWorkspace,
   markersStayAlone,
   singleTransformCommand,
   transformCommitFor,
+  type AxisScaleBlock,
   type TransformCommit,
   type LayoutWorkspaceConfig,
   type LayoutWorkspaceInstance
@@ -29,6 +31,7 @@ export {
 } from "./gizmo";
 
 export {
+  buildSceneTree,
   useLayoutWorkspaceView,
   type LayoutWorkspaceViewProps
 } from "./LayoutWorkspaceView";

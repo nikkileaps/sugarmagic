@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  createEmptyContentLibrarySnapshot,
   createDefaultRegion,
   migrateToScenes,
   normalizeScenes,
@@ -17,6 +18,10 @@ import {
   createDefaultGameProject,
   type Scene
 } from "@sugarmagic/domain";
+
+/** Nothing here is about textures, so an empty library is the right
+ *  answer: no texture reference can dangle against it. */
+const VALIDATION_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot("test");
 
 /** A pre-#226 Scene as it appears on disk. */
 function legacyScene(overrides: Record<string, unknown>): unknown {
@@ -143,7 +148,11 @@ describe("collapsing a Scene onto one region", () => {
     });
 
     // Studio has to open so the author can fix it; validation is the refusal.
-    const result = validateProjectContent(project, [region]);
+    const result = validateProjectContent(
+      project,
+      [region],
+      VALIDATION_CONTENT_LIBRARY
+    );
     expect(result.valid).toBe(false);
     expect(
       result.issues.some(
@@ -171,6 +180,9 @@ describe("collapsing a Scene onto one region", () => {
       displayName: "Only"
     });
 
-    expect(validateProjectContent(project, [region]).valid).toBe(false);
+    expect(
+      validateProjectContent(project, [region], VALIDATION_CONTENT_LIBRARY)
+        .valid
+    ).toBe(false);
   });
 });

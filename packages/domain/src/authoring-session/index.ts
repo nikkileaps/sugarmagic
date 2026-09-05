@@ -23,7 +23,11 @@ import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { WorldFlagDefinition } from "../world-flag";
-import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
+import type {
+  PlacedAssetInstance,
+  PlacedLight,
+  RegionDocument
+} from "../region-authoring";
 import {
   createItemPresenceId,
   createNPCPresenceId,
@@ -4348,10 +4352,14 @@ export function removeTextureDefinitionFromSession(
 }
 
 /**
- * True when a texture definition is referenced anywhere: material
- * texture maps, or texture-content / texture-mask layers in
- * inline surfaces (assets + landscape channels). Referenced
+ * True when a texture definition is referenced anywhere: material texture
+ * maps, texture-content / texture-mask layers in inline surfaces (assets +
+ * landscape channels), or a spot light shining through it. Referenced
  * textures cannot be deleted from the Library.
+ *
+ * EVERY REFERENCE TO A TEXTURE BELONGS IN HERE. This is what stands between
+ * an author and a dangling id; the save-time check that reports one is a
+ * backstop for files that already have it, not a second opinion.
  */
 export function textureDefinitionHasReferences(
   session: AuthoringSession,
@@ -4416,9 +4424,22 @@ export function textureDefinitionHasReferences(
   );
   if (usedByAsset) return true;
 
-  return getAllRegions(session).some((region) =>
+  const usedByLandscape = getAllRegions(session).some((region) =>
     region.landscape.surfaceSlots.some((channel) =>
       surfaceUsesTexture(channel.surface as Parameters<typeof surfaceUsesTexture>[0])
+    )
+  );
+  if (usedByLandscape) return true;
+
+  // Base-scope lights and every Scene's own, since a light placed in a Scene
+  // overlay names a texture just as firmly as one in the region.
+  const shinesThrough = (lights: readonly PlacedLight[]): boolean =>
+    lights.some((light) => light.spot?.projectedTextureId === definitionId);
+
+  return (
+    getAllRegions(session).some((region) => shinesThrough(region.placedLights)) ||
+    getAllScenes(session.gameProject.episodes).some((scene) =>
+      shinesThrough(scene.overlay.placedLights)
     )
   );
 }
