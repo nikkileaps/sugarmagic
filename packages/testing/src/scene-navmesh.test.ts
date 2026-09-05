@@ -15,6 +15,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
+  getAllEpisodes,
   applyCommand,
   collectFileBackedAssetPaths,
   createAuthoringSession,
@@ -45,7 +47,7 @@ function sessionWithScene() {
   return createAuthoringSession(
     {
       ...base,
-      episodes: base.episodes.map((episode) => ({
+      seasons: mapEpisodes(base.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene) => ({
           ...scene,
@@ -76,11 +78,11 @@ describe("a Scene's own navmesh", () => {
 
   it("is recorded on the Scene that owns it", () => {
     const session = sessionWithScene();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
 
     const next = applyCommand(session, setSceneNavMesh(sceneId, ARTIFACT));
 
-    expect(getAllScenes(next.gameProject.episodes)[0]!.navMesh).toEqual(
+    expect(getAllScenes(getAllEpisodes(next.gameProject.seasons))[0]!.navMesh).toEqual(
       ARTIFACT
     );
   });
@@ -90,17 +92,17 @@ describe("a Scene's own navmesh", () => {
     // Left behind, the Scene would keep pathing against a composition that
     // is no longer real.
     const session = sessionWithScene();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
     const baked = applyCommand(session, setSceneNavMesh(sceneId, ARTIFACT));
 
     const cleared = applyCommand(baked, setSceneNavMesh(sceneId, null));
 
-    expect(getAllScenes(cleared.gameProject.episodes)[0]!.navMesh).toBeNull();
+    expect(getAllScenes(getAllEpisodes(cleared.gameProject.seasons))[0]!.navMesh).toBeNull();
   });
 
   it("re-baking to the same artifact is not an edit", () => {
     const session = sessionWithScene();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
     const once = applyCommand(session, setSceneNavMesh(sceneId, ARTIFACT));
 
     const twice = applyCommand(once, setSceneNavMesh(sceneId, { ...ARTIFACT }));

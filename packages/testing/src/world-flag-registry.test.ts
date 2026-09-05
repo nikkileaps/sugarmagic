@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
+  getAllEpisodes,
   createDefaultGameProject,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -30,7 +32,7 @@ function projectNaming(regionId: string) {
   const base = createDefaultGameProject("Test", "test");
   return {
     ...base,
-    episodes: base.episodes.map((episode) => ({
+    seasons: mapEpisodes(base.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene) => ({ ...scene, regionId }))
     }))
@@ -234,7 +236,7 @@ describe("migrating flag references written before the registry", () => {
     return {
       ...base,
       // Quests are held by the Scene they happen in (epic #226).
-      episodes: base.episodes.map((episode) => ({
+      seasons: mapEpisodes(base.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene, index) => ({
           ...scene,
@@ -245,7 +247,7 @@ describe("migrating flag references written before the registry", () => {
   }
 
   function firstNodeOf(project: GameProject) {
-    return getAllQuestDefinitionsInEpisodes(project.episodes)[0]
+    return getAllQuestDefinitionsInEpisodes(getAllEpisodes(project.seasons))[0]
       .stageDefinitions[0].nodeDefinitions[0];
   }
 

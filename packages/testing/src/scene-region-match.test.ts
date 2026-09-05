@@ -11,6 +11,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
+  getAllEpisodes,
   applyCommand,
   createAuthoringSession,
   createDefaultGameProject,
@@ -103,7 +105,7 @@ describe("editing a Scene that happens somewhere else", () => {
     return createAuthoringSession(
       {
         ...base,
-        episodes: base.episodes.map((episode) => ({
+        seasons: mapEpisodes(base.seasons, (episode) => ({
           ...episode,
           scenes: episode.scenes.map((scene) => ({ ...scene, regionId: HERE }))
         }))
@@ -149,7 +151,7 @@ describe("editing a Scene that happens somewhere else", () => {
 
     expect(
       sceneOverlayForRegion(
-        next.gameProject.episodes[0]!.scenes[0]!,
+        getAllEpisodes(next.gameProject.seasons)[0]!.scenes[0]!,
         HERE
       )?.npcPresences.map((presence) => presence.presenceId)
     ).toEqual(["presence:1"]);

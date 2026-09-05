@@ -51,14 +51,20 @@ import {
   findEpisodeBySceneId,
   findSceneById,
   getAllScenes,
-  mapScenes,
-  normalizeEpisodes,
   type Episode,
   type EpisodeEndRouting,
   getAllQuestDefinitionsInEpisodes,
   findQuestDefinitionById,
   findSceneByQuestDefinitionId
 } from "../episodes";
+import {
+  findSeasonByEpisodeId,
+  findSeasonById,
+  getAllEpisodes,
+  mapEpisodes,
+  mapScenes,
+  type Season
+} from "../seasons";
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
@@ -290,7 +296,7 @@ export function getActiveRegion(
  * (Scene deleted); a migrated project always has >= 1.
  */
 export function getActiveScene(session: AuthoringSession): Scene | null {
-  const episodes = session.gameProject.episodes;
+  const episodes = getAllEpisodes(session.gameProject.seasons);
   return (
     findSceneById(episodes, session.activeSceneId) ??
     getAllScenes(episodes)[0] ??
@@ -300,7 +306,7 @@ export function getActiveScene(session: AuthoringSession): Scene | null {
 
 /** The Episode holding the author's active Scene. */
 export function getActiveEpisode(session: AuthoringSession): Episode | null {
-  const episodes = session.gameProject.episodes;
+  const episodes = getAllEpisodes(session.gameProject.seasons);
   return (
     findEpisodeBySceneId(episodes, getActiveScene(session)?.sceneId ?? null) ??
     episodes[0] ??
@@ -329,7 +335,7 @@ export function switchActiveScene(
   sceneId: string
 ): AuthoringSession {
   const exists = Boolean(
-    findSceneById(session.gameProject.episodes, sceneId)
+    findSceneById(getAllEpisodes(session.gameProject.seasons), sceneId)
   );
   if (!exists || session.activeSceneId === sceneId) return session;
   return {
@@ -462,7 +468,9 @@ export function getAllDialogueDefinitions(
 export function getAllQuestDefinitions(
   session: AuthoringSession
 ): QuestDefinition[] {
-  return getAllQuestDefinitionsInEpisodes(session.gameProject.episodes);
+  return getAllQuestDefinitionsInEpisodes(
+    getAllEpisodes(session.gameProject.seasons)
+  );
 }
 
 export function getAllMenuDefinitions(
@@ -502,7 +510,7 @@ export function createAuthoringSession(
   // `episodes` now, and a file old enough to carry that nest is not
   // converted, just overwritten.
   const migrated = migrateToScenes({
-    scenes: getAllScenes(normalizedProject.episodes),
+    scenes: getAllScenes(getAllEpisodes(normalizedProject.seasons)),
     regions
   });
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
@@ -528,9 +536,12 @@ export function createAuthoringSession(
   const migratedRegionIds = new Map(
     migrated.scenes.map((scene) => [scene.sceneId, scene.regionId])
   );
+  // Through `mapEpisodes` rather than a flat rebuild: this replaces a whole
+  // Scene list per Episode, so it is Episode-shaped rather than
+  // `mapScenes`-shaped, and every Episode has to stay in its Season.
   const projectWithScenes: GameProject = {
     ...normalizedProject,
-    episodes: normalizedProject.episodes.map((episode) => ({
+    seasons: mapEpisodes(normalizedProject.seasons, (episode) => ({
       ...episode,
       scenes: normalizeScenesForLoad(
         episode.scenes.map((scene) =>
@@ -558,7 +569,9 @@ export function createAuthoringSession(
     contentLibrary: normalizedContentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
-    activeSceneId: getAllScenes(projectWithScenes.episodes)[0]?.sceneId ?? null,
+    activeSceneId:
+      getAllScenes(getAllEpisodes(projectWithScenes.seasons))[0]?.sceneId ??
+      null,
     undoStack: [],
     redoStack: [],
     history: createEmptyHistory(),
@@ -813,7 +826,7 @@ function applyDeleteShaderGraphCommand(
     // in `regions` below).
     gameProject: {
       ...session.gameProject,
-      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+      seasons: mapScenes(session.gameProject.seasons, (scene) => ({
         ...scene,
         overlay: {
           ...scene.overlay,
@@ -1648,10 +1661,11 @@ function applyUpdateWorldFlagDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.map((definition) =>
-        definition.definitionId === command.payload.definitionId
-          ? { ...definition, ...command.payload.changes }
-          : definition
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.map(
+        (definition) =>
+          definition.definitionId === command.payload.definitionId
+            ? { ...definition, ...command.payload.changes }
+            : definition
       )
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
@@ -1746,7 +1760,7 @@ function applyCreateQuestDefinitionCommand(
   // Scene here used to mean a null or stale `activeSceneId` matched no
   // Scene and the new quest was silently discarded -- created, then gone.
   const target = findSceneById(
-    session.gameProject.episodes,
+    getAllEpisodes(session.gameProject.seasons),
     command.payload.sceneId
   );
   if (!target) {
@@ -1762,7 +1776,7 @@ function applyCreateQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      episodes: mapScenes(session.gameProject.episodes, (scene) =>
+      seasons: mapScenes(session.gameProject.seasons, (scene) =>
         scene.sceneId === target.sceneId
           ? {
               ...scene,
@@ -1933,7 +1947,7 @@ function applyUpdateQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+      seasons: mapScenes(session.gameProject.seasons, (scene) => ({
         ...scene,
         questDefinitions: scene.questDefinitions.map((definition) =>
           definition.definitionId === command.payload.definition.definitionId
@@ -2076,7 +2090,7 @@ function applyDeleteQuestDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+      seasons: mapScenes(session.gameProject.seasons, (scene) => ({
         ...scene,
         questDefinitions: scene.questDefinitions.filter(
           (definition) =>
@@ -2573,7 +2587,10 @@ export function applyCommand(
 
   if (command.kind === "PromotePresenceToRegion") {
     const { sceneId, presenceId } = command.payload;
-    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    const scene = findSceneById(
+      getAllEpisodes(session.gameProject.seasons),
+      sceneId
+    );
     const region = scene ? session.regions.get(scene.regionId) : null;
     if (!scene || !region) return session;
 
@@ -2606,9 +2623,9 @@ export function applyCommand(
     });
 
     return {
-      ...withEpisodes(
-        {  ...session, regions: nextRegions },
-        mapScenes(session.gameProject.episodes, (entry) =>
+      ...withSeasons(
+        { ...session, regions: nextRegions },
+        mapScenes(session.gameProject.seasons, (entry) =>
           entry.sceneId === sceneId
             ? {
                 ...entry,
@@ -2638,15 +2655,18 @@ export function applyCommand(
 
   if (command.kind === "SetSceneSuppression") {
     const { sceneId, regionOwnedId, suppressed } = command.payload;
-    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    const scene = findSceneById(
+      getAllEpisodes(session.gameProject.seasons),
+      sceneId
+    );
     if (!scene) return session;
     const already = scene.overlay.suppressedRegionIds.includes(regionOwnedId);
     if (already === suppressed) return session;
     const transaction = createTransactionForCommand(command, [regionOwnedId]);
     return {
-      ...withEpisodes(
+      ...withSeasons(
         session,
-        mapScenes(session.gameProject.episodes, (entry) =>
+        mapScenes(session.gameProject.seasons, (entry) =>
           entry.sceneId === sceneId
             ? {
                 ...entry,
@@ -2671,7 +2691,10 @@ export function applyCommand(
 
   if (command.kind === "SetSceneNavMesh") {
     const { sceneId, navMesh } = command.payload;
-    const scene = findSceneById(session.gameProject.episodes, sceneId);
+    const scene = findSceneById(
+      getAllEpisodes(session.gameProject.seasons),
+      sceneId
+    );
     if (!scene) return session;
     // A bake that produced the same artifact is not an edit, so it does not
     // push an undo step or dirty the project.
@@ -2683,9 +2706,9 @@ export function applyCommand(
     }
     const transaction = createTransactionForCommand(command, [sceneId]);
     return {
-      ...withEpisodes(
+      ...withSeasons(
         session,
-        mapScenes(session.gameProject.episodes, (entry) =>
+        mapScenes(session.gameProject.seasons, (entry) =>
           entry.sceneId === sceneId ? { ...entry, navMesh } : entry
         )
       ),
@@ -2793,7 +2816,7 @@ export function applyCommand(
         ? session.gameProject
         : {
             ...session.gameProject,
-            episodes: mapScenes(session.gameProject.episodes, (scene) =>
+            seasons: mapScenes(session.gameProject.seasons, (scene) =>
               scene.sceneId === result.scene.sceneId ? result.scene : scene
             )
           },
@@ -2878,15 +2901,34 @@ export function addRegionToSession(
 // addRegionToSession: structural mutations outside the semantic
 // command/undo stream) ---
 
-function withEpisodes(
+function withSeasons(
   session: AuthoringSession,
-  episodes: Episode[]
+  seasons: Season[]
 ): AuthoringSession {
   return {
     ...session,
-    gameProject: { ...session.gameProject, episodes },
+    gameProject: { ...session.gameProject, seasons },
     isDirty: true
   };
+}
+
+/**
+ * Rewrite one Season's Episode list, leaving the others alone.
+ * Every structural edit to a single Season's run of Episodes goes
+ * through here, so no caller rebuilds the campaign from a flat
+ * Episode list and drops the grouping on the way.
+ */
+function withSeasonEpisodes(
+  session: AuthoringSession,
+  seasonId: string,
+  episodes: Episode[]
+): AuthoringSession {
+  return withSeasons(
+    session,
+    session.gameProject.seasons.map((season) =>
+      season.seasonId === seasonId ? { ...season, episodes } : season
+    )
+  );
 }
 
 /** Rewrite one Episode's Scene list, leaving the others alone. */
@@ -2895,9 +2937,9 @@ function withEpisodeScenes(
   episodeId: string,
   scenes: Scene[]
 ): AuthoringSession {
-  return withEpisodes(
+  return withSeasons(
     session,
-    session.gameProject.episodes.map((episode) =>
+    mapEpisodes(session.gameProject.seasons, (episode) =>
       episode.episodeId === episodeId ? { ...episode, scenes } : episode
     )
   );
@@ -2914,15 +2956,27 @@ function withEpisodeScenes(
  */
 export function addEpisodeToSession(
   session: AuthoringSession,
-  options: { displayName: string }
+  options: { displayName: string; seasonId?: string }
 ): AuthoringSession {
+  // Which Season it lands in: the one named, else the last, which is
+  // where "append to the end of the campaign" puts it. Studio has no
+  // Season control yet, so today every call takes the default.
+  const seasons = session.gameProject.seasons;
+  const target =
+    findSeasonById(seasons, options.seasonId ?? null) ??
+    seasons[seasons.length - 1];
+  if (!target) return session;
+
   const scene = createDefaultScene({ displayName: "Scene 1" });
   const episode = createDefaultEpisode({
     displayName: options.displayName.trim() || "Untitled Episode",
     scenes: [scene]
   });
   return {
-    ...withEpisodes(session, [...session.gameProject.episodes, episode]),
+    ...withSeasonEpisodes(session, target.seasonId, [
+      ...target.episodes,
+      episode
+    ]),
     activeSceneId: scene.sceneId
   };
 }
@@ -2937,34 +2991,46 @@ export function deleteEpisodeFromSession(
   session: AuthoringSession,
   episodeId: string
 ): AuthoringSession {
-  const episodes = session.gameProject.episodes;
-  if (episodes.length <= 1) return session;
-  const remaining = episodes.filter(
+  // Guarded on the OWNING Season's count, not the project's: a Season may
+  // never be empty, and a project-wide count would happily empty Season 2
+  // while Season 1 still had Episodes.
+  const owner = findSeasonByEpisodeId(session.gameProject.seasons, episodeId);
+  if (!owner || owner.episodes.length <= 1) return session;
+
+  const remaining = owner.episodes.filter(
     (episode) => episode.episodeId !== episodeId
   );
-  if (remaining.length === episodes.length) return session;
-  const next = withEpisodes(session, remaining);
+  const next = withSeasonEpisodes(session, owner.seasonId, remaining);
+  const remainingEpisodes = getAllEpisodes(next.gameProject.seasons);
   const activeSurvives = Boolean(
-    findSceneById(remaining, session.activeSceneId)
+    findSceneById(remainingEpisodes, session.activeSceneId)
   );
   return {
     ...next,
     activeSceneId: activeSurvives
       ? session.activeSceneId
-      : getAllScenes(remaining)[0]?.sceneId ?? null
+      : (getAllScenes(remainingEpisodes)[0]?.sceneId ?? null)
   };
 }
 
 /**
- * Move an Episode one step up or down the campaign. Moving the
- * entry IS the reorder — nothing is renumbered afterwards.
+ * Move an Episode one step up or down INSIDE its Season. Moving
+ * the entry IS the reorder — nothing is renumbered afterwards.
+ *
+ * A step never crosses a Season boundary: at either end of the
+ * Season's list this is a no-op. Letting it cross would silently
+ * re-home the Episode and slip past the rule that a Season cannot
+ * be emptied. Changing which Season owns an Episode is its own
+ * operation.
  */
 export function reorderEpisodeInSession(
   session: AuthoringSession,
   episodeId: string,
   direction: "up" | "down"
 ): AuthoringSession {
-  const episodes = [...session.gameProject.episodes];
+  const owner = findSeasonByEpisodeId(session.gameProject.seasons, episodeId);
+  if (!owner) return session;
+  const episodes = [...owner.episodes];
   const index = episodes.findIndex(
     (episode) => episode.episodeId === episodeId
   );
@@ -2976,7 +3042,7 @@ export function reorderEpisodeInSession(
     episodes[targetIndex]!,
     episodes[index]!
   ];
-  return withEpisodes(session, episodes);
+  return withSeasonEpisodes(session, owner.seasonId, episodes);
 }
 
 /**
@@ -2992,7 +3058,7 @@ export function moveSceneToEpisodeInSession(
   sceneId: string,
   toEpisodeId: string
 ): AuthoringSession {
-  const episodes = session.gameProject.episodes;
+  const episodes = getAllEpisodes(session.gameProject.seasons);
   const from = findEpisodeBySceneId(episodes, sceneId);
   const scene = findSceneById(episodes, sceneId);
   const to = episodes.find((episode) => episode.episodeId === toEpisodeId);
@@ -3000,15 +3066,15 @@ export function moveSceneToEpisodeInSession(
     return session;
   }
   if (from.scenes.length <= 1) return session;
-  return withEpisodes(
+  // Through `mapEpisodes` so both Episodes stay in the Season that owns
+  // them; the two may be in different Seasons.
+  return withSeasons(
     session,
-    episodes.map((episode) => {
+    mapEpisodes(session.gameProject.seasons, (episode) => {
       if (episode.episodeId === from.episodeId) {
         return {
           ...episode,
-          scenes: episode.scenes.filter(
-            (entry) => entry.sceneId !== sceneId
-          )
+          scenes: episode.scenes.filter((entry) => entry.sceneId !== sceneId)
         };
       }
       if (episode.episodeId === to.episodeId) {
@@ -3033,15 +3099,18 @@ export function moveQuestToSceneInSession(
   questDefinitionId: string,
   toSceneId: string
 ): AuthoringSession {
-  const episodes = session.gameProject.episodes;
+  // Both views: the flat run to look the quest and Scenes up, the Seasons
+  // themselves to write back through without flattening the campaign.
+  const seasons = session.gameProject.seasons;
+  const episodes = getAllEpisodes(seasons);
   const quest = findQuestDefinitionById(episodes, questDefinitionId);
   const from = findSceneByQuestDefinitionId(episodes, questDefinitionId);
   const to = findSceneById(episodes, toSceneId);
   if (!quest || !to || from?.sceneId === toSceneId) return session;
 
-  return withEpisodes(
+  return withSeasons(
     session,
-    mapScenes(episodes, (scene) => {
+    mapScenes(seasons, (scene) => {
       const without = scene.questDefinitions.filter(
         (entry) => entry.definitionId !== questDefinitionId
       );
@@ -3076,20 +3145,24 @@ export function updateEpisodeInSession(
   patch: Partial<
     Pick<
       Episode,
-      "displayName" | "description" | "notes" | "unlockCondition" | "transitionConfig"
+      | "displayName"
+      | "description"
+      | "notes"
+      | "unlockCondition"
+      | "transitionConfig"
     >
   >
 ): AuthoringSession {
   if (
-    !session.gameProject.episodes.some(
+    !getAllEpisodes(session.gameProject.seasons).some(
       (episode) => episode.episodeId === episodeId
     )
   ) {
     return session;
   }
-  return withEpisodes(
+  return withSeasons(
     session,
-    session.gameProject.episodes.map((episode) =>
+    mapEpisodes(session.gameProject.seasons, (episode) =>
       episode.episodeId === episodeId ? { ...episode, ...patch } : episode
     )
   );
@@ -3110,7 +3183,7 @@ export function addSceneToSession(
   options: { displayName: string; episodeId?: string; regionId?: string }
 ): AuthoringSession {
   const episode = options.episodeId
-    ? session.gameProject.episodes.find(
+    ? getAllEpisodes(session.gameProject.seasons).find(
         (entry) => entry.episodeId === options.episodeId
       )
     : getActiveEpisode(session);
@@ -3152,10 +3225,11 @@ export function updateSceneInSession(
     >
   >
 ): AuthoringSession {
-  if (!findSceneById(session.gameProject.episodes, sceneId)) return session;
-  return withEpisodes(
+  if (!findSceneById(getAllEpisodes(session.gameProject.seasons), sceneId))
+    return session;
+  return withSeasons(
     session,
-    mapScenes(session.gameProject.episodes, (scene) =>
+    mapScenes(session.gameProject.seasons, (scene) =>
       scene.sceneId === sceneId ? { ...scene, ...patch } : scene
     )
   );
@@ -3169,7 +3243,7 @@ export function deleteSceneFromSession(
   session: AuthoringSession,
   sceneId: string
 ): AuthoringSession {
-  const episodes = session.gameProject.episodes;
+  const episodes = getAllEpisodes(session.gameProject.seasons);
   if (getAllScenes(episodes).length <= 1) return session;
   const owner = findEpisodeBySceneId(episodes, sceneId);
   if (!owner) return session;
@@ -3184,7 +3258,8 @@ export function deleteSceneFromSession(
     ...next,
     activeSceneId:
       session.activeSceneId === sceneId
-        ? getAllScenes(next.gameProject.episodes)[0]?.sceneId ?? null
+        ? (getAllScenes(getAllEpisodes(next.gameProject.seasons))[0]?.sceneId ??
+          null)
         : session.activeSceneId
   };
 }
@@ -3202,7 +3277,10 @@ export function reorderSceneInSession(
   sceneId: string,
   direction: "up" | "down"
 ): AuthoringSession {
-  const owner = findEpisodeBySceneId(session.gameProject.episodes, sceneId);
+  const owner = findEpisodeBySceneId(
+    getAllEpisodes(session.gameProject.seasons),
+    sceneId
+  );
   if (!owner) return session;
   const scenes = [...owner.scenes];
   const index = scenes.findIndex((scene) => scene.sceneId === sceneId);
@@ -3240,9 +3318,7 @@ export function convertAssetScopeInSession(
   const source = inBase ?? inOverlay;
   if (!source) return session;
 
-  const destinationFolders = inBase
-    ? overlay?.folders ?? []
-    : region.folders;
+  const destinationFolders = inBase ? (overlay?.folders ?? []) : region.folders;
   const moved: PlacedAssetInstance = {
     ...source,
     parentFolderId: destinationFolders.some(
@@ -3262,7 +3338,7 @@ export function convertAssetScopeInSession(
       : [...region.placedAssets, moved]
   });
 
-  const newEpisodes = mapScenes(session.gameProject.episodes, (scene) => {
+  const newSeasons = mapScenes(session.gameProject.seasons, (scene) => {
     if (scene.sceneId !== activeScene.sceneId) return scene;
     const current = scene.overlay;
     return {
@@ -3279,7 +3355,7 @@ export function convertAssetScopeInSession(
   });
 
   return {
-    ...withEpisodes(session, newEpisodes),
+    ...withSeasons(session, newSeasons),
     regions: newRegions
   };
 }
@@ -3301,11 +3377,11 @@ export function copyOverlayEntryToScene(
 ): AuthoringSession {
   if (options.fromSceneId === options.toSceneId) return session;
   const fromScene = findSceneById(
-    session.gameProject.episodes,
+    getAllEpisodes(session.gameProject.seasons),
     options.fromSceneId
   );
   const toScene = findSceneById(
-    session.gameProject.episodes,
+    getAllEpisodes(session.gameProject.seasons),
     options.toSceneId
   );
   // Overlay content only, deliberately. A region-owned resident or prop is
@@ -3384,9 +3460,9 @@ export function copyOverlayEntryToScene(
   }
 
   if (!nextTarget) return session;
-  return withEpisodes(
+  return withSeasons(
     session,
-    mapScenes(session.gameProject.episodes, (scene) =>
+    mapScenes(session.gameProject.seasons, (scene) =>
       scene.sceneId === options.toSceneId
         ? { ...scene, overlay: nextTarget! }
         : scene
@@ -3687,7 +3763,10 @@ export function removeSoundCueDefinitionFromSession(
 }
 
 /** Whether a quest action plays or stops the given sound cue. */
-function namesCue(action: QuestActionDefinition, cueDefinitionId: string): boolean {
+function namesCue(
+  action: QuestActionDefinition,
+  cueDefinitionId: string
+): boolean {
   return (
     (action.type === "playCue" || action.type === "stopCue") &&
     action.cueDefinitionId === cueDefinitionId
@@ -3923,9 +4002,7 @@ export function updateAnimationLibraryDefinitionInSession(
       ...session.contentLibrary,
       animationLibraryDefinitions: (
         session.contentLibrary.animationLibraryDefinitions ?? []
-      ).map((d) =>
-        d.definitionId === definitionId ? { ...d, ...patch } : d
-      )
+      ).map((d) => (d.definitionId === definitionId ? { ...d, ...patch } : d))
     },
     isDirty: true
   };
@@ -4393,14 +4470,15 @@ export function textureDefinitionHasReferences(
     }
     return (layer.masks ?? []).some(
       (mask) =>
-        mask.kind === "texture" &&
-        mask.textureDefinitionId === definitionId
+        mask.kind === "texture" && mask.textureDefinitionId === definitionId
     );
   };
-  const surfaceUsesTexture = (binding: {
-    kind: string;
-    surface?: { layers: readonly unknown[] };
-  } | null): boolean =>
+  const surfaceUsesTexture = (
+    binding: {
+      kind: string;
+      surface?: { layers: readonly unknown[] };
+    } | null
+  ): boolean =>
     binding?.kind === "inline" &&
     Boolean(
       binding.surface?.layers.some((layer) =>
@@ -4419,14 +4497,18 @@ export function textureDefinitionHasReferences(
   const usedByAsset = session.contentLibrary.assetDefinitions.some(
     (assetDefinition) =>
       assetDefinition.surfaceSlots.some((slot) =>
-        surfaceUsesTexture(slot.surface as Parameters<typeof surfaceUsesTexture>[0])
+        surfaceUsesTexture(
+          slot.surface as Parameters<typeof surfaceUsesTexture>[0]
+        )
       )
   );
   if (usedByAsset) return true;
 
   const usedByLandscape = getAllRegions(session).some((region) =>
     region.landscape.surfaceSlots.some((channel) =>
-      surfaceUsesTexture(channel.surface as Parameters<typeof surfaceUsesTexture>[0])
+      surfaceUsesTexture(
+        channel.surface as Parameters<typeof surfaceUsesTexture>[0]
+      )
     )
   );
   if (usedByLandscape) return true;
@@ -4437,8 +4519,10 @@ export function textureDefinitionHasReferences(
     lights.some((light) => light.spot?.projectedTextureId === definitionId);
 
   return (
-    getAllRegions(session).some((region) => shinesThrough(region.placedLights)) ||
-    getAllScenes(session.gameProject.episodes).some((scene) =>
+    getAllRegions(session).some((region) =>
+      shinesThrough(region.placedLights)
+    ) ||
+    getAllScenes(getAllEpisodes(session.gameProject.seasons)).some((scene) =>
       shinesThrough(scene.overlay.placedLights)
     )
   );
@@ -4497,10 +4581,11 @@ export function assetDefinitionHasSceneReferences(
     )
   );
   if (inBase) return true;
-  return getAllScenes(session.gameProject.episodes).some((scene) =>
-    scene.overlay.placedAssets.some(
-      (asset) => asset.assetDefinitionId === definitionId
-    )
+  return getAllScenes(getAllEpisodes(session.gameProject.seasons)).some(
+    (scene) =>
+      scene.overlay.placedAssets.some(
+        (asset) => asset.assetDefinitionId === definitionId
+      )
   );
 }
 

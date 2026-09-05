@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  getAllEpisodes,
   addSceneToSession,
   copyOverlayEntryToScene,
   convertAssetScopeInSession,
@@ -35,7 +36,7 @@ import {
 
 /** Every Scene in the session, flattened across Episodes. */
 function scenesOf(session: AuthoringSession) {
-  return getAllScenes(session.gameProject.episodes);
+  return getAllScenes(getAllEpisodes(session.gameProject.seasons));
 }
 
 function makeSession(): AuthoringSession {
@@ -70,9 +71,11 @@ describe("Scene CRUD", () => {
     expect(added.overlay.placedAssets).toEqual([]);
     // Appending IS the ordering — the new Scene lands last in its
     // Episode, with no order number to compute.
-    expect(session.gameProject.episodes).toHaveLength(1);
+    expect(getAllEpisodes(session.gameProject.seasons)).toHaveLength(1);
     expect(
-      session.gameProject.episodes[0]!.scenes.map((scene) => scene.displayName)
+      getAllEpisodes(session.gameProject.seasons)[0]!.scenes.map(
+        (scene) => scene.displayName
+      )
     ).toEqual(["Scene 1", "Scene 2"]);
     expect(session.activeSceneId).toBe(added.sceneId);
     expect(session.isDirty).toBe(true);
@@ -202,13 +205,11 @@ describe("scope conversion", () => {
       instanceId: "asset:statue"
     });
     expect(
-      session.regions.get("region:town")!.placedAssets.map(
-        (asset) => asset.instanceId
-      )
+      session.regions
+        .get("region:town")!
+        .placedAssets.map((asset) => asset.instanceId)
     ).toEqual(["asset:statue"]);
-    expect(
-      getActiveScene(session)!.overlay.placedAssets
-    ).toHaveLength(0);
+    expect(getActiveScene(session)!.overlay.placedAssets).toHaveLength(0);
     expect(getActiveScene(session)!.sceneId).toBe(sceneId);
   });
 
@@ -245,29 +246,29 @@ describe("cross-Scene copy", () => {
       ...session,
       gameProject: {
         ...session.gameProject,
-        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        seasons: mapScenes(session.gameProject.seasons, (scene) => ({
           ...scene,
           regionId: "region:town",
           overlay: {
-              suppressedRegionIds: [],
-              assetAppearanceOverrides: {},
-              folders: [],
-              placedAssets: [],
-              placedLights: [],
-              playerPresence: null,
-              npcPresences: [
-                createRegionNPCPresence({
-                  presenceId: "npc:testy",
-                  npcDefinitionId: "def:testy",
-                  transform: {
-                    position: [3, 0, 3],
-                    rotation: [0, 0, 0],
-                    scale: [1, 1, 1]
-                  }
-                })
-              ],
-              itemPresences: []
-            }
+            suppressedRegionIds: [],
+            assetAppearanceOverrides: {},
+            folders: [],
+            placedAssets: [],
+            placedLights: [],
+            playerPresence: null,
+            npcPresences: [
+              createRegionNPCPresence({
+                presenceId: "npc:testy",
+                npcDefinitionId: "def:testy",
+                transform: {
+                  position: [3, 0, 3],
+                  rotation: [0, 0, 0],
+                  scale: [1, 1, 1]
+                }
+              })
+            ],
+            itemPresences: []
+          }
         }))
       }
     };
@@ -293,9 +294,7 @@ describe("cross-Scene copy", () => {
     const sceneOne = scenesOf(session).find(
       (scene) => scene.sceneId === sceneOneId
     )!;
-    expect(
-      sceneOne.overlay.npcPresences[0]!.presenceId
-    ).toBe("npc:testy");
+    expect(sceneOne.overlay.npcPresences[0]!.presenceId).toBe("npc:testy");
   });
 
   it("never clobbers an existing player spawn in the destination", () => {
@@ -305,26 +304,26 @@ describe("cross-Scene copy", () => {
       ...session,
       gameProject: {
         ...session.gameProject,
-        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        seasons: mapScenes(session.gameProject.seasons, (scene) => ({
           ...scene,
           regionId: "region:town",
           overlay: {
-              suppressedRegionIds: [],
-              assetAppearanceOverrides: {},
-              folders: [],
-              placedAssets: [],
-              placedLights: [],
-              playerPresence: {
-                presenceId: "player:1",
-                transform: {
-                  position: [1, 0, 1],
-                  rotation: [0, 0, 0],
-                  scale: [1, 1, 1]
-                }
-              },
-              npcPresences: [],
-              itemPresences: []
-            }
+            suppressedRegionIds: [],
+            assetAppearanceOverrides: {},
+            folders: [],
+            placedAssets: [],
+            placedLights: [],
+            playerPresence: {
+              presenceId: "player:1",
+              transform: {
+                position: [1, 0, 1],
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1]
+              }
+            },
+            npcPresences: [],
+            itemPresences: []
+          }
         }))
       }
     };
@@ -351,8 +350,8 @@ describe("cross-Scene copy", () => {
       id: "player:1"
     });
     expect(
-      scenesOf(again).find((scene) => scene.sceneId === sceneTwoId)!
-        .overlay.playerPresence
+      scenesOf(again).find((scene) => scene.sceneId === sceneTwoId)!.overlay
+        .playerPresence
     ).toEqual(firstCopy);
   });
 
@@ -363,24 +362,24 @@ describe("cross-Scene copy", () => {
       ...session,
       gameProject: {
         ...session.gameProject,
-        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
+        seasons: mapScenes(session.gameProject.seasons, (scene) => ({
           ...scene,
           regionId: "region:town",
           overlay: {
-              suppressedRegionIds: [],
-              assetAppearanceOverrides: {},
-              folders: [],
-              placedAssets: [],
-              placedLights: [],
-              playerPresence: null,
-              npcPresences: [
-                createRegionNPCPresence({
-                  presenceId: "npc:testy",
-                  npcDefinitionId: "def:testy"
-                })
-              ],
-              itemPresences: []
-            }
+            suppressedRegionIds: [],
+            assetAppearanceOverrides: {},
+            folders: [],
+            placedAssets: [],
+            placedLights: [],
+            playerPresence: null,
+            npcPresences: [
+              createRegionNPCPresence({
+                presenceId: "npc:testy",
+                npcDefinitionId: "def:testy"
+              })
+            ],
+            itemPresences: []
+          }
         }))
       }
     };

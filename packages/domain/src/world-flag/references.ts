@@ -2,7 +2,8 @@ import type {
   DialogueCondition,
   DialogueDefinition
 } from "../dialogue-definition";
-import { getAllQuestDefinitionsInEpisodes, mapScenes } from "../episodes";
+import { getAllQuestDefinitionsInEpisodes } from "../episodes";
+import { getAllEpisodes, mapScenes } from "../seasons";
 import type { GameProject } from "../game-project";
 import type {
   QuestActionDefinition,
@@ -154,50 +155,52 @@ export function mapWorldFlagReferences(
   }
 
   const rewrittenQuests = new Map<string, QuestDefinition>(
-    getAllQuestDefinitionsInEpisodes(gameProject.episodes).map((quest) => [
-      quest.definitionId,
-      {
-      ...quest,
-      startCondition: questCondition(quest.startCondition, {
-        where: `quest "${quest.displayName}" start condition`,
-        target: {
-          kind: "quest-start-condition" as const,
-          questDefinitionId: quest.definitionId
+    getAllQuestDefinitionsInEpisodes(getAllEpisodes(gameProject.seasons)).map(
+      (quest) => [
+        quest.definitionId,
+        {
+          ...quest,
+          startCondition: questCondition(quest.startCondition, {
+            where: `quest "${quest.displayName}" start condition`,
+            target: {
+              kind: "quest-start-condition" as const,
+              questDefinitionId: quest.definitionId
+            }
+          }),
+          stageDefinitions: quest.stageDefinitions.map((stage) => ({
+            ...stage,
+            nodeDefinitions: stage.nodeDefinitions.map((node) => {
+              const where = `quest "${quest.displayName}" node "${node.displayName}"`;
+              const target = {
+                kind: "quest-node" as const,
+                questDefinitionId: quest.definitionId,
+                stageId: stage.stageId,
+                nodeId: node.nodeId
+              };
+              return {
+                ...node,
+                condition: questCondition(node.condition, {
+                  where: `${where} condition`,
+                  target
+                }),
+                onEnterActions: node.onEnterActions.map((action) =>
+                  questAction(action, {
+                    where: `${where} on-enter action`,
+                    target
+                  })
+                ),
+                onCompleteActions: node.onCompleteActions.map((action) =>
+                  questAction(action, {
+                    where: `${where} on-complete action`,
+                    target
+                  })
+                )
+              };
+            })
+          }))
         }
-      }),
-      stageDefinitions: quest.stageDefinitions.map((stage) => ({
-        ...stage,
-        nodeDefinitions: stage.nodeDefinitions.map((node) => {
-          const where = `quest "${quest.displayName}" node "${node.displayName}"`;
-          const target = {
-            kind: "quest-node" as const,
-            questDefinitionId: quest.definitionId,
-            stageId: stage.stageId,
-            nodeId: node.nodeId
-          };
-          return {
-            ...node,
-            condition: questCondition(node.condition, {
-              where: `${where} condition`,
-              target
-            }),
-            onEnterActions: node.onEnterActions.map((action) =>
-              questAction(action, {
-                where: `${where} on-enter action`,
-                target
-              })
-            ),
-            onCompleteActions: node.onCompleteActions.map((action) =>
-              questAction(action, {
-                where: `${where} on-complete action`,
-                target
-              })
-            )
-          };
-        })
-      }))
-      }
-    ])
+      ]
+    )
   );
 
   // A dialogue's conditions hang off each node's outgoing edges.
@@ -309,7 +312,7 @@ export function mapWorldFlagReferences(
   // A Scene's own placements carry conditions too; they live on its
   // overlay, inside the Episode that owns the Scene. The region's
   // residents are walked above.
-  const episodes = mapScenes(gameProject.episodes, (scene) => ({
+  const seasons = mapScenes(gameProject.seasons, (scene) => ({
     ...scene,
     overlay: {
       ...scene.overlay,
@@ -339,7 +342,7 @@ export function mapWorldFlagReferences(
       spellDefinitions,
       // Quests go back into the Scenes that hold them: this walk rewrote
       // them in place, and there is no flat list to write instead.
-      episodes: mapScenes(episodes, (scene) => ({
+      seasons: mapScenes(seasons, (scene) => ({
         ...scene,
         questDefinitions: scene.questDefinitions.map(
           (quest) => rewrittenQuests.get(quest.definitionId) ?? quest

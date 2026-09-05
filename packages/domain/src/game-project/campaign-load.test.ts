@@ -13,19 +13,21 @@
  *      from, so a load that reorders is unrecoverable damage. An
  *      earlier version of this file tested only the normalizer and
  *      missed a reorder in the real load path entirely.
- *   2. A project with no campaign gets one Episode holding one
- *      Scene, so Studio always has an active Scene and the runtime
- *      always has something to boot into.
+ *   2. A project with no campaign gets one Season holding one
+ *      Episode holding one Scene, so Studio always has an active
+ *      Scene and the runtime always has something to boot into.
  *
  * Status: active
  */
 
 import { describe, expect, it } from "vitest";
 import {
+  getAllEpisodes,
   createAuthoringSession,
   createDefaultGameProject,
   createDefaultRegion,
   createDefaultEpisode,
+  createDefaultSeason,
   createDefaultScene,
   getAllScenes,
   normalizeGameProject
@@ -35,27 +37,29 @@ const REGIONS = [
   createDefaultRegion({ regionId: "region:town", displayName: "Town" })
 ];
 
+const CAMPAIGN_EPISODES = [
+  createDefaultEpisode({
+    episodeId: "e:second",
+    scenes: [
+      createDefaultScene({ sceneId: "s:b2", displayName: "B2" }),
+      createDefaultScene({ sceneId: "s:b1", displayName: "B1" })
+    ]
+  }),
+  createDefaultEpisode({
+    episodeId: "e:first",
+    scenes: [
+      createDefaultScene({ sceneId: "s:a3", displayName: "A3" }),
+      createDefaultScene({ sceneId: "s:a1", displayName: "A1" }),
+      createDefaultScene({ sceneId: "s:a2", displayName: "A2" })
+    ]
+  })
+];
+
 function projectWithEpisodes() {
   return {
     ...createDefaultGameProject("Probe", "probe"),
     regionRegistry: [{ regionId: "region:town" }],
-    episodes: [
-      createDefaultEpisode({
-        episodeId: "e:second",
-        scenes: [
-          createDefaultScene({ sceneId: "s:b2", displayName: "B2" }),
-          createDefaultScene({ sceneId: "s:b1", displayName: "B1" })
-        ]
-      }),
-      createDefaultEpisode({
-        episodeId: "e:first",
-        scenes: [
-          createDefaultScene({ sceneId: "s:a3", displayName: "A3" }),
-          createDefaultScene({ sceneId: "s:a1", displayName: "A1" }),
-          createDefaultScene({ sceneId: "s:a2", displayName: "A2" })
-        ]
-      })
-    ]
+    seasons: [createDefaultSeason({ episodes: CAMPAIGN_EPISODES })]
   };
 }
 
@@ -64,12 +68,13 @@ describe("campaign order round-trip", () => {
     const reloaded = normalizeGameProject(
       JSON.parse(JSON.stringify(projectWithEpisodes())) as never
     );
-    expect(reloaded.episodes.map((episode) => episode.episodeId)).toEqual([
-      "e:second",
-      "e:first"
-    ]);
     expect(
-      getAllScenes(reloaded.episodes).map((scene) => scene.displayName)
+      getAllEpisodes(reloaded.seasons).map((episode) => episode.episodeId)
+    ).toEqual(["e:second", "e:first"]);
+    expect(
+      getAllScenes(getAllEpisodes(reloaded.seasons)).map(
+        (scene) => scene.displayName
+      )
     ).toEqual(["B2", "B1", "A3", "A1", "A2"]);
   });
 
@@ -81,10 +86,12 @@ describe("campaign order round-trip", () => {
       REGIONS
     );
     expect(
-      session.gameProject.episodes.map((episode) => episode.episodeId)
+      getAllEpisodes(session.gameProject.seasons).map(
+        (episode) => episode.episodeId
+      )
     ).toEqual(["e:second", "e:first"]);
     expect(
-      getAllScenes(session.gameProject.episodes).map(
+      getAllScenes(getAllEpisodes(session.gameProject.seasons)).map(
         (scene) => scene.displayName
       )
     ).toEqual(["B2", "B1", "A3", "A1", "A2"]);
@@ -96,40 +103,49 @@ describe("campaign order round-trip", () => {
   });
 });
 
+/** A project file carrying no campaign key of any generation. */
+function projectWithNoCampaign(): Record<string, unknown> {
+  const bare = createDefaultGameProject("Probe", "probe") as unknown as Record<
+    string,
+    unknown
+  >;
+  delete bare.seasons;
+  delete bare.episodes;
+  return bare;
+}
+
 describe("a project with no campaign gets a floor", () => {
-  it("normalizeGameProject supplies one Episode holding one Scene", () => {
-    const bare = createDefaultGameProject("Probe", "probe") as unknown as Record<
-      string,
-      unknown
-    >;
-    delete bare.episodes;
-    const project = normalizeGameProject(bare as never);
-    expect(project.episodes).toHaveLength(1);
-    expect(project.episodes[0]!.scenes).toHaveLength(1);
+  it("normalizeGameProject supplies one Season, Episode and Scene", () => {
+    const project = normalizeGameProject(projectWithNoCampaign() as never);
+    expect(project.seasons).toHaveLength(1);
+    expect(getAllEpisodes(project.seasons)).toHaveLength(1);
+    expect(getAllEpisodes(project.seasons)[0]!.scenes).toHaveLength(1);
   });
 
-  it("an empty episodes array is treated as no campaign", () => {
+  it("empty campaign arrays are treated as no campaign", () => {
     const project = normalizeGameProject({
-      ...createDefaultGameProject("Probe", "probe"),
+      ...projectWithNoCampaign(),
+      seasons: [],
       episodes: []
     } as never);
-    expect(project.episodes).toHaveLength(1);
-    expect(project.episodes[0]!.scenes).toHaveLength(1);
+    expect(project.seasons).toHaveLength(1);
+    expect(getAllEpisodes(project.seasons)).toHaveLength(1);
+    expect(getAllEpisodes(project.seasons)[0]!.scenes).toHaveLength(1);
   });
 
   it("createAuthoringSession lands on an active Scene", () => {
-    const bare = createDefaultGameProject("Probe", "probe") as unknown as Record<
-      string,
-      unknown
-    >;
-    delete bare.episodes;
-    const session = createAuthoringSession(bare as never, REGIONS);
+    const session = createAuthoringSession(
+      projectWithNoCampaign() as never,
+      REGIONS
+    );
     expect(session.activeSceneId).not.toBeNull();
-    expect(getAllScenes(session.gameProject.episodes)).toHaveLength(1);
+    expect(
+      getAllScenes(getAllEpisodes(session.gameProject.seasons))
+    ).toHaveLength(1);
   });
 });
 
-describe("the pre-Episodes shape is dropped, not converted", () => {
+describe("superseded campaign keys are dropped, not converted", () => {
   it("a stale scenes array does not survive the load", () => {
     const stale = {
       ...createDefaultGameProject("Probe", "probe"),
@@ -141,14 +157,32 @@ describe("the pre-Episodes shape is dropped, not converted", () => {
       unknown
     >;
     // Dropped from the output so a stale file cannot write them back
-    // out beside the `episodes` that replaced them.
+    // out beside the `seasons` that replaced them.
     expect(project.scenes).toBeUndefined();
     expect(project.scenesUiLabel).toBeUndefined();
-    // The campaign comes from `episodes`; the old Scene is not folded in.
+    // The campaign comes from `seasons`; the old Scene is not folded in.
     expect(
-      getAllScenes(project.episodes as never).map(
+      getAllScenes(getAllEpisodes(project.seasons as never)).map(
         (scene: { sceneId: string }) => scene.sceneId
       )
     ).not.toContain("s:old");
+  });
+
+  it("a flat episodes list is wrapped, then dropped from the output", () => {
+    // The wrap is the conversion; the key going away is what stops the
+    // normalizer's spread from carrying it back onto disk on every save.
+    const legacy = projectWithNoCampaign();
+    legacy.episodes = CAMPAIGN_EPISODES;
+    const project = normalizeGameProject(legacy as never) as unknown as Record<
+      string,
+      unknown
+    >;
+
+    expect(project.episodes).toBeUndefined();
+    expect(
+      getAllEpisodes(project.seasons as never).map(
+        (episode: { episodeId: string }) => episode.episodeId
+      )
+    ).toEqual(["e:second", "e:first"]);
   });
 });

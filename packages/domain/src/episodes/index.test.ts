@@ -24,7 +24,7 @@ import {
   findEpisodeBySceneId,
   findSceneById,
   getAllScenes,
-  mapScenes,
+  mapScenesInEpisodes,
   normalizeEpisode,
   normalizeEpisodeEndRouting,
   normalizeEpisodes,
@@ -415,8 +415,8 @@ describe("Scene lookup across Episodes", () => {
     expect(findEpisodeBySceneId(episodes, null)).toBeNull();
   });
 
-  it("mapScenes rewrites Scenes without moving them between Episodes", () => {
-    const mapped = mapScenes(episodes, (scene) => ({
+  it("mapScenesInEpisodes rewrites Scenes without moving them between Episodes", () => {
+    const mapped = mapScenesInEpisodes(episodes, (scene) => ({
       ...scene,
       displayName: `renamed ${scene.sceneId}`
     }));

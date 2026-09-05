@@ -39,6 +39,7 @@ import {
   getActiveRegion,
   getActiveRegionContents,
   getActiveScene,
+  getAllEpisodes,
   getAllScenes,
   type AuthoringSession,
   type MusicBindings
@@ -274,7 +275,7 @@ export function useBuildProductModeView(
     getRegionContents: () =>
       session ? getActiveRegionContents(session) : null,
     getActiveScene: () => (session ? getActiveScene(session) : null),
-    getAllScenes: () => getAllScenes(session?.gameProject.episodes ?? []),
+    getAllScenes: () => getAllScenes(getAllEpisodes(session?.gameProject.seasons ?? [])),
     assetDefinitions,
     surfaceDefinitions,
     textureDefinitions,
@@ -452,7 +453,7 @@ export function useBuildProductModeView(
     onCommand,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     npcDefinitions,
-    episodes: session?.gameProject.episodes ?? [],
+    episodes: getAllEpisodes(session?.gameProject.seasons ?? []),
     soundCueDefinitions,
     // The full documents, not the `regions` summary prop: a destination
     // picker needs each region's markers.

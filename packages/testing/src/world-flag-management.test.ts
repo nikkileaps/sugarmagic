@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
   applyCommand,
   collectWorldFlagReferences,
   createAuthoringSession,
@@ -58,7 +59,7 @@ function projectReferencing(worldFlagId: string): GameProject {
       createWorldFlagDefinition({ definitionId: worldFlagId, name: "gate-open" })
     ],
     // Quests are held by the Scene they happen in (epic #226).
-    episodes: base.episodes.map((episode) => ({
+    seasons: mapEpisodes(base.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene, index) => ({
         ...scene,
@@ -208,7 +209,7 @@ describe("unique flag names", () => {
     const base = createDefaultGameProject("Test", "test");
     const project: GameProject = {
       ...base,
-      episodes: base.episodes.map((episode) => ({
+      seasons: mapEpisodes(base.seasons, (episode) => ({
         ...episode,
         scenes: episode.scenes.map((scene) => ({
           ...scene,

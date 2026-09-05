@@ -10,7 +10,11 @@
  */
 
 import { createStore } from "zustand/vanilla";
-import { collectFileBackedAssetPaths, getAllScenes } from "@sugarmagic/domain";
+import {
+  collectFileBackedAssetPaths,
+  getAllEpisodes,
+  getAllScenes
+} from "@sugarmagic/domain";
 import { readBlobFile } from "@sugarmagic/io";
 import type { ProjectStore } from "../project";
 
@@ -36,7 +40,7 @@ function collectRelativeAssetPaths(projectStore: ProjectStore): string[] {
     regions: session.regions ? Array.from(session.regions.values()) : [],
     // Same reason for a Scene's own navmesh: without this it never re-loads
     // on open and that Scene silently paths against the region's mesh.
-    scenes: getAllScenes(session.gameProject?.episodes ?? []),
+    scenes: getAllScenes(getAllEpisodes(session.gameProject?.seasons ?? [])),
     // Plan 092.2 — a plugin's derived artifacts are file-backed too. Same
     // reason as the navmesh: without this they never re-load on open, so a
     // bake looks lost after a restart.

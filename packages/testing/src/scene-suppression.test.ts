@@ -9,6 +9,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
+  getAllEpisodes,
   applyCommand,
   composeRegionContents,
   createAuthoringSession,
@@ -38,7 +40,7 @@ function sessionWithResident() {
   const base = createDefaultGameProject("Test", "test");
   const project: GameProject = {
     ...base,
-    episodes: base.episodes.map((episode) => ({
+    seasons: mapEpisodes(base.seasons, (episode) => ({
       ...episode,
       scenes: episode.scenes.map((scene) => ({
         ...scene,
@@ -65,12 +67,12 @@ function suppress(
 describe("giving a Scene's presence to the region", () => {
   it("moves it out of the overlay and onto the region", () => {
     const { session } = sessionWithResident();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
     const seeded = {
       ...session,
       gameProject: {
         ...session.gameProject,
-        episodes: session.gameProject.episodes.map((episode) => ({
+        seasons: mapEpisodes(session.gameProject.seasons, (episode) => ({
           ...episode,
           scenes: episode.scenes.map((scene) =>
             scene.sceneId === sceneId
@@ -105,7 +107,7 @@ describe("giving a Scene's presence to the region", () => {
       next.regions.get(REGION_ID)!.npcPresences.map((p) => p.presenceId)
     ).toContain("presence:visitor");
     expect(
-      findSceneById(next.gameProject.episodes, sceneId)!.overlay.npcPresences
+      findSceneById(getAllEpisodes(next.gameProject.seasons), sceneId)!.overlay.npcPresences
     ).toEqual([]);
   });
 });
@@ -113,10 +115,10 @@ describe("giving a Scene's presence to the region", () => {
 describe("suppressing region content for a Scene", () => {
   it("hides the resident in that Scene and composition drops it", () => {
     const { session, region } = sessionWithResident();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
 
     const next = applyCommand(session, suppress(sceneId, RESIDENT_ID, true));
-    const scene = findSceneById(next.gameProject.episodes, sceneId)!;
+    const scene = findSceneById(getAllEpisodes(next.gameProject.seasons), sceneId)!;
 
     expect(scene.overlay.suppressedRegionIds).toEqual([RESIDENT_ID]);
     expect(composeRegionContents(region, scene).npcPresences).toEqual([]);
@@ -124,10 +126,10 @@ describe("suppressing region content for a Scene", () => {
 
   it("names the id rather than copying the thing", () => {
     const { session, region } = sessionWithResident();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
 
     const next = applyCommand(session, suppress(sceneId, RESIDENT_ID, true));
-    const scene = findSceneById(next.gameProject.episodes, sceneId)!;
+    const scene = findSceneById(getAllEpisodes(next.gameProject.seasons), sceneId)!;
 
     // The region still owns it: suppression hides, it never edits or
     // moves the thing, so there is no second copy to drift.
@@ -137,11 +139,11 @@ describe("suppressing region content for a Scene", () => {
 
   it("un-suppressing brings it back", () => {
     const { session, region } = sessionWithResident();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
 
     const hidden = applyCommand(session, suppress(sceneId, RESIDENT_ID, true));
     const shown = applyCommand(hidden, suppress(sceneId, RESIDENT_ID, false));
-    const scene = findSceneById(shown.gameProject.episodes, sceneId)!;
+    const scene = findSceneById(getAllEpisodes(shown.gameProject.seasons), sceneId)!;
 
     expect(scene.overlay.suppressedRegionIds).toEqual([]);
     expect(composeRegionContents(region, scene).npcPresences).toHaveLength(1);
@@ -149,13 +151,13 @@ describe("suppressing region content for a Scene", () => {
 
   it("suppressing twice does not stack duplicate ids", () => {
     const { session } = sessionWithResident();
-    const sceneId = getAllScenes(session.gameProject.episodes)[0]!.sceneId;
+    const sceneId = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!.sceneId;
 
     const once = applyCommand(session, suppress(sceneId, RESIDENT_ID, true));
     const twice = applyCommand(once, suppress(sceneId, RESIDENT_ID, true));
 
     expect(
-      findSceneById(twice.gameProject.episodes, sceneId)!.overlay
+      findSceneById(getAllEpisodes(twice.gameProject.seasons), sceneId)!.overlay
         .suppressedRegionIds
     ).toEqual([RESIDENT_ID]);
     // A no-op edit must not push an undo step either.

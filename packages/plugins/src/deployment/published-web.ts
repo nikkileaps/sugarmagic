@@ -32,6 +32,7 @@ import type {
 import {
   collectFileBackedAssetPaths,
   getAllScenes,
+  getAllEpisodes,
   normalizeCreditsDefinition,
   getAllQuestDefinitionsInEpisodes
 } from "@sugarmagic/domain";
@@ -127,7 +128,7 @@ function resolveAssetSources(
       regions: snapshot.regions,
       // A Scene that changes what blocks movement bakes its own navmesh.
       // Without this the bundle ships the pointer and not the file.
-      scenes: getAllScenes(gameProject.episodes),
+      scenes: getAllScenes(getAllEpisodes(gameProject.seasons)),
       // Plan 092.2 — a plugin's derived artifacts ship with the game.
       // Disabled plugins are skipped inside the collector, so turning
       // one off deploys a game without its files rather than a game
@@ -185,7 +186,14 @@ function buildBootJsonPayload(
     // model; the runtime composes only the active Scene's
     // overlays and gates Episodes at boot). Regions above are the
     // shrunk base shape.
-    episodes: gameProject.episodes,
+    // Flattened, so this payload keeps the shape the runtime reads today.
+    // The runtime learns about Seasons in its own story, together with the
+    // `BOOT_JSON_SCHEMA_VERSION` bump and Studio's Preview message; until
+    // then a published game runs the campaign as one flat run, which is
+    // what it did before Seasons existed. Send `gameProject.seasons` here
+    // and the runtime silently normalizes an absent `episodes` to an empty
+    // campaign, so the two move together or not at all.
+    episodes: getAllEpisodes(gameProject.seasons),
     episodeEndRouting: gameProject.episodeEndRouting,
     activeRegionId,
     activeEnvironmentId: snapshot.activeEnvironmentId ?? null,
@@ -200,7 +208,7 @@ function buildBootJsonPayload(
     dialogueDefinitions: gameProject.dialogueDefinitions,
     // Derived at the wire seam, not stored: quests live in the Scenes
     // that hold them, so the bundle carries each one exactly once.
-    questDefinitions: getAllQuestDefinitionsInEpisodes(gameProject.episodes),
+    questDefinitions: getAllQuestDefinitionsInEpisodes(getAllEpisodes(gameProject.seasons)),
     menuDefinitions: gameProject.menuDefinitions,
     hudDefinition: gameProject.hudDefinition,
     uiTheme: gameProject.uiTheme,

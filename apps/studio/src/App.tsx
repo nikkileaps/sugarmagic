@@ -145,6 +145,7 @@ import {
   createScopedId,
   sceneOverlayForRegion,
   getAllScenes,
+  getAllEpisodes,
   type Scene,
   getActiveRegionContents
 } from "@sugarmagic/domain";
@@ -1118,7 +1119,12 @@ async function postPreviewBootMessage(
       // The campaign rides the boot payload; the runtime gates the
       // Episodes and composes the active Scene's overlays onto the
       // region base.
-      episodes: session.gameProject.episodes,
+      // Flattened, matching the boot payload the published game gets. The
+      // Preview message learns about Seasons in the same story the runtime
+      // does -- `PreviewBootMessage` is preview.tsx's own interface and
+      // names no GameProject, so nothing here would break if this kept
+      // flattening after that landed. Changing both together is the point.
+      episodes: getAllEpisodes(session.gameProject.seasons),
       episodeEndRouting: session.gameProject.episodeEndRouting,
       // Ambient Context: Preview boots whichever Scene is active
       // in the editor — no separate "preview which Scene?" picker.
@@ -2792,7 +2798,7 @@ export function App() {
     // it owns no artifact and inherits -- and any it owned before is
     // cleared, or it would keep pathing against a composition that no
     // longer differs.
-    for (const scene of getAllScenes(session.gameProject.episodes)) {
+    for (const scene of getAllScenes(getAllEpisodes(session.gameProject.seasons))) {
       if (scene.regionId !== region.identity.id) continue;
       const sceneInput = buildRegionNavMeshInput({
         ...shared,
@@ -3417,7 +3423,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     gameProject: session?.gameProject ?? null,
     regions: regionDocuments,
-    episodes: session?.gameProject.episodes ?? [],
+    episodes: getAllEpisodes(session?.gameProject.seasons ?? []),
     soundCueDefinitions,
     creditsDefinition: session?.gameProject.creditsDefinition ?? {
       sections: []
@@ -3567,17 +3573,17 @@ export function App() {
     // The Episode holding the Scene being worked in -- the graph draws the
     // chapter the author is actually inside, not whichever came first.
     graphEpisode: session
-      ? (session.gameProject.episodes.find((episode) =>
+      ? (getAllEpisodes(session.gameProject.seasons).find((episode) =>
           episode.scenes.some(
             (scene) => scene.sceneId === session.activeSceneId
           )
         ) ??
-        session.gameProject.episodes[0] ??
+        getAllEpisodes(session.gameProject.seasons)[0] ??
         null)
       : null,
     structurePanel: session ? (
       <StoryStructureView
-        episodes={session.gameProject.episodes}
+        episodes={getAllEpisodes(session.gameProject.seasons)}
         activeSceneId={session.activeSceneId}
         questDefinitions={getAllQuestDefinitions(session)}
         environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
@@ -3614,7 +3620,7 @@ export function App() {
     ) : null,
     composerPanel: session ? (
       <SceneComposerPanel
-        scenes={getAllScenes(session.gameProject.episodes)}
+        scenes={getAllScenes(getAllEpisodes(session.gameProject.seasons))}
         selectedScene={getActiveScene(session)}
         region={
           session.regions.get(getActiveScene(session)?.regionId ?? "") ?? null
@@ -3657,7 +3663,7 @@ export function App() {
       gameProjectId: session?.gameProject.identity.id ?? null,
       questDefinitions: session ? getAllQuestDefinitions(session) : [],
       regions: regionDocuments,
-      episodes: session?.gameProject.episodes ?? [],
+      episodes: getAllEpisodes(session?.gameProject.seasons ?? []),
       soundCueDefinitions,
       dialogueDefinitions: session?.gameProject.dialogueDefinitions ?? [],
       itemDefinitions: session?.gameProject.itemDefinitions ?? [],
@@ -4656,7 +4662,7 @@ export function App() {
                       {/* One group per Episode, its Scenes in order
                         underneath. The grouping is the containment
                         made visible; authoring Episodes is story 2. */}
-                      {session.gameProject.episodes.map((episode) => (
+                      {getAllEpisodes(session.gameProject.seasons).map((episode) => (
                         <Fragment key={episode.episodeId}>
                           <Menu.Label>{episode.displayName}</Menu.Label>
                           {episode.scenes.map((scene) => (

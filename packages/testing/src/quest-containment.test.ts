@@ -11,6 +11,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  mapEpisodes,
+  getAllEpisodes,
   createDefaultGameProject,
   createDefaultQuestDefinition,
   findSceneByQuestDefinitionId,
@@ -55,7 +57,7 @@ describe("quest containment", () => {
     const project = normalizeGameProject(legacyProjectRaw());
     const notes = takeQuestContainmentNotes();
 
-    const scenes = getAllScenes(project.episodes);
+    const scenes = getAllScenes(getAllEpisodes(project.seasons));
     expect(scenes[0]!.questDefinitions.map((q) => q.definitionId)).toEqual([
       QUEST_ID
     ]);
@@ -72,11 +74,11 @@ describe("quest containment", () => {
     takeQuestContainmentNotes();
     const project = normalizeGameProject(legacyProjectRaw());
 
-    const owners = getAllScenes(project.episodes).filter((scene) =>
+    const owners = getAllScenes(getAllEpisodes(project.seasons)).filter((scene) =>
       scene.questDefinitions.some((q) => q.definitionId === QUEST_ID)
     );
     expect(owners).toHaveLength(1);
-    expect(findSceneByQuestDefinitionId(project.episodes, QUEST_ID)).toBe(
+    expect(findSceneByQuestDefinitionId(getAllEpisodes(project.seasons), QUEST_ID)).toBe(
       owners[0]
     );
   });
@@ -93,7 +95,7 @@ describe("quest containment", () => {
     const twice = normalizeGameProject(secondLoad);
 
     expect(
-      getAllQuestDefinitionsInEpisodes(twice.episodes).filter(
+      getAllQuestDefinitionsInEpisodes(getAllEpisodes(twice.seasons)).filter(
         (q) => q.definitionId === QUEST_ID
       )
     ).toHaveLength(1);
@@ -106,7 +108,7 @@ describe("quest containment", () => {
     // The quest manager takes a flat array; containment is the storage,
     // this is the projection.
     expect(
-      getAllQuestDefinitionsInEpisodes(project.episodes).map(
+      getAllQuestDefinitionsInEpisodes(getAllEpisodes(project.seasons)).map(
         (q) => q.definitionId
       )
     ).toEqual([QUEST_ID]);
@@ -122,7 +124,7 @@ describe("quest containment", () => {
     let session = createAuthoringSession(
       {
         ...project,
-        episodes: project.episodes.map((episode) => ({
+        seasons: mapEpisodes(project.seasons, (episode) => ({
           ...episode,
           scenes: [
             ...episode.scenes.map((scene) => ({
@@ -142,7 +144,7 @@ describe("quest containment", () => {
 
     session = moveQuestToSceneInSession(session, QUEST_ID, "scene:second");
 
-    const owners = getAllScenes(session.gameProject.episodes).filter((scene) =>
+    const owners = getAllScenes(getAllEpisodes(session.gameProject.seasons)).filter((scene) =>
       scene.questDefinitions.some((q) => q.definitionId === QUEST_ID)
     );
     expect(owners.map((scene) => scene.sceneId)).toEqual(["scene:second"]);
@@ -150,7 +152,7 @@ describe("quest containment", () => {
     // Moving it again is not a way to end up with two.
     session = moveQuestToSceneInSession(session, QUEST_ID, "scene:second");
     expect(
-      getAllQuestDefinitionsInEpisodes(session.gameProject.episodes).filter(
+      getAllQuestDefinitionsInEpisodes(getAllEpisodes(session.gameProject.seasons)).filter(
         (q) => q.definitionId === QUEST_ID
       )
     ).toHaveLength(1);
@@ -192,7 +194,7 @@ describe("quest containment", () => {
     const session = createAuthoringSession(project, [
       createDefaultRegion({ regionId: "region:test", displayName: "Test" })
     ]);
-    const target = getAllScenes(session.gameProject.episodes)[0]!;
+    const target = getAllScenes(getAllEpisodes(session.gameProject.seasons))[0]!;
     const definition = createDefaultQuestDefinition({
       definitionId: "quest:new",
       displayName: "New"
@@ -212,7 +214,7 @@ describe("quest containment", () => {
     });
 
     expect(
-      findSceneByQuestDefinitionId(next.gameProject.episodes, "quest:new")
+      findSceneByQuestDefinitionId(getAllEpisodes(next.gameProject.seasons), "quest:new")
         ?.sceneId
     ).toBe(target.sceneId);
   });
