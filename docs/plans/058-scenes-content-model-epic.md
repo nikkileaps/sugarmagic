@@ -89,12 +89,6 @@ This is enforced by pattern 2 (Ambient Context) at authoring time — every work
 
 Studio surface: every placed asset's inspector gets a **Scope** dropdown: `"Base — always visible"` or `"Scene <N>: <name>"`. Default on creation is the active Scene's overlay (matching the Ambient Context expectation), but the author can flip to Base immediately. Migration defaults to **Base** for all existing `region.scene.placedAssets` (see 058.1) — safest, preserves current behavior.
 
-## No "Season" concept in the engine
-
-Earlier drafts included Seasons as the level above Scenes, but a "next season" (e.g. Wordlark Hollow → Rackwick City) is a genuinely new project with its own regions, mechanics, and world. Separate Studio project. Player identity carries via SugarProfile (already handles it); any cross-project meta-progression would be a plugin, not engine core. Scenes are the single narrative-partition primitive.
-
-Author-side label mapping is a per-project setting (`scenesUiLabel: string`, default `"Scene"`) that renders "Chapter 3" / "Episode 3" / "Act 3" in the game's UI without changing the engine's `Scene` primitive.
-
 ## Goal
 
 After this epic:

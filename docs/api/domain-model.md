@@ -1,7 +1,7 @@
 # Sugarmagic Domain Model
 
 Status: active
-Last verified against code: 2026-08-18
+Last verified against code: 2026-09-05
 
 How the core sugarmagic entities fit together. This covers the core product
 only -- the sugarlang plugin has its own model at
@@ -34,10 +34,11 @@ store.
 completed. The world at any point is DERIVED from that record and never
 stored alongside it.
 
-The narrative is containment: a game holds Episodes, an Episode holds
-Scenes (`Episode.scenes`), a Scene holds quests
-(`Scene.questDefinitions`). Containment is by value, so a quest belongs to
-exactly one Scene and a Scene to exactly one Episode.
+The narrative is containment: a game holds Seasons (`GameProject.seasons`),
+a Season holds Episodes (`Season.episodes`), an Episode holds Scenes
+(`Episode.scenes`), a Scene holds quests (`Scene.questDefinitions`).
+Containment is by value, so a quest belongs to exactly one Scene, a Scene to
+exactly one Episode, and an Episode to exactly one Season.
 
 It is ordered by that containment and by quest start conditions, not by
 wall clock. Two quests whose conditions do not reference each other have no
@@ -50,6 +51,19 @@ Scene's overlay; above the Scene tier, no overlay at all, which is the
 region at rest. `composeRegionContents(region, scene | null)` computes
 both -- a null Scene is the "above the Scene tier" answer, not a missing
 value.
+
+**Completion rolls up, and only quest completion is stored.**
+`QuestManager`'s slice records which quests are finished. A Scene is complete
+when every quest it holds is (`isSceneComplete`), and an Episode when every
+Scene it holds is (`isEpisodeComplete`); both are computed on read from that
+one recorded fact. A Scene holding no quests is complete vacuously. An
+Episode holding no Scenes is not, because it cannot be entered, and calling
+it finished would claim the player did something they had no way to do.
+
+**The runtime can say "nothing is active".** `resolveActiveEpisode` returns
+null once every unlocked Episode is finished and the next one is gated shut.
+That is a real position on the timeline, above the Episode tier, not a failed
+lookup -- and it is exactly the position a null Scene draws.
 
 **Things elsewhere read the timeline rather than being contained by it.** A
 resident who appears only after a quest, a barrier that opens at a stage,
@@ -67,22 +81,10 @@ game state derives from.
 
 ### What the code does not do yet
 
-Stated because this document describes the present:
-
-- **Completion does not roll up.** Quest completion is stored
-  (`QuestManager`'s slice) and Episode completion is stored SEPARATELY
-  (`completedEpisodeIds`, `campaignProgressionParticipant`). There is no
-  Scene-level completion at all, so "every child is done" is not
-  computable at the Scene tier, and the stored Episode list is a second
-  representation that can disagree with the quests it summarises.
-- **Resolution cannot report "nothing active".** `resolveActiveEpisode`
-  falls back requested -> first unlocked -> first enterable, and
-  `resolveActiveScene` is `requested ?? episode.scenes[0]`. Both always
-  find something, so a position above the Scene tier is expressible in the
-  composition but never produced by the runtime.
-- **A placed asset cannot be conditioned.** Presences, volumes and
-  behaviour tasks carry a condition; `PlacedAssetInstance` does not. So
-  "this statue exists after the festival" has nowhere to live.
+Stated because this document describes the present: **a placed asset cannot
+be conditioned.** Presences, volumes and behaviour tasks carry a condition;
+`PlacedAssetInstance` does not. So "this statue exists after the festival"
+has nowhere to live.
 
 ## The whole model
 
@@ -90,14 +92,15 @@ Stated because this document describes the present:
 erDiagram
     GAME_PROJECT ||--|| CONTENT_LIBRARY : owns
     GAME_PROJECT ||--o{ REGION : registers
-    GAME_PROJECT ||--o{ SCENE : "sequences (campaign)"
+    GAME_PROJECT ||--o{ SEASON : "sequences (campaign)"
+    SEASON ||--o{ EPISODE : orders
+    EPISODE ||--o{ SCENE : orders
 
     CONTENT_LIBRARY ||--o{ ASSET_DEFINITION : catalogues
     CONTENT_LIBRARY ||--o{ MATERIAL_DEFINITION : catalogues
     CONTENT_LIBRARY ||--o{ SOUND_CUE : catalogues
     CONTENT_LIBRARY ||--o{ NPC_DEFINITION : catalogues
     CONTENT_LIBRARY ||--o{ DIALOGUE_DEFINITION : catalogues
-    CONTENT_LIBRARY ||--o{ QUEST_DEFINITION : catalogues
     CONTENT_LIBRARY ||--o{ ITEM_DEFINITION : catalogues
     CONTENT_LIBRARY ||--o{ SPELL_DEFINITION : catalogues
 
@@ -107,6 +110,7 @@ erDiagram
     PLACED_ASSET_INSTANCE }o--|| ASSET_DEFINITION : references
     NPC_PRESENCE }o--|| NPC_DEFINITION : references
     SCENE }o--|| REGION : overlays
+    SCENE ||--o{ QUEST_DEFINITION : holds
 
     QUEST_DEFINITION ||--o{ QUEST_STAGE : "chains linearly"
     QUEST_STAGE ||--o{ QUEST_NODE : contains
@@ -143,20 +147,24 @@ Manager projects quest facts into the Runtime Blackboard*.
 `GameProject` (`packages/domain/src/game-project`) is the authored root: on
 disk it is `project.sgrmagic` + `content-library.sgrmagic` +
 `regions/*.json` + assets. It owns project settings, sound-event and music
-bindings, credits, and the campaign (the `Episode` list -- see Ordered and
+bindings, credits, and the campaign (the `Season` list -- see Ordered and
 gated below).
 
 `ContentLibrary` (`packages/domain/src/content-library`) owns every reusable
 definition: assets (with colliders), materials and textures, character
 models and animation libraries, audio clips and sound cues, environment
-lighting presets -- plus the gameplay definitions below. A definition owns
-what a thing IS; it never owns where the thing is placed.
+lighting presets -- plus the NPC, dialogue, item and spell definitions
+below. A definition owns what a thing IS; it never owns where the thing is
+placed. Quests are the exception, and they are not catalogued at all: a
+`QuestDefinition` is held by the Scene it happens in.
 
 ### Ordered and gated
 
 Two words for the two independent things a narrative structure does. Every
 doc, code comment and UI label uses them with exactly this meaning:
 
+- **Seasons are ordered but not gated.** Order says which Season comes after
+  which. Nothing holds the player back at a Season boundary.
 - **Episodes are ordered and gated.** Order says which chapter comes after
   which. The unlock rule says whether the player may go there yet.
 - **Scenes are ordered but not gated.** Order says which Scene comes after
@@ -165,27 +173,69 @@ doc, code comment and UI label uses them with exactly this meaning:
 
 So **ordered** is about sequence and **gated** is about permission. They are
 separate: a thing can be ordered without being gated, which is exactly what a
-Scene is. "Locked", "unlocked", "available" and "sequenced" are not loose
-synonyms for either.
+Season and a Scene are. "Locked", "unlocked", "available" and "sequenced" are
+not loose synonyms for either.
 
-**Order is list position.** `GameProject.episodes` is ordered, and each
-`Episode.scenes` is ordered. Neither carries an order number: a stored
-ordinal beside an ordered list is the same fact written twice, and the two
-drift the moment a delete leaves a hole. Player-facing numbering ("Scene 3 of
-5") derives from position, so it is always contiguous from 1. A Scene that
-needs a fixed name like "Chapter 7" puts it in `displayName`, which is a
-title, not an order. Because there is no sort key to recover from, the load
-path never reorders -- `normalizeEpisodes` and `normalizeScenes` preserve
-input order, and a round-trip test pins it.
+**A Season needs no gate of its own.** Narrative order across the campaign is
+the concatenation of each Season's Episode list, in Season order; gating and
+routing read that flat run and cannot see the grouping. Holding Season 2 back
+until Season 1 finishes is done by gating Season 2's first Episode.
 
-### Episode, Region and Scene
+**Order is list position.** `GameProject.seasons` is ordered, each
+`Season.episodes` is ordered, and each `Episode.scenes` is ordered. None
+carries an order number: a stored ordinal beside an ordered list is the same
+fact written twice, and the two drift the moment a delete leaves a hole.
+Player-facing numbering ("Scene 3 of 5") derives from position, so it is
+always contiguous from 1. A Scene that needs a fixed name like "Chapter 7"
+puts it in `displayName`, which is a title, not an order. Because there is no
+sort key to recover from, the load path never reorders -- `normalizeSeasons`,
+`normalizeEpisodes` and `normalizeScenes` all preserve input order, and a
+round-trip test pins it.
+
+### Season, Episode, Region and Scene
+
+`Season` (`packages/domain/src/seasons`) is a container and nothing else:
+identity, display name, description, author notes, and an ordered list of
+Episodes. It carries no gate, no title card and no completion rule -- all
+three live on the Episode. A Season exists so a serial run of Episodes has a
+name and a boundary.
+
+A Season HOLDS its Episodes rather than naming them by id, so an Episode
+belongs to exactly one Season by construction. Code that wants every Episode
+without caring which Season owns it uses `getAllEpisodes(seasons)`;
+`findSeasonById` and `findSeasonByEpisodeId` answer the lookup the other way.
+Code that REWRITES Episodes or Scenes uses `mapEpisodes` or `mapScenes`,
+which put every entry back where it came from -- rebuilding a campaign from a
+flat Episode list is how Season membership gets silently collapsed.
+
+**A Season is never empty.** Three authoring-session operations make that
+true: adding a Season creates it already holding one Episode holding one
+Scene, moving an Episode out refuses to empty its source, and deleting an
+Episode is guarded on the owning Season's Episode count rather than the
+project's. The last Season cannot be deleted either. Reordering an
+Episode moves it inside its Season and stops at the Season's edges; changing
+which Season owns an Episode is its own operation,
+`moveEpisodeToSeasonInSession`.
+
+A project file that carries no Seasons still loads as a campaign.
+`normalizeGameProject` takes the first of these that is a NON-EMPTY list: the
+authored `seasons`; else a flat `episodes` list from before Seasons existed,
+wrapped in one Season with the fixed id `season:default`; else one
+synthesized Season holding one Episode holding one Scene, so Studio always
+has a Scene to author against. Non-empty rather than merely present is the
+load-bearing part: a file carrying `seasons: []` beside a real `episodes`
+list has to fall through to the wrap, or it would load as an empty campaign.
 
 `Episode` (`packages/domain/src/episodes`) holds an ordered run of Scenes plus
 the gate that decides when the player may enter it (`always`, `manual`,
 `questComplete`, `wallClock`). An Episode HOLDS its Scenes rather than naming
-them by id, so a Scene belongs to exactly one Episode by construction. Code
-that needs a Scene without caring which Episode owns it uses `getAllScenes` /
-`findSceneById` / `mapScenes`.
+them by id, so a Scene belongs to exactly one Episode by construction. The
+Scene lookups take an Episode list, so a caller holding a project reaches
+them through `getAllEpisodes`: `getAllScenes(getAllEpisodes(project.seasons))`
+and `findSceneById(getAllEpisodes(project.seasons), id)`.
+`mapScenesInEpisodes` rewrites the Scenes inside one Episode list; a
+campaign-wide rewrite wants `mapScenes` above, which keeps every Episode in
+the Season that owns it.
 
 `Region` (`packages/domain/src/region-authoring`) is the authored place:
 placed asset instances, placed lights, landscape, environment, and the
@@ -216,11 +266,13 @@ consumer should read.
 
 `Scene` (`packages/domain/src/scenes`) is one place with the overlays that
 dress it for this part of the story: content additions/overrides, environment
-and audio overrides, a title card. It carries no order number and no gate of
-its own. Quest actions drive progression -- `advanceToNextScene` moves within
-an Episode (and running off the end is the Episode boundary, where credits
-roll), `unlockEpisode` opens a gate. Viewport and runtime always resolve
-region + active scene overlay composed, never the base region alone.
+and audio overrides, a title card. It also holds the quests that happen there
+(`Scene.questDefinitions`), by value, the way an Episode holds its Scenes. It
+carries no order number and no gate of its own. Quest actions drive
+progression -- `advanceToNextScene` moves within an Episode (and running off
+the end is the Episode boundary, where credits roll), `unlockEpisode` opens a
+gate. Viewport and runtime always resolve region + active scene overlay
+composed, never the base region alone.
 
 `GameProject.episodeEndRouting` decides where the player goes when an Episode
 ends: `episodes-screen` (the default) hands them the Episodes screen to
@@ -254,7 +306,12 @@ runtime inventory and caster.
 
 ### Quest
 
-`QuestDefinition` (`packages/domain/src/quest-definition`) is:
+`QuestDefinition` (`packages/domain/src/quest-definition`) lives on the Scene
+that holds it. Most consumers -- the runtime's quest manager, the deploy
+bundle, validation -- want every quest and do not care which Scene owns
+which, and read the flat view derived on demand by
+`getAllQuestDefinitionsInEpisodes` / `findQuestDefinitionById` in
+`episodes/`. A definition is:
 
 - **Stages chain linearly.** `startStageId` + per-stage `nextStageId`.
   A stage is "a scene at a time": it may pin `timeOfDay`, applied to the
@@ -420,10 +477,18 @@ rather than restating it.**
 | `caster.stats` | caster stats | runtime-core |
 | `playthrough.identity` | which playthrough this save is | runtime-core |
 | `host.player` | current region + player position | web host |
-| `campaign.progression` | current Episode and Scene, manually unlocked Episodes, completed Scenes and Episodes | web host |
+| `campaign.progression` | current Episode and Scene, manually unlocked Episodes | web host |
 
 Plugins contribute their own participants on top (sugarlang's target
 language, for example).
+
+`campaign.progression` names no Season and records no completion. The Season
+the player is in is found from the current Episode (`findSeasonByEpisodeId`),
+and completion is derived from the quests in `quest.manager`; storing either
+would be the same fact written twice. `unlockedEpisodeIds` holds only the
+unlocks gameplay granted outright, because the gates that read state --
+`always`, `questComplete`, `wallClock` -- are evaluated fresh at every boot,
+so retuning a gate never strands a player.
 
 Each slice carries a `schemaVersion`. Two patterns exist and the choice is
 per-slice: **upgrade in place** when the old shape still means something

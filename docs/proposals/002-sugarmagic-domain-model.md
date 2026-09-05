@@ -696,8 +696,8 @@ This is distinct from both raw imported geometry and region placement.
 
 ### Gameplay project objects
 
-- `SeasonDefinition`
-- `EpisodeDefinition`
+- `Season`
+- `Episode`
 - `PlayerConfig`
 - `WorldRuleDefinition`
 
