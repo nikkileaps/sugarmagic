@@ -213,7 +213,7 @@ import {
   markOpenEpisodesForNextBoot,
   markSceneEntryForNextBoot
 } from "./save/sceneEntry";
-import type { EpisodesViewModel } from "./ui/EpisodesScreen";
+import type { EpisodeCardStatus, EpisodesViewModel } from "./ui/EpisodesScreen";
 import { gameplayFrameArt } from "./ui/frameArt";
 import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
@@ -1632,9 +1632,7 @@ export function createWebRuntimeHost(
   // preview console (works in ANY Chrome — no debugger attach needed): it
   // flips each condition, samples the 1Hz stats, restores, and prints +
   // returns the attribution table. Exposed on window in start().
-  async function runSmperfMatrix(opts?: {
-    perConditionMs?: number;
-  }): Promise<{
+  async function runSmperfMatrix(opts?: { perConditionMs?: number }): Promise<{
     table: string;
     rows: Record<string, number | string | null>[];
   }> {
@@ -3567,7 +3565,11 @@ export function createWebRuntimeHost(
     // Flattened here: gating and routing walk the campaign as one run,
     // and neither can see the grouping. The Seasons themselves are read
     // by the Episodes screen's view model further down.
-    bootEpisodes = getAllEpisodes(normalizeSeasons(state.seasons ?? []));
+    // Both views of one campaign: the Seasons for the Episodes screen's
+    // grouping, and the flattened run for gating and routing, neither of
+    // which can see the grouping.
+    const bootSeasons = normalizeSeasons(state.seasons ?? []);
+    bootEpisodes = getAllEpisodes(bootSeasons);
     // Plan 058 §058.1 — strip the pre-058 `region.scene` nest off the
     // regions. Its Scene-side output is ignored: the campaign ships as
     // `seasons` now.
@@ -3626,23 +3628,32 @@ export function createWebRuntimeHost(
     // the thing whose lock state a card can show; a Scene has no
     // gate to report. Entering an Episode resumes at whichever
     // Scene the save holds.
+    // Grouped by Season so a card's ordinal can restart inside each one.
+    // Status is computed exactly as before, from the flattened run --
+    // grouping changes how the cards are laid out, never which are open.
+    const episodeCardStatus = (episode: Episode): EpisodeCardStatus =>
+      // COMPLETED outranks CURRENT. The save pointer can still name an
+      // Episode the player has finished -- when its last Scene advanced
+      // into a shut gate there was nowhere to move it to -- and reading
+      // that as "current" would offer Continue back into a Scene they
+      // already played.
+      isEpisodeComplete(episode, isQuestCompleted)
+        ? "completed"
+        : episode.episodeId === activeEpisodeIdForSave
+          ? "current"
+          : unlockedEpisodeIds.has(episode.episodeId)
+            ? "unlocked"
+            : "locked";
     bootEpisodesViewModel = {
-      entries: bootEpisodes.map((episode) => ({
-        episodeId: episode.episodeId,
-        displayName: episode.displayName,
-        description: episode.description,
-        // COMPLETED outranks CURRENT. The save pointer can still name an
-        // Episode the player has finished -- when its last Scene advanced
-        // into a shut gate there was nowhere to move it to -- and reading
-        // that as "current" would offer Continue back into a Scene they
-        // already played.
-        status: isEpisodeComplete(episode, isQuestCompleted)
-          ? ("completed" as const)
-          : episode.episodeId === activeEpisodeIdForSave
-            ? ("current" as const)
-            : unlockedEpisodeIds.has(episode.episodeId)
-              ? ("unlocked" as const)
-              : ("locked" as const)
+      groups: bootSeasons.map((season) => ({
+        seasonId: season.seasonId,
+        displayName: season.displayName,
+        entries: season.episodes.map((episode) => ({
+          episodeId: episode.episodeId,
+          displayName: episode.displayName,
+          description: episode.description,
+          status: episodeCardStatus(episode)
+        }))
       }))
     };
     // Where the player is, in order: where the save left them, then the
